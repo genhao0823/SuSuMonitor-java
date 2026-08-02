@@ -232,6 +232,8 @@ export interface AlertRule {
   operator: AlertOperator | string
   threshold_value: number
   level: AlertLevel | string
+  /** 连续越界确认次数: 1=立即触发,>1=连续N次越界触发(逃逸窗口)。 */
+  confirm_count: number
   enabled: boolean
   created_by: number | null
   created_at: string
@@ -294,6 +296,8 @@ export interface CreateAlertRuleRequest {
   operator: AlertOperator
   threshold_value: number
   level: AlertLevel
+  /** 连续越界确认次数(可选,默认1=立即触发)。 */
+  confirm_count?: number
 }
 
 /**
@@ -304,6 +308,8 @@ export interface UpdateAlertRuleRequest {
   threshold_value: number
   level: AlertLevel
   enabled: boolean
+  /** 连续越界确认次数(可选项,不传保持原值)。 */
+  confirm_count?: number
 }
 
 /**

@@ -106,7 +106,7 @@ class AlertRuleServiceTests {
                 () -> service.updateRule(1L, request));
 
         assertEquals(ErrorCode.RESOURCE_CONFLICT, exception.getErrorCode());
-        verify(ruleMapper, org.mockito.Mockito.never()).updateRule(anyLong(), any(), any(), any());
+        verify(ruleMapper, org.mockito.Mockito.never()).updateRule(anyLong(), any(), any(), any(), any());
     }
 
     /** 并发场景下数据库唯一约束触发时更新应返回 40900。 */
@@ -116,7 +116,7 @@ class AlertRuleServiceTests {
         when(ruleMapper.selectActiveRuleById(1L)).thenReturn(ruleEntity(1L, "cpu", ">", "80", "warning"));
         UpdateAlertRuleRequest request = updateRequest("90", "critical", true);
         doThrow(new DuplicateKeyException("duplicate")).when(ruleMapper)
-                .updateRule(1L, new BigDecimal("90"), "critical", true);
+                .updateRule(1L, new BigDecimal("90"), "critical", true, null);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.updateRule(1L, request));

@@ -59,6 +59,7 @@ class AlertRecordStateMapperMybatisTests {
                         rule_id BIGINT NOT NULL,
                         server_id BIGINT NOT NULL,
                         active BOOLEAN NOT NULL,
+                        breach_count INT NOT NULL DEFAULT 0,
                         alert_record_id BIGINT,
                         first_triggered_at TIMESTAMP,
                         last_triggered_at TIMESTAMP,
@@ -145,6 +146,7 @@ class AlertRecordStateMapperMybatisTests {
         state.setRuleId(1L);
         state.setServerId(1L);
         state.setActive(true);
+        state.setBreachCount(0);
         state.setAlertRecordId(1L);
         state.setFirstTriggeredAt(LocalDateTime.now());
         state.setLastTriggeredAt(LocalDateTime.now());

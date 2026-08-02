@@ -20,6 +20,14 @@ public interface AlertStateMapper {
     /** 插入新状态行，回写主键。 */
     int insertState(@Param("state") AlertStateEntity state);
 
+    /** 计数递增（逃逸窗口）：连续越界 +1，未触发阶段。 */
+    int incrementBreachCount(@Param("id") Long id, @Param("lastTriggeredAt") LocalDateTime lastTriggeredAt,
+            @Param("version") int version);
+
+    /** 计数达到 confirm_count，把状态行升级为活跃并绑定告警记录。 */
+    int activateOnBreachThreshold(@Param("id") Long id, @Param("alertRecordId") Long alertRecordId,
+            @Param("lastTriggeredAt") LocalDateTime lastTriggeredAt, @Param("version") int version);
+
     /** 更新状态为活跃，设置 alert_record_id 和 last_triggered_at，version + 1。 */
     int updateStateActive(@Param("id") Long id, @Param("alertRecordId") Long alertRecordId,
             @Param("lastTriggeredAt") LocalDateTime lastTriggeredAt, @Param("version") int version);

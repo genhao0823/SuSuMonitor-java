@@ -26,6 +26,8 @@ public class AlertRuleVo {
     @JsonProperty("threshold_value")
     private BigDecimal thresholdValue;
     private String level;
+    @JsonProperty("confirm_count")
+    private Integer confirmCount;
     private Boolean enabled;
     @JsonProperty("created_by")
     private Long createdBy;

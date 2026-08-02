@@ -41,6 +41,9 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         entity.setOperator(request.getOperator());
         entity.setThresholdValue(request.getThresholdValue());
         entity.setLevel(request.getLevel());
+        // 逃逸窗口：confirm_count 缺省即为 1（立即触发，向后兼容）。
+        entity.setConfirmCount(request.getConfirmCount() == null
+                ? 1 : Math.max(1, request.getConfirmCount()));
         entity.setEnabled(true);
         entity.setDeleted(false);
         entity.setCreatedBy(createdBy);
@@ -117,7 +120,8 @@ public class AlertRuleServiceImpl implements AlertRuleService {
 
     private void updateRuleWithConflictTranslation(Long ruleId, UpdateAlertRuleRequest request) {
         try {
-            ruleMapper.updateRule(ruleId, request.getThresholdValue(), request.getLevel(), request.getEnabled());
+            ruleMapper.updateRule(ruleId, request.getThresholdValue(), request.getLevel(),
+                    request.getEnabled(), request.getConfirmCount());
         } catch (DuplicateKeyException exception) {
             throw new BusinessException(ErrorCode.RESOURCE_CONFLICT, exception);
         }
@@ -134,6 +138,7 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         vo.setOperator(entity.getOperator());
         vo.setThresholdValue(entity.getThresholdValue());
         vo.setLevel(entity.getLevel());
+        vo.setConfirmCount(entity.getConfirmCount());
         vo.setEnabled(entity.getEnabled());
         vo.setCreatedBy(entity.getCreatedBy());
         vo.setCreatedAt(AlertRuleVo.toOffset(entity.getCreatedAt()));

@@ -35,4 +35,7 @@ public class CreateAlertRuleRequest {
     // 告警等级: warning/critical。
     @NotBlank(message = "level must not be blank")
     private String level;
+    // 连续越界确认次数（可选，默认 1=立即触发；>1=连续越界 N 次触发）。
+    @JsonProperty("confirm_count")
+    private Integer confirmCount;
 }

@@ -29,6 +29,9 @@ public class AlertStateEntity {
     private Long serverId;
     // 是否处于越界状态: false 否, true 是。
     private Boolean active;
+    // 当前连续越界计数（未达 confirm_count 时的累计值）。
+    @TableField("breach_count")
+    private Integer breachCount;
     // 当前活动告警记录 ID。
     @TableField("alert_record_id")
     private Long alertRecordId;

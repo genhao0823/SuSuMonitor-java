@@ -6,6 +6,7 @@
         <result column="rule_id" property="ruleId"/>
         <result column="server_id" property="serverId"/>
         <result column="active" property="active"/>
+        <result column="breach_count" property="breachCount"/>
         <result column="alert_record_id" property="alertRecordId"/>
         <result column="first_triggered_at" property="firstTriggeredAt"/>
         <result column="last_triggered_at" property="lastTriggeredAt"/>
@@ -14,17 +15,29 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
-    <sql id="StateColumns">id, rule_id, server_id, active, alert_record_id, first_triggered_at,
+    <sql id="StateColumns">id, rule_id, server_id, active, breach_count, alert_record_id, first_triggered_at,
         last_triggered_at, resolved_at, version, created_at, updated_at</sql>
     <select id="selectByRuleAndServer" resultMap="AlertStateResultMap">
         SELECT <include refid="StateColumns"/> FROM alert_states
         WHERE rule_id = #{ruleId} AND server_id = #{serverId}
     </select>
     <insert id="insertState" useGeneratedKeys="true" keyProperty="state.id">
-        INSERT INTO alert_states (rule_id, server_id, active, alert_record_id, first_triggered_at, last_triggered_at, version)
-        VALUES (#{state.ruleId}, #{state.serverId}, #{state.active}, #{state.alertRecordId},
+        INSERT INTO alert_states (rule_id, server_id, active, breach_count, alert_record_id, first_triggered_at, last_triggered_at, version)
+        VALUES (#{state.ruleId}, #{state.serverId}, #{state.active}, #{state.breachCount}, #{state.alertRecordId},
             #{state.firstTriggeredAt}, #{state.lastTriggeredAt}, #{state.version})
     </insert>
+    <!-- 计数递增（逃逸窗口）：连续越界 +1，未触发阶段。 -->
+    <update id="incrementBreachCount">
+        UPDATE alert_states
+        SET breach_count = breach_count + 1, last_triggered_at = #{lastTriggeredAt}, version = version + 1
+        WHERE id = #{id} AND version = #{version}
+    </update>
+    <!-- 计数达到 confirm_count，升级为活跃并绑定告警记录。 -->
+    <update id="activateOnBreachThreshold">
+        UPDATE alert_states
+        SET active = 1, alert_record_id = #{alertRecordId}, last_triggered_at = #{lastTriggeredAt}, version = version + 1
+        WHERE id = #{id} AND version = #{version}
+    </update>
     <update id="updateStateActive">
         UPDATE alert_states
         SET active = 1, alert_record_id = #{alertRecordId}, last_triggered_at = #{lastTriggeredAt}, version = version + 1

@@ -71,18 +71,23 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
         AlertTransition transition = stateMachine.evaluate(rule, metrics, state);
 
         switch (transition) {
-            case AlertTransition.Trigger t -> handleTrigger(rule, metrics.getServerId(), t.currentValue());
+            case AlertTransition.Trigger t -> handleTrigger(rule, metrics.getServerId(), t.currentValue(), state);
             case AlertTransition.ContinueBreached c -> handleContinue(c.state(), c.currentValue());
             case AlertTransition.Resolve r -> handleResolve(r.state());
+            case AlertTransition.CountingStart s -> handleCountingStart(rule, metrics.getServerId());
+            case AlertTransition.CountingProgress p -> handleCountingProgress(p.state());
+            case AlertTransition.CountingReset r -> handleCountingReset(r.state());
             case AlertTransition.NoAction ignored -> {
             }
         }
     }
 
     /**
-     * 首次越界：创建 unread record + active state，发布 AlertTriggeredEvent。
+     * 触发：创建 unread record + active state，发布 AlertTriggeredEvent。
+     * state 非空表示逃逸窗口计数行达到阈值后升级触发（active=false → active=true 并绑定 record）。
      */
-    private void handleTrigger(AlertRuleEntity rule, Long serverId, BigDecimal currentValue) {
+    private void handleTrigger(AlertRuleEntity rule, Long serverId, BigDecimal currentValue,
+            AlertStateEntity state) {
         LocalDateTime now = LocalDateTime.now(clock);
         // 创建告警记录。
         AlertRecordEntity record = new AlertRecordEntity();
@@ -97,20 +102,62 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
         record.setTriggeredAt(now);
         recordMapper.insertRecord(record);
 
-        // 创建活跃状态。
-        AlertStateEntity state = new AlertStateEntity();
-        state.setRuleId(rule.getId());
-        state.setServerId(serverId);
-        state.setActive(true);
-        state.setAlertRecordId(record.getId());
-        state.setFirstTriggeredAt(now);
-        state.setLastTriggeredAt(now);
-        state.setVersion(0);
-        stateMapper.insertState(state);
+        if (state == null) {
+            // 普通首次越界：创建全新活跃状态行。
+            AlertStateEntity newState = new AlertStateEntity();
+            newState.setRuleId(rule.getId());
+            newState.setServerId(serverId);
+            newState.setActive(true);
+            newState.setBreachCount(0);
+            newState.setAlertRecordId(record.getId());
+            newState.setFirstTriggeredAt(now);
+            newState.setLastTriggeredAt(now);
+            newState.setVersion(0);
+            stateMapper.insertState(newState);
+        } else {
+            // 逃逸窗口计数行达到 confirm_count，升级为活跃并绑定 record。
+            int updated = stateMapper.activateOnBreachThreshold(state.getId(), record.getId(), now, state.getVersion());
+            if (updated == 0) {
+                log.warn("alert state optimistic lock conflict during activation, stateId={}, version={}",
+                        state.getId(), state.getVersion());
+            }
+        }
 
         // 发布告警触发事件供 WS 推送。
         AlertRecordVo recordVo = toVo(record);
         eventPublisher.publishEvent(new AlertTriggeredEvent(serverId, recordVo));
+    }
+
+    /** 逃逸窗口计数开始：创建 active=false 计数状态行（连续越界计数为 1）。 */
+    private void handleCountingStart(AlertRuleEntity rule, Long serverId) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        AlertStateEntity state = new AlertStateEntity();
+        state.setRuleId(rule.getId());
+        state.setServerId(serverId);
+        state.setActive(false);
+        state.setBreachCount(1);
+        state.setFirstTriggeredAt(now);
+        state.setLastTriggeredAt(now);
+        state.setVersion(0);
+        stateMapper.insertState(state);
+    }
+
+    /** 逃逸窗口计数递增：连续越界 count+1（未达阈值不触发）。 */
+    private void handleCountingProgress(AlertStateEntity state) {
+        int updated = stateMapper.incrementBreachCount(state.getId(), LocalDateTime.now(clock), state.getVersion());
+        if (updated == 0) {
+            log.warn("alert state optimistic lock conflict during counting, stateId={}, version={}",
+                    state.getId(), state.getVersion());
+        }
+    }
+
+    /** 逃逸窗口计数重置：连续越界中断，删除计数状态行。 */
+    private void handleCountingReset(AlertStateEntity state) {
+        int deleted = stateMapper.deleteState(state.getId(), state.getVersion());
+        if (deleted == 0) {
+            log.warn("alert state optimistic lock conflict during counting reset, stateId={}, version={}",
+                    state.getId(), state.getVersion());
+        }
     }
 
     /**

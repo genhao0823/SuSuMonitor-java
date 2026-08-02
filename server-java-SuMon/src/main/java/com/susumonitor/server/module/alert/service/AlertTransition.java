@@ -33,4 +33,16 @@ public sealed interface AlertTransition {
     /** 无需操作：不越界且无活跃状态。 */
     record NoAction() implements AlertTransition {
     }
+
+    /** 计数开始（逃逸窗口）：首次越界，创建计数状态行（active=false, count=1），不触发。 */
+    record CountingStart(AlertRuleEntity rule) implements AlertTransition {
+    }
+
+    /** 计数递增（逃逸窗口）：持续越界但未达 confirm_count，count+1。 */
+    record CountingProgress(AlertStateEntity state) implements AlertTransition {
+    }
+
+    /** 计数重置（逃逸窗口）：连续越界中断，删除计数状态行。 */
+    record CountingReset(AlertStateEntity state) implements AlertTransition {
+    }
 }

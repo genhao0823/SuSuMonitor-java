@@ -27,4 +27,7 @@ public class UpdateAlertRuleRequest {
     // 是否启用。
     @NotNull(message = "enabled must not be null")
     private Boolean enabled;
+    // 连续越界确认次数（可选，传入则更新；默认保持原值）。
+    @JsonProperty("confirm_count")
+    private Integer confirmCount;
 }

@@ -6,35 +6,62 @@
     "version": "0.1.0"
   },
   "servers": [
-    {"url": "http://localhost:18080", "description": "Local development server"}
+    {
+      "url": "http://localhost:18080",
+      "description": "Local development server"
+    }
   ],
   "tags": [
-    {"name": "alert", "description": "Alert rules, records, and push"}
+    {
+      "name": "alert",
+      "description": "Alert rules, records, and push"
+    }
   ],
-  "security": [{"bearerAuth": []}],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
   "paths": {
     "/api/alerts/rules": {
       "post": {
-        "tags": ["alert"],
+        "tags": [
+          "alert"
+        ],
         "summary": "Create alert rule",
         "description": "Creates an alert rule. Admin-only. server_id null means a general rule matching all servers. metric must be cpu/memory/disk/temperature/load. operator must be >/>=/</<=. level must be warning/critical.",
         "operationId": "createAlertRule",
         "parameters": [
-          {"$ref": "#/components/parameters/XRequestId"}
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"$ref": "#/components/schemas/CreateAlertRuleRequest"},
+              "schema": {
+                "$ref": "#/components/schemas/CreateAlertRuleRequest"
+              },
               "examples": {
                 "serverSpecific": {
                   "summary": "Server-specific CPU rule",
-                  "value": {"server_id": 1, "metric": "cpu", "operator": ">", "threshold_value": 80, "level": "warning"}
+                  "value": {
+                    "server_id": 1,
+                    "metric": "cpu",
+                    "operator": ">",
+                    "threshold_value": 80,
+                    "level": "warning"
+                  }
                 },
                 "generalRule": {
                   "summary": "General memory rule (all servers)",
-                  "value": {"metric": "memory", "operator": ">=", "threshold_value": 90, "level": "critical"}
+                  "value": {
+                    "metric": "memory",
+                    "operator": ">=",
+                    "threshold_value": 90,
+                    "level": "critical"
+                  }
                 }
               }
             }
@@ -43,10 +70,16 @@
         "responses": {
           "200": {
             "description": "Rule created",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/XRequestId"}},
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/AlertRuleResponse"},
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleResponse"
+                },
                 "example": {
                   "code": 0,
                   "message": "success",
@@ -66,43 +99,74 @@
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       },
       "get": {
-        "tags": ["alert"],
+        "tags": [
+          "alert"
+        ],
         "summary": "List alert rules",
         "description": "Returns all non-deleted alert rules, ordered by created_at DESC. Authenticated users only.",
         "operationId": "listAlertRules",
         "parameters": [
-          {"$ref": "#/components/parameters/XRequestId"}
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Rule list",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/XRequestId"}},
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/AlertRuleListResponse"},
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleListResponse"
+                },
                 "example": {
                   "code": 0,
                   "message": "success",
                   "data": [
-                    {"id": 1, "server_id": 1, "metric": "cpu", "operator": ">", "threshold_value": 80, "level": "warning", "enabled": true, "created_by": 1, "created_at": "2026-07-22T00:00:00Z", "updated_at": "2026-07-22T00:00:00Z"}
+                    {
+                      "id": 1,
+                      "server_id": 1,
+                      "metric": "cpu",
+                      "operator": ">",
+                      "threshold_value": 80,
+                      "level": "warning",
+                      "enabled": true,
+                      "created_by": 1,
+                      "created_at": "2026-07-22T00:00:00Z",
+                      "updated_at": "2026-07-22T00:00:00Z"
+                    }
                   ]
                 }
               }
             }
           },
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/api/alerts/rules/{id}": {
       "put": {
-        "tags": ["alert"],
+        "tags": [
+          "alert"
+        ],
         "summary": "Update alert rule",
         "description": "Updates threshold_value, level, and enabled. Does not allow changing metric, operator, or server_id. Admin-only.",
         "operationId": "updateAlertRule",
@@ -112,37 +176,65 @@
             "in": "path",
             "required": true,
             "description": "Rule ID, must be positive.",
-            "schema": {"type": "integer", "format": "int64", "minimum": 1}
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
           },
-          {"$ref": "#/components/parameters/XRequestId"}
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"$ref": "#/components/schemas/UpdateAlertRuleRequest"},
-              "example": {"threshold_value": 90, "level": "critical", "enabled": true}
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAlertRuleRequest"
+              },
+              "example": {
+                "threshold_value": 90,
+                "level": "critical",
+                "enabled": true
+              }
             }
           }
         },
         "responses": {
           "200": {
             "description": "Rule updated",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/XRequestId"}},
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/AlertRuleResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       },
       "delete": {
-        "tags": ["alert"],
+        "tags": [
+          "alert"
+        ],
         "summary": "Delete alert rule (soft delete)",
         "description": "Soft-deletes the rule by setting deleted=1. Admin-only.",
         "operationId": "deleteAlertRule",
@@ -152,30 +244,54 @@
             "in": "path",
             "required": true,
             "description": "Rule ID, must be positive.",
-            "schema": {"type": "integer", "format": "int64", "minimum": 1}
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
           },
-          {"$ref": "#/components/parameters/XRequestId"}
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Rule deleted",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/XRequestId"}},
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/EmptyResponse"},
-                "example": {"code": 0, "message": "success", "data": null}
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": null
+                }
               }
             }
           },
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"}
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/alerts/records": {
       "get": {
-        "tags": ["alert"],
+        "tags": [
+          "alert"
+        ],
         "summary": "List alert records (paginated)",
         "description": "Returns paginated alert records, optionally filtered by server_id and status (unread/read/resolved). Authenticated users only.",
         "operationId": "listAlertRecords",
@@ -185,32 +301,78 @@
             "in": "query",
             "required": false,
             "description": "Filter by server ID.",
-            "schema": {"type": "integer", "format": "int64"}
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           },
           {
             "name": "status",
             "in": "query",
             "required": false,
             "description": "Filter by status: unread, read, resolved.",
-            "schema": {"type": "string", "enum": ["unread", "read", "resolved"]}
+            "schema": {
+              "type": "string",
+              "enum": [
+                "unread",
+                "read",
+                "resolved"
+              ]
+            }
           },
-          {"name": "page", "in": "query", "schema": {"type": "integer", "default": 1, "minimum": 1}},
-          {"name": "page_size", "in": "query", "schema": {"type": "integer", "default": 20, "minimum": 1, "maximum": 100}},
-          {"$ref": "#/components/parameters/XRequestId"}
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Paginated alert records",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/XRequestId"}},
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/AlertRecordPageResponse"},
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRecordPageResponse"
+                },
                 "example": {
                   "code": 0,
                   "message": "success",
                   "data": {
                     "items": [
-                      {"id": 1, "rule_id": 1, "server_id": 1, "metric": "cpu", "current_value": 90.5, "threshold_value": 80, "level": "warning", "status": "unread", "triggered_at": "2026-07-22T00:00:00Z", "created_at": "2026-07-22T00:00:00Z"}
+                      {
+                        "id": 1,
+                        "rule_id": 1,
+                        "server_id": 1,
+                        "metric": "cpu",
+                        "current_value": 90.5,
+                        "threshold_value": 80,
+                        "level": "warning",
+                        "status": "unread",
+                        "triggered_at": "2026-07-22T00:00:00Z",
+                        "created_at": "2026-07-22T00:00:00Z"
+                      }
                     ],
                     "total": 1,
                     "page": 1,
@@ -220,14 +382,20 @@
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/api/alerts/records/{id}/read": {
       "put": {
-        "tags": ["alert"],
+        "tags": [
+          "alert"
+        ],
         "summary": "Mark alert record as read",
         "description": "Marks an unread alert record as read. Already read or resolved records are not affected. Authenticated users only.",
         "operationId": "markAlertRecordAsRead",
@@ -237,30 +405,54 @@
             "in": "path",
             "required": true,
             "description": "Record ID, must be positive.",
-            "schema": {"type": "integer", "format": "int64", "minimum": 1}
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
           },
-          {"$ref": "#/components/parameters/XRequestId"}
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Record marked as read",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/XRequestId"}},
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/EmptyResponse"},
-                "example": {"code": 0, "message": "success", "data": null}
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": null
+                }
               }
             }
           },
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "404": {"$ref": "#/components/responses/NotFound"}
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     }
   },
   "components": {
     "securitySchemes": {
-      "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
     },
     "parameters": {
       "XRequestId": {
@@ -268,13 +460,18 @@
         "in": "header",
         "required": false,
         "description": "Optional client request trace ID. The server generates a UUID when omitted.",
-        "schema": {"type": "string"}
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "headers": {
       "XRequestId": {
         "description": "Server-generated UUID request trace ID.",
-        "schema": {"type": "string", "format": "uuid"}
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
       }
     },
     "responses": {
@@ -282,8 +479,14 @@
         "description": "Missing, invalid, or expired JWT (40100)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40100, "message": "unauthorized", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40100,
+              "message": "unauthorized",
+              "data": null
+            }
           }
         }
       },
@@ -291,8 +494,14 @@
         "description": "Authenticated but not an administrator (40300)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40300, "message": "forbidden", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40300,
+              "message": "forbidden",
+              "data": null
+            }
           }
         }
       },
@@ -300,8 +509,14 @@
         "description": "Resource not found (40400)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40400, "message": "resource not found", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40400,
+              "message": "resource not found",
+              "data": null
+            }
           }
         }
       },
@@ -309,8 +524,14 @@
         "description": "Invalid request parameter (40002)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40002, "message": "invalid request parameter", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40002,
+              "message": "invalid request parameter",
+              "data": null
+            }
           }
         }
       }
@@ -318,111 +539,351 @@
     "schemas": {
       "CreateAlertRuleRequest": {
         "type": "object",
-        "required": ["metric", "operator", "threshold_value", "level"],
+        "required": [
+          "metric",
+          "operator",
+          "threshold_value",
+          "level"
+        ],
         "properties": {
-          "server_id": {"type": "integer", "format": "int64", "nullable": true, "description": "Server ID. Null means general rule."},
-          "metric": {"type": "string", "enum": ["cpu", "memory", "disk", "temperature", "load"]},
-          "operator": {"type": "string", "enum": [">", ">=", "<", "<="]},
-          "threshold_value": {"type": "number", "minimum": 0},
-          "level": {"type": "string", "enum": ["warning", "critical"]}
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Server ID. Null means general rule."
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "cpu",
+              "memory",
+              "disk",
+              "temperature",
+              "load"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              ">",
+              ">=",
+              "<",
+              "<="
+            ]
+          },
+          "threshold_value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "critical"
+            ]
+          },
+          "confirm_count": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "连续越界确认次数(可选,默认1=立即触发)"
+          }
         }
       },
       "UpdateAlertRuleRequest": {
         "type": "object",
-        "required": ["threshold_value", "level", "enabled"],
+        "required": [
+          "threshold_value",
+          "level",
+          "enabled"
+        ],
         "properties": {
-          "threshold_value": {"type": "number", "minimum": 0},
-          "level": {"type": "string", "enum": ["warning", "critical"]},
-          "enabled": {"type": "boolean"}
+          "threshold_value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "critical"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "confirm_count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "连续越界确认次数(可选项,不传保持原值)"
+          }
         }
       },
       "AlertRule": {
         "type": "object",
-        "required": ["id", "metric", "operator", "threshold_value", "level", "enabled"],
+        "required": [
+          "id",
+          "metric",
+          "operator",
+          "threshold_value",
+          "level",
+          "enabled",
+          "confirm_count"
+        ],
         "properties": {
-          "id": {"type": "integer", "format": "int64"},
-          "server_id": {"type": "integer", "format": "int64", "nullable": true},
-          "metric": {"type": "string"},
-          "operator": {"type": "string"},
-          "threshold_value": {"type": "number"},
-          "level": {"type": "string"},
-          "enabled": {"type": "boolean"},
-          "created_by": {"type": "integer", "format": "int64", "nullable": true},
-          "created_at": {"type": "string", "format": "date-time"},
-          "updated_at": {"type": "string", "format": "date-time"}
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "metric": {
+            "type": "string"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "threshold_value": {
+            "type": "number"
+          },
+          "level": {
+            "type": "string"
+          },
+          "confirm_count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "连续越界确认次数: 1=立即触发, >1=连续N次越界触发"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "created_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "AlertRecord": {
         "type": "object",
-        "required": ["id", "server_id", "metric", "current_value", "threshold_value", "level", "status", "triggered_at"],
+        "required": [
+          "id",
+          "server_id",
+          "metric",
+          "current_value",
+          "threshold_value",
+          "level",
+          "status",
+          "triggered_at"
+        ],
         "properties": {
-          "id": {"type": "integer", "format": "int64"},
-          "rule_id": {"type": "integer", "format": "int64", "nullable": true},
-          "server_id": {"type": "integer", "format": "int64"},
-          "metric": {"type": "string"},
-          "current_value": {"type": "number"},
-          "threshold_value": {"type": "number"},
-          "level": {"type": "string"},
-          "status": {"type": "string", "enum": ["unread", "read", "resolved"]},
-          "message": {"type": "string", "nullable": true},
-          "read_by": {"type": "integer", "format": "int64", "nullable": true},
-          "read_at": {"type": "string", "format": "date-time", "nullable": true},
-          "triggered_at": {"type": "string", "format": "date-time"},
-          "created_at": {"type": "string", "format": "date-time"}
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rule_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "server_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "current_value": {
+            "type": "number"
+          },
+          "threshold_value": {
+            "type": "number"
+          },
+          "level": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unread",
+              "read",
+              "resolved"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "read_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "triggered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "AlertRuleResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
-          "code": {"type": "integer", "example": 0},
-          "message": {"type": "string", "example": "success"},
-          "data": {"$ref": "#/components/schemas/AlertRule"}
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AlertRule"
+          }
         }
       },
       "AlertRuleListResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
-          "code": {"type": "integer", "example": 0},
-          "message": {"type": "string", "example": "success"},
-          "data": {"type": "array", "items": {"$ref": "#/components/schemas/AlertRule"}}
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertRule"
+            }
+          }
         }
       },
       "AlertRecordPageResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
-          "code": {"type": "integer", "example": 0},
-          "message": {"type": "string", "example": "success"},
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
           "data": {
             "type": "object",
-            "required": ["items", "total", "page", "page_size"],
+            "required": [
+              "items",
+              "total",
+              "page",
+              "page_size"
+            ],
             "properties": {
-              "items": {"type": "array", "items": {"$ref": "#/components/schemas/AlertRecord"}},
-              "total": {"type": "integer", "example": 100},
-              "page": {"type": "integer", "example": 1},
-              "page_size": {"type": "integer", "example": 20}
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AlertRecord"
+                }
+              },
+              "total": {
+                "type": "integer",
+                "example": 100
+              },
+              "page": {
+                "type": "integer",
+                "example": 1
+              },
+              "page_size": {
+                "type": "integer",
+                "example": 20
+              }
             }
           }
         }
       },
       "EmptyResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
-          "code": {"type": "integer", "example": 0},
-          "message": {"type": "string", "example": "success"},
-          "data": {"nullable": true, "example": null}
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "nullable": true,
+            "example": null
+          }
         }
       },
       "ErrorResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
-          "code": {"type": "integer", "format": "int32", "enum": [40002, 40100, 40300, 40400]},
-          "message": {"type": "string"},
-          "data": {"nullable": true, "example": null}
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+              40002,
+              40100,
+              40300,
+              40400
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true,
+            "example": null
+          }
         }
       }
     }

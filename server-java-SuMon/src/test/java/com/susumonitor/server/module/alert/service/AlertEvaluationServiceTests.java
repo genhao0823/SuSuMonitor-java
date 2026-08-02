@@ -2,6 +2,7 @@ package com.susumonitor.server.module.alert.service;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -191,6 +192,91 @@ class AlertEvaluationServiceTests {
     private void setupService() {
         service = new AlertEvaluationServiceImpl(ruleMapper, stateMapper, recordMapper,
                 stateMachine, eventPublisher, CLOCK);
+    }
+
+    // ---- 逃逸窗口（confirm_count > 1）----
+
+    /** 首次越界确认数>1：创建计数行（active=false）不触发，不建 record 不发事件。 */
+    @Test
+    void firstBreachWithConfirmWindowCreatesCountingRowOnly() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(null);
+
+        service.evaluate(metrics(bd("90")));
+
+        verify(stateMapper).insertState(argThat(state ->
+                !Boolean.TRUE.equals(state.getActive()) && state.getBreachCount() == 1));
+        verify(recordMapper, never()).insertRecord(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    /** 计数未达阈值：仅递增 breach_count。 */
+    @Test
+    void countingBreachProgressIncrementsCountOnly() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity counting = new AlertStateEntity();
+        counting.setId(1L);
+        counting.setActive(false);
+        counting.setBreachCount(1);
+        counting.setVersion(0);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(counting);
+        when(stateMapper.incrementBreachCount(eq(1L), any(LocalDateTime.class), eq(0))).thenReturn(1);
+
+        service.evaluate(metrics(bd("90")));
+
+        verify(stateMapper).incrementBreachCount(eq(1L), any(LocalDateTime.class), eq(0));
+        verify(recordMapper, never()).insertRecord(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    /** 计数达阈值：升级活跃 + 建 record + 发事件（激活用 activateOnBreachThreshold）。 */
+    @Test
+    void countingReachingThresholdActivatesAndRecords() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity counting = new AlertStateEntity();
+        counting.setId(1L);
+        counting.setActive(false);
+        counting.setBreachCount(2);
+        counting.setVersion(0);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(counting);
+        when(stateMapper.activateOnBreachThreshold(eq(1L), any(), any(LocalDateTime.class), eq(0)))
+                .thenReturn(1);
+
+        service.evaluate(metrics(bd("90")));
+
+        verify(recordMapper).insertRecord(any(AlertRecordEntity.class));
+        verify(stateMapper).activateOnBreachThreshold(eq(1L), any(), any(LocalDateTime.class), eq(0));
+        verify(eventPublisher).publishEvent(any(AlertTriggeredEvent.class));
+    }
+
+    /** 计数中断恢复：删除计数行。 */
+    @Test
+    void countingRecoveryDeletesCountingRow() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity counting = new AlertStateEntity();
+        counting.setId(1L);
+        counting.setActive(false);
+        counting.setBreachCount(2);
+        counting.setVersion(0);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(counting);
+        when(stateMapper.deleteState(eq(1L), eq(0))).thenReturn(1);
+
+        service.evaluate(metrics(bd("50")));
+
+        verify(stateMapper).deleteState(eq(1L), eq(0));
+        verify(recordMapper, never()).insertRecord(any());
     }
 
     private AlertRuleEntity rule(Long id, String metric, String operator, BigDecimal threshold) {

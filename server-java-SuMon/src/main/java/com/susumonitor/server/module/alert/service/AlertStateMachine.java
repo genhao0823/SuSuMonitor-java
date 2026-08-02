@@ -41,12 +41,25 @@ public class AlertStateMachine {
             return new AlertTransition.NoAction();
         }
 
+        int confirmCount = Math.max(1,
+                rule.getConfirmCount() == null ? 1 : rule.getConfirmCount());
         BigDecimal currentValue = metric.extract(metrics);
         boolean breached = operator.eval(currentValue, rule.getThresholdValue());
 
         if (breached && currentState == null) {
-            // 首次越界：无活跃状态 → Trigger。
-            return new AlertTransition.Trigger(rule, currentValue);
+            // 首次越界：无状态行。
+            // confirm_count=1（默认）立即触发；>1 则进入逃逸窗口计数。
+            return confirmCount == 1
+                    ? new AlertTransition.Trigger(rule, currentValue)
+                    : new AlertTransition.CountingStart(rule);
+        }
+        if (breached && !Boolean.TRUE.equals(currentState.getActive())) {
+            // 逃逸窗口计数中：非活跃状态行（active=false），继续越界。
+            int breachedSoFar = currentState.getBreachCount() == null ? 0 : currentState.getBreachCount();
+            // 已累计 (confirmCount-1) 次，本次为第 confirmCount 次 → 达到阈值触发。
+            return breachedSoFar + 1 >= confirmCount
+                    ? new AlertTransition.Trigger(rule, currentValue)
+                    : new AlertTransition.CountingProgress(currentState);
         }
         if (breached && currentState != null && Boolean.TRUE.equals(currentState.getActive())) {
             // 持续越界：已有活跃状态 → ContinueBreached。
@@ -55,6 +68,10 @@ public class AlertStateMachine {
         if (!breached && currentState != null && Boolean.TRUE.equals(currentState.getActive())) {
             // 恢复：活跃状态 + 不再越界 → Resolve。
             return new AlertTransition.Resolve(currentState);
+        }
+        if (!breached && currentState != null && !Boolean.TRUE.equals(currentState.getActive())) {
+            // 计数状态行 + 恢复：连续越界中断，清除计数行。
+            return new AlertTransition.CountingReset(currentState);
         }
         // 不越界且无活跃状态，或状态已恢复（active=false）→ NoAction。
         return new AlertTransition.NoAction();

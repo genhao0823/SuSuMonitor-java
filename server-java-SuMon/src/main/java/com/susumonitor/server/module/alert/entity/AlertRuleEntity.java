@@ -33,6 +33,9 @@ public class AlertRuleEntity {
     private BigDecimal thresholdValue;
     // 告警等级: warning/critical。
     private String level;
+    // 连续越界确认次数: 1=首次越界即触发（默认/向后兼容）, >1=连续越界 N 次触发（逃逸窗口）。
+    @TableField("confirm_count")
+    private Integer confirmCount;
     // 是否启用: 0 否, 1 是。
     private Boolean enabled;
     // 软删除标记: 0 未删除, 1 已删除。
