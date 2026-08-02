@@ -92,6 +92,21 @@
           </template>
         </el-table-column>
         <el-table-column
+          label="确认次数"
+          width="120"
+        >
+          <template #default="{ row }">
+            <el-tag
+              v-if="(row.confirm_count ?? 1) > 1"
+              type="info"
+              effect="plain"
+            >
+              连续 {{ row.confirm_count }} 次
+            </el-tag>
+            <span v-else>1（立即触发）</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="启用"
           width="90"
         >

@@ -118,6 +118,25 @@
       </el-row>
 
       <el-form-item
+        label="连续确认次数"
+        prop="confirm_count"
+      >
+        <div class="alert-rule-dialog__confirm">
+          <el-input-number
+            v-model="form.confirm_count"
+            :min="1"
+            :max="100"
+            :step="1"
+            controls-position="right"
+            class="alert-rule-dialog__confirm-input"
+          />
+          <span class="alert-rule-dialog__confirm-tip">
+            {{ form.confirm_count > 1 ? `连续越界 ${form.confirm_count} 次才触发(防瞬时抖动)` : '首次越界即触发' }}
+          </span>
+        </div>
+      </el-form-item>
+
+      <el-form-item
         v-if="isEdit"
         label="启用"
         prop="enabled"
@@ -206,6 +225,7 @@ const form = reactive({
   operator: '>' as AlertOperator,
   threshold_value: 80,
   level: 'warning' as AlertLevel,
+  confirm_count: 1,
   enabled: true
 })
 const serverIdInput = ref<number | null>(null)
@@ -222,6 +242,7 @@ watch(
       form.operator = (r.operator as AlertOperator) ?? '>'
       form.threshold_value = r.threshold_value
       form.level = (r.level as AlertLevel) ?? 'warning'
+      form.confirm_count = r.confirm_count ?? 1
       form.enabled = r.enabled
     }
   },
@@ -234,6 +255,7 @@ function resetForm(): void {
   form.operator = '>'
   form.threshold_value = 80
   form.level = 'warning'
+  form.confirm_count = 1
   form.enabled = true
 }
 
@@ -289,7 +311,8 @@ async function handleSubmit(): Promise<void> {
       await alerts.updateRule(props.rule.id, {
         threshold_value: form.threshold_value,
         level: form.level,
-        enabled: form.enabled
+        enabled: form.enabled,
+        confirm_count: form.confirm_count
       })
       ElMessage.success('规则已更新')
     } else {
@@ -298,7 +321,8 @@ async function handleSubmit(): Promise<void> {
         metric: form.metric,
         operator: form.operator,
         threshold_value: form.threshold_value,
-        level: form.level
+        level: form.level,
+        confirm_count: form.confirm_count
       })
       ElMessage.success('规则已创建')
     }
@@ -328,6 +352,22 @@ function onClose(): void {
 
 .alert-rule-dialog__full {
   width: 100%;
+}
+
+.alert-rule-dialog__confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.alert-rule-dialog__confirm-input {
+  width: 160px;
+}
+
+.alert-rule-dialog__confirm-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .alert-rule-dialog__hint {
