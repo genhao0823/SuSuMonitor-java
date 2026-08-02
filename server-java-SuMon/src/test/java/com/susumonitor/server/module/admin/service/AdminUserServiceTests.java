@@ -2,6 +2,7 @@ package com.susumonitor.server.module.admin.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -12,7 +13,7 @@ import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
 import com.susumonitor.server.module.admin.vo.BatchReviewResult;
-import com.susumonitor.server.module.admin.vo.PendingUserVo;
+import com.susumonitor.server.module.admin.vo.AdminUserVo;
 import com.susumonitor.server.module.auth.entity.UserEntity;
 import com.susumonitor.server.module.auth.service.UserService;
 import com.susumonitor.server.module.auth.vo.CurrentUserVo;
@@ -43,17 +44,17 @@ class AdminUserServiceTests {
         adminUserService = new AdminUserServiceImpl(userService);
     }
 
-    // 验证待审核分页列表转换安全 VO 并透传分页信息。
+    // 验证分页列表转换安全 VO 并透传分页信息与 status 过滤。
     @Test
-    void pagePendingUsersShouldReturnMappedPage() {
+    void pageUsersShouldReturnMappedPage() {
         PageResult<UserEntity> page = new PageResult<>();
         page.setItems(List.of(user("pending", "user")));
         page.setTotal(1);
         page.setPage(1);
         page.setPageSize(20);
-        when(userService.pagePendingUsers("alice", 1, 20)).thenReturn(page);
+        when(userService.pageUsers("pending", "alice", 1, 20)).thenReturn(page);
 
-        PageResult<PendingUserVo> result = adminUserService.pagePendingUsers("alice", 1, 20);
+        PageResult<AdminUserVo> result = adminUserService.pageUsers("pending", "alice", 1, 20);
 
         assertEquals(1, result.getItems().size());
         assertEquals(1, result.getTotal());
@@ -61,7 +62,7 @@ class AdminUserServiceTests {
         assertEquals(20, result.getPageSize());
     }
 
-    // 验证批量审核全部成功时 processed 计数。
+    // 验证批量审核全部成功时 processed 计数且 failedIds 为空。
     @Test
     void batchApproveAllSuccessShouldCountProcessed() {
         when(userService.getReviewUserById(2L)).thenReturn(user("pending", "user"));
@@ -72,9 +73,10 @@ class AdminUserServiceTests {
 
         assertEquals(2, result.getProcessed());
         assertEquals(0, result.getFailed());
+        assertTrue(result.getFailedIds().isEmpty());
     }
 
-    // 验证批量审核单个失败（状态已变/不存在）累计到 failed 不中断整体。
+    // 验证批量审核单个失败（状态已变/不存在）累计到 failed/failedIds 不中断整体。
     @Test
     void batchApprovePartialFailureShouldCountFailed() {
         when(userService.getReviewUserById(2L)).thenReturn(user("approved", "user"));
@@ -85,6 +87,7 @@ class AdminUserServiceTests {
 
         assertEquals(1, result.getProcessed());
         assertEquals(1, result.getFailed());
+        assertEquals(List.of(2L), result.getFailedIds());
     }
 
     // 验证批量审核空列表返回参数错误。

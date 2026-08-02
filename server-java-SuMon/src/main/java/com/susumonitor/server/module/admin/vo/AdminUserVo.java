@@ -5,7 +5,7 @@ import lombok.Data;
 
 // 自动生成当前 VO 的 getter、setter、toString、equals 和 hashCode 方法。
 @Data
-public class PendingUserVo {
+public class AdminUserVo {
 
     private Long id;
 

@@ -15,7 +15,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -50,32 +49,24 @@ public class UserServiceImpl implements UserService {
     private final String dummyPasswordHash;
 
     /**
-     * 查询所有待审核用户（users 表所有权契约，管理面通过本接口访问）。
+     * 分页查询普通用户（users 表所有权契约，管理面通过本接口访问）。
      *
-     * @return 待审核用户实体列表
-     */
-    @Override
-    public List<UserEntity> listPendingUsers() {
-        return userMapper.selectPendingUsers();
-    }
-
-    /**
-     * 分页查询待审核用户（users 表所有权契约，管理面通过本接口访问）。
-     *
+     * @param status   审核状态过滤（pending/approved/rejected），null/空白时不过滤
      * @param keyword  用户名模糊关键字，null/空白时不过滤
      * @param page     页码（从 1 起）
      * @param pageSize 每页大小
      * @return 分页结果（items/total/page/page_size）
      */
     @Override
-    public com.susumonitor.server.common.vo.PageResult<UserEntity> pagePendingUsers(
-            String keyword, int page, int pageSize) {
-        String normalized = keyword == null ? null : keyword.trim();
+    public com.susumonitor.server.common.vo.PageResult<UserEntity> pageUsers(
+            String status, String keyword, int page, int pageSize) {
+        String normalizedStatus = status == null ? null : status.trim();
+        String normalizedKeyword = keyword == null ? null : keyword.trim();
         int offset = (page - 1) * pageSize;
         com.susumonitor.server.common.vo.PageResult<UserEntity> result =
                 new com.susumonitor.server.common.vo.PageResult<>();
-        result.setItems(userMapper.selectPagePendingUsers(normalized, offset, pageSize));
-        result.setTotal(userMapper.countPendingUsers(normalized));
+        result.setItems(userMapper.selectPageUsers(normalizedStatus, normalizedKeyword, offset, pageSize));
+        result.setTotal(userMapper.countUsers(normalizedStatus, normalizedKeyword));
         result.setPage(page);
         result.setPageSize(pageSize);
         return result;

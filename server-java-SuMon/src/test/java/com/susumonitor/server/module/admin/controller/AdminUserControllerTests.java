@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.susumonitor.server.module.admin.service.AdminUserService;
 import com.susumonitor.server.module.auth.entity.UserEntity;
-import com.susumonitor.server.module.admin.vo.PendingUserVo;
+import com.susumonitor.server.module.admin.vo.AdminUserVo;
 import com.susumonitor.server.module.auth.mapper.AuthBootstrapStateMapper;
 import com.susumonitor.server.module.auth.mapper.UserMapper;
 import com.susumonitor.server.module.auth.vo.CurrentUserVo;
@@ -109,26 +109,28 @@ class AdminUserControllerTests {
 
 
 
-    // 验证管理员可以获取待审核用户分页列表并返回统一成功响应。
+    // 验证管理员可以获取用户分页列表并返回统一成功响应（status/keyword/page 参数透传）。
     @Test
-    void pendingUsersShouldReturnSuccess() throws Exception {
-        PendingUserVo pendingUserVo = new PendingUserVo();
-        pendingUserVo.setId(2L);
-        pendingUserVo.setUsername("pending_user");
-        pendingUserVo.setRole("user");
-        pendingUserVo.setReviewStatus("pending");
-        pendingUserVo.setCreatedAt(OffsetDateTime.now());
-        com.susumonitor.server.common.vo.PageResult<PendingUserVo> page = new com.susumonitor.server.common.vo.PageResult<>();
-        page.setItems(List.of(pendingUserVo));
+    void listUsersShouldReturnSuccess() throws Exception {
+        com.susumonitor.server.module.admin.vo.AdminUserVo adminUserVo = new com.susumonitor.server.module.admin.vo.AdminUserVo();
+        adminUserVo.setId(2L);
+        adminUserVo.setUsername("pending_user");
+        adminUserVo.setRole("user");
+        adminUserVo.setReviewStatus("pending");
+        adminUserVo.setCreatedAt(OffsetDateTime.now());
+        com.susumonitor.server.common.vo.PageResult<com.susumonitor.server.module.admin.vo.AdminUserVo> page =
+                new com.susumonitor.server.common.vo.PageResult<>();
+        page.setItems(List.of(adminUserVo));
         page.setTotal(1);
         page.setPage(1);
         page.setPageSize(20);
-        Mockito.when(adminUserService.pagePendingUsers("user", 1, 20)).thenReturn(page);
+        Mockito.when(adminUserService.pageUsers("pending", "user", 1, 20)).thenReturn(page);
         Mockito.when(jwtTokenService.parseToken("admin-token"))
                 .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
 
-        mockMvc.perform(get("/api/admin/users/pending")
+        mockMvc.perform(get("/api/admin/users")
+                        .param("status", "pending")
                         .param("keyword", "user")
                         .param("page", "1")
                         .param("page_size", "20")
@@ -144,7 +146,19 @@ class AdminUserControllerTests {
                 .andExpect(jsonPath("$.data.items[0].passwordHash").doesNotExist());
     }
 
-    // 验证批量审核通过返回处理统计。
+    // 验证非法 status 值返回参数错误 40002。
+    @Test
+    void invalidStatusShouldReturnBadRequest() throws Exception {
+        authenticateAdmin();
+
+        mockMvc.perform(get("/api/admin/users")
+                        .param("status", "banned")
+                        .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40002));
+    }
+
+    // 验证批量审核通过返回处理统计（含失败明细）。
     @Test
     void batchApproveUsersShouldReturnResult() throws Exception {
         authenticateAdmin();
@@ -152,6 +166,7 @@ class AdminUserControllerTests {
                 new com.susumonitor.server.module.admin.vo.BatchReviewResult();
         result.setProcessed(2);
         result.setFailed(0);
+        result.setFailedIds(List.of());
         Mockito.when(adminUserService.batchUpdateReviewStatus(List.of(2L, 3L), "approved", 1L))
                 .thenReturn(result);
 
@@ -162,7 +177,8 @@ class AdminUserControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.processed").value(2))
-                .andExpect(jsonPath("$.data.failed").value(0));
+                .andExpect(jsonPath("$.data.failed").value(0))
+                .andExpect(jsonPath("$.data.failed_ids").isArray());
     }
 
     // 验证批量拒绝空列表返回参数错误。
@@ -215,7 +231,7 @@ class AdminUserControllerTests {
     // 验证未认证请求访问管理员接口返回统一 401。
     @Test
     void unauthenticatedRequestShouldReturnUnauthorized() throws Exception {
-        mockMvc.perform(get("/api/admin/users/pending"))
+        mockMvc.perform(get("/api/admin/users"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(40100));
     }

@@ -3,8 +3,8 @@ package com.susumonitor.server.module.admin.service;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
+import com.susumonitor.server.module.admin.vo.AdminUserVo;
 import com.susumonitor.server.module.admin.vo.BatchReviewResult;
-import com.susumonitor.server.module.admin.vo.PendingUserVo;
 import com.susumonitor.server.module.auth.entity.UserEntity;
 import com.susumonitor.server.module.auth.service.UserService;
 import com.susumonitor.server.module.auth.vo.CurrentUserVo;
@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,12 +39,12 @@ public class AdminUserServiceImpl implements AdminUserService {
     // users 表数据所有权归 auth 模块，审核数据访问统一走 UserService 契约。
     private final UserService userService;
 
-    // 分页查询待审核用户，并按创建时间升序返回给管理员。
+    // 分页查询普通用户（管理面列表），并按审核状态筛选。
     @Transactional(readOnly = true)
-    public PageResult<PendingUserVo> pagePendingUsers(String keyword, int page, int pageSize) {
-        PageResult<UserEntity> raw = userService.pagePendingUsers(keyword, page, pageSize);
-        PageResult<PendingUserVo> result = new PageResult<>();
-        result.setItems(raw.getItems().stream().map(this::toPendingUserVo).toList());
+    public PageResult<AdminUserVo> pageUsers(String status, String keyword, int page, int pageSize) {
+        PageResult<UserEntity> raw = userService.pageUsers(status, keyword, page, pageSize);
+        PageResult<AdminUserVo> result = new PageResult<>();
+        result.setItems(raw.getItems().stream().map(this::toAdminUserVo).toList());
         result.setTotal(raw.getTotal());
         result.setPage(raw.getPage());
         result.setPageSize(raw.getPageSize());
@@ -62,7 +63,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         return updateUserReviewStatus(userId, operatorUserId, REJECTED_STATUS);
     }
 
-    // 批量审核：逐 id 原子审核，单个失败累计到 failed 不整体回滚，便于前端展示部分成功。
+    // 批量审核：逐 id 原子审核，单个失败累计到 failed/failedIds 不整体回滚，便于前端展示部分成功。
     @Transactional
     public BatchReviewResult batchUpdateReviewStatus(List<Long> userIds, String targetStatus, Long operatorUserId) {
         if (userIds == null || userIds.isEmpty()) {
@@ -72,10 +73,10 @@ public class AdminUserServiceImpl implements AdminUserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
         int processed = 0;
-        int failed = 0;
+        List<Long> failedIds = new ArrayList<>();
         for (Long userId : userIds) {
             if (userId == null || userId <= 0) {
-                failed++;
+                failedIds.add(userId);
                 continue;
             }
             try {
@@ -84,12 +85,13 @@ public class AdminUserServiceImpl implements AdminUserService {
             } catch (BusinessException exception) {
                 log.warn("batch review skipped userId={}, target={}, reason={}",
                         userId, targetStatus, exception.getErrorCode());
-                failed++;
+                failedIds.add(userId);
             }
         }
         BatchReviewResult result = new BatchReviewResult();
         result.setProcessed(processed);
-        result.setFailed(failed);
+        result.setFailed(failedIds.size());
+        result.setFailedIds(failedIds);
         return result;
     }
 
@@ -115,15 +117,15 @@ public class AdminUserServiceImpl implements AdminUserService {
         return toCurrentUserVo(userEntity);
     }
 
-    // 将待审核用户实体转换为接口响应对象，避免暴露密码哈希等敏感字段。
-    private PendingUserVo toPendingUserVo(UserEntity userEntity) {
-        PendingUserVo pendingUserVo = new PendingUserVo();
-        pendingUserVo.setId(userEntity.getId());
-        pendingUserVo.setUsername(userEntity.getUsername());
-        pendingUserVo.setRole(userEntity.getRole());
-        pendingUserVo.setReviewStatus(userEntity.getReviewStatus());
-        pendingUserVo.setCreatedAt(toOffsetDateTime(userEntity.getCreatedAt()));
-        return pendingUserVo;
+    // 将用户实体转换为管理面接口响应对象，避免暴露密码哈希等敏感字段。
+    private AdminUserVo toAdminUserVo(UserEntity userEntity) {
+        AdminUserVo adminUserVo = new AdminUserVo();
+        adminUserVo.setId(userEntity.getId());
+        adminUserVo.setUsername(userEntity.getUsername());
+        adminUserVo.setRole(userEntity.getRole());
+        adminUserVo.setReviewStatus(userEntity.getReviewStatus());
+        adminUserVo.setCreatedAt(toOffsetDateTime(userEntity.getCreatedAt()));
+        return adminUserVo;
     }
 
     // 按应用时区将数据库时间转换为接口时间。

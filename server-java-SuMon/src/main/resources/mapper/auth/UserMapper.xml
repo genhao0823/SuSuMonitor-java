@@ -66,24 +66,28 @@
         WHERE id = #{userId}
     </select>
 
-    <select id="selectPagePendingUsers" resultMap="UserResultMap">
+    <select id="selectPageUsers" resultMap="UserResultMap">
         SELECT
         <include refid="SafeUserColumns"/>
         FROM users
         WHERE role = 'user'
-          AND review_status = 'pending'
+        <if test="status != null and status != ''">
+            AND review_status = #{status}
+        </if>
         <if test="keyword != null and keyword != ''">
             AND username LIKE CONCAT('%', #{keyword}, '%')
         </if>
-        ORDER BY created_at ASC, id ASC
+        ORDER BY created_at DESC, id DESC
         LIMIT #{offset}, #{pageSize}
     </select>
 
-    <select id="countPendingUsers" resultType="long">
+    <select id="countUsers" resultType="long">
         SELECT COUNT(id)
         FROM users
         WHERE role = 'user'
-          AND review_status = 'pending'
+        <if test="status != null and status != ''">
+            AND review_status = #{status}
+        </if>
         <if test="keyword != null and keyword != ''">
             AND username LIKE CONCAT('%', #{keyword}, '%')
         </if>

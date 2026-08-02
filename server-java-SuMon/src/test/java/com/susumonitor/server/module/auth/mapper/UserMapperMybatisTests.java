@@ -53,9 +53,9 @@ class UserMapperMybatisTests {
         sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
     }
 
-    /** 无关键字分页：按 created_at ASC 限制 offset/pageSize。 */
+    /** 无关键字分页：status=pending 过滤 + LIMIT 分页。 */
     @Test
-    void pagePendingUsersWithoutKeywordShouldLimitRows() throws Exception {
+    void pageUsersWithPendingStatusShouldLimitRows() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             UserMapper mapper = session.getMapper(UserMapper.class);
             insertPending(mapper, "alice");
@@ -63,26 +63,56 @@ class UserMapperMybatisTests {
             insertPending(mapper, "carol");
             insertReview(mapper, "zoe");
 
-            List<com.susumonitor.server.module.auth.entity.UserEntity> page = mapper.selectPagePendingUsers(null, 0, 2);
-            long total = mapper.countPendingUsers(null);
+            List<com.susumonitor.server.module.auth.entity.UserEntity> page = mapper.selectPageUsers("pending", null, 0, 2);
+            long total = mapper.countUsers("pending", null);
 
             assertEquals(2, page.size());
-            assertEquals("alice", page.get(0).getUsername());
+            // 管理视图统一 created_at DESC:后插入的 carol/bob 在前。
+            assertEquals("carol", page.get(0).getUsername());
             assertEquals("bob", page.get(1).getUsername());
-            assertEquals(3, total); // zoe 已审核不计入
+            assertEquals(3, total); // zoe 已审核不计入 pending
+        }
+    }
+
+    /** status=approved 过滤：只返回已审核用户。 */
+    @Test
+    void pageUsersWithApprovedStatusShouldFilter() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            UserMapper mapper = session.getMapper(UserMapper.class);
+            insertPending(mapper, "alice");
+            insertReview(mapper, "zoe");
+
+            List<com.susumonitor.server.module.auth.entity.UserEntity> page = mapper.selectPageUsers("approved", null, 0, 20);
+            long total = mapper.countUsers("approved", null);
+
+            assertEquals(1, page.size());
+            assertEquals("zoe", page.get(0).getUsername());
+            assertEquals(1, total);
+        }
+    }
+
+    /** status 为空时不过滤：全部普通用户。 */
+    @Test
+    void pageUsersWithoutStatusShouldReturnAll() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            UserMapper mapper = session.getMapper(UserMapper.class);
+            insertPending(mapper, "alice");
+            insertReview(mapper, "zoe");
+
+            assertEquals(2, mapper.countUsers(null, null));
         }
     }
 
     /** keyword 模糊过滤：匹配中断且仅返回匹配数。 */
     @Test
-    void pagePendingUsersWithKeywordShouldFilterByUsername() throws Exception {
+    void pageUsersWithKeywordShouldFilterByUsername() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             UserMapper mapper = session.getMapper(UserMapper.class);
             insertPending(mapper, "alice");
             insertPending(mapper, "bob");
 
-            List<com.susumonitor.server.module.auth.entity.UserEntity> page = mapper.selectPagePendingUsers("li", 0, 20);
-            long total = mapper.countPendingUsers("li");
+            List<com.susumonitor.server.module.auth.entity.UserEntity> page = mapper.selectPageUsers(null, "li", 0, 20);
+            long total = mapper.countUsers(null, "li");
 
             assertEquals(1, page.size());
             assertEquals("alice", page.get(0).getUsername());
