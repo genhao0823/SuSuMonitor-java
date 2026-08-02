@@ -23,6 +23,15 @@ public interface UserMapper extends BaseMapper<UserEntity> {
     // 按 ID 查询审核目标的安全字段，不读取密码哈希。
     UserEntity selectReviewUserById(@Param("userId") Long userId);
 
+    // 分页查询待审核普通用户，keyword 非空时按用户名模糊匹配（同一过滤条件的 COUNT 见 countPendingUsers）。
+    List<UserEntity> selectPagePendingUsers(
+            @Param("keyword") String keyword,
+            @Param("offset") int offset,
+            @Param("pageSize") int pageSize);
+
+    // 统计待审核普通用户总数，keyword 过滤与 selectPagePendingUsers 一致。
+    long countPendingUsers(@Param("keyword") String keyword);
+
     // 仅当目标仍是待审核普通用户时原子更新审核结果。
     int updateReviewStatus(
             @Param("userId") Long userId,

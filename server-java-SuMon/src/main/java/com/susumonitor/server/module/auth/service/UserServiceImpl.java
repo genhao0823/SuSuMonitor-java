@@ -60,6 +60,28 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
+     * 分页查询待审核用户（users 表所有权契约，管理面通过本接口访问）。
+     *
+     * @param keyword  用户名模糊关键字，null/空白时不过滤
+     * @param page     页码（从 1 起）
+     * @param pageSize 每页大小
+     * @return 分页结果（items/total/page/page_size）
+     */
+    @Override
+    public com.susumonitor.server.common.vo.PageResult<UserEntity> pagePendingUsers(
+            String keyword, int page, int pageSize) {
+        String normalized = keyword == null ? null : keyword.trim();
+        int offset = (page - 1) * pageSize;
+        com.susumonitor.server.common.vo.PageResult<UserEntity> result =
+                new com.susumonitor.server.common.vo.PageResult<>();
+        result.setItems(userMapper.selectPagePendingUsers(normalized, offset, pageSize));
+        result.setTotal(userMapper.countPendingUsers(normalized));
+        result.setPage(page);
+        result.setPageSize(pageSize);
+        return result;
+    }
+
+    /**
      * 按 ID 查询用户，供管理面审核前置校验使用。
      *
      * @param userId 用户 ID

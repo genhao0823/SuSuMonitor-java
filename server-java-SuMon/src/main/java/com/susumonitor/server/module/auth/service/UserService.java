@@ -40,6 +40,17 @@ public interface UserService {
     List<UserEntity> listPendingUsers();
 
     /**
+     * 分页查询待审核用户（管理面分页/搜索）。
+     *
+     * @param keyword  用户名模糊关键字，null/空白时不过滤
+     * @param page     页码（从 1 起）
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    com.susumonitor.server.common.vo.PageResult<UserEntity> pagePendingUsers(
+            String keyword, int page, int pageSize);
+
+    /**
      * 按 ID 查询用户（管理面审核前置校验用）。
      *
      * @param userId 用户 ID

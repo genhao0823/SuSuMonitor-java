@@ -109,7 +109,7 @@ class AdminUserControllerTests {
 
 
 
-    // 验证管理员可以获取待审核用户列表并返回统一成功响应。
+    // 验证管理员可以获取待审核用户分页列表并返回统一成功响应。
     @Test
     void pendingUsersShouldReturnSuccess() throws Exception {
         PendingUserVo pendingUserVo = new PendingUserVo();
@@ -118,21 +118,64 @@ class AdminUserControllerTests {
         pendingUserVo.setRole("user");
         pendingUserVo.setReviewStatus("pending");
         pendingUserVo.setCreatedAt(OffsetDateTime.now());
-        Mockito.when(adminUserService.listPendingUsers()).thenReturn(List.of(pendingUserVo));
+        com.susumonitor.server.common.vo.PageResult<PendingUserVo> page = new com.susumonitor.server.common.vo.PageResult<>();
+        page.setItems(List.of(pendingUserVo));
+        page.setTotal(1);
+        page.setPage(1);
+        page.setPageSize(20);
+        Mockito.when(adminUserService.pagePendingUsers("user", 1, 20)).thenReturn(page);
         Mockito.when(jwtTokenService.parseToken("admin-token"))
                 .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
 
         mockMvc.perform(get("/api/admin/users/pending")
+                        .param("keyword", "user")
+                        .param("page", "1")
+                        .param("page_size", "20")
                         .header("Authorization", "Bearer admin-token")
                         .header("X-Correlation-ID", "admin-pending-1"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Request-ID", not(blankOrNullString())))
                 .andExpect(header().string("X-Correlation-ID", "admin-pending-1"))
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data[0].id").value(2L))
-                .andExpect(jsonPath("$.data[0].reviewStatus").value("pending"))
-                .andExpect(jsonPath("$.data[0].passwordHash").doesNotExist());
+                .andExpect(jsonPath("$.data.items[0].id").value(2L))
+                .andExpect(jsonPath("$.data.items[0].reviewStatus").value("pending"))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].passwordHash").doesNotExist());
+    }
+
+    // 验证批量审核通过返回处理统计。
+    @Test
+    void batchApproveUsersShouldReturnResult() throws Exception {
+        authenticateAdmin();
+        com.susumonitor.server.module.admin.vo.BatchReviewResult result =
+                new com.susumonitor.server.module.admin.vo.BatchReviewResult();
+        result.setProcessed(2);
+        result.setFailed(0);
+        Mockito.when(adminUserService.batchUpdateReviewStatus(List.of(2L, 3L), "approved", 1L))
+                .thenReturn(result);
+
+        mockMvc.perform(put("/api/admin/users/batch-approve")
+                        .header("Authorization", "Bearer admin-token")
+                        .contentType("application/json")
+                        .content("{\"user_ids\":[2,3]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.processed").value(2))
+                .andExpect(jsonPath("$.data.failed").value(0));
+    }
+
+    // 验证批量拒绝空列表返回参数错误。
+    @Test
+    void batchReviewEmptyIdsShouldReturnBadRequest() throws Exception {
+        authenticateAdmin();
+
+        mockMvc.perform(put("/api/admin/users/batch-approve")
+                        .header("Authorization", "Bearer admin-token")
+                        .contentType("application/json")
+                        .content("{\"user_ids\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40002));
     }
 
     // 验证管理员可以批准待审核用户并返回统一成功响应。
