@@ -200,8 +200,14 @@ const registeredUser = await api('/api/auth/register', {
 })
 check('P0', registeredUser.status === 200, '验证用户注册')
 
-const pending = await api(`/api/admin/users?status=pending&page=1&page_size=50`, { token: adminToken })
-const pendingUser = (pending.body.data?.items ?? []).find((user) => user.username === userUsername)
+// 待审核列表：优先新版 /users（分页），旧版后端（无该端点）回退 /users/pending 数组。
+const pending = await api('/api/admin/users?status=pending&page=1&page_size=50', { token: adminToken })
+let pendingItems = pending.body.data?.items
+if (!Array.isArray(pendingItems)) {
+  const legacy = await api('/api/admin/users/pending', { token: adminToken })
+  pendingItems = Array.isArray(legacy.body.data) ? legacy.body.data : []
+}
+const pendingUser = pendingItems.find((user) => user.username === userUsername)
 check('P0', !!pendingUser, '待审批列表可见验证用户')
 
 const approved = await api(`/api/admin/users/${pendingUser.id}/approve`, { method: 'PUT', token: adminToken })
