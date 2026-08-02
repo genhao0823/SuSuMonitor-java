@@ -275,8 +275,8 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 
 ## 后续计划
 
-- **后端**:`server-java-SuMon/` 进入下一阶段（管理员批量审核 / 用户搜索接口，待前端 Sprint 5+ 启动）
-- **前端**:MVP-6 告警前端已闭环；Sprint 5+ 视新需求启动（可能的搜索 / 批量审核 / T4 Web SSH 终端等）
+- **后端**:~~管理员批量审核 / 用户搜索接口~~（**Sprint 5+ 已完成 2026-08-02**：pending 分页+keyword 搜索 + batch-approve/reject，openapi-admin 3→5 端点，见 `Develop-log/20260802-Sprint5-用户管理增强与逃逸窗口控件.md`）
+- **前端**:~~Sprint 5+（搜索 / 批量审核）~~（**已完成 2026-08-02**：用户审核页远端搜索/分页/批量选择 + 告警逃逸窗口 confirm_count 表单/列表控件，vitest 116 全绿）；剩余候选：按状态筛选管理、批量失败明细、T4 Web SSH 终端增强、ECharts 图表启用
 - **协作**:在 GitHub 上创建 PR / 提 issue
 
 ## 协议 / 工具
