@@ -312,7 +312,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
@@ -338,6 +338,8 @@ const editOpen = ref(false)
 const agentDialogOpen = ref(false)
 const agentDialogMode = ref<'register' | 'rotate'>('register')
 const agentBusy = ref(false)
+const STATUS_REFRESH_INTERVAL_MS = 30_000
+let statusRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 /**
  * 解析路由参数 id(只接受数字,非法 id 直接跳回列表)。
@@ -380,6 +382,21 @@ async function reload(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+/** 每 30 秒刷新状态快照，失败时保留最后一次成功结果。 */
+function startStatusRefresh(): void {
+  statusRefreshTimer = setInterval(() => {
+    const id = parseId()
+    if (id === null) return
+    void getServerStatus(id)
+      .then((response) => {
+        status.value = response.data
+      })
+      .catch(() => {
+        // 自动刷新失败时不打断当前页面，也不重复弹出错误提示。
+      })
+  }, STATUS_REFRESH_INTERVAL_MS)
 }
 
 function goBack(): void {
@@ -631,7 +648,16 @@ watch(
 )
 
 onMounted(() => {
-  void reload()
+  void reload().finally(() => {
+    startStatusRefresh()
+  })
+})
+
+onBeforeUnmount(() => {
+  if (statusRefreshTimer !== null) {
+    clearInterval(statusRefreshTimer)
+    statusRefreshTimer = null
+  }
 })
 </script>
 

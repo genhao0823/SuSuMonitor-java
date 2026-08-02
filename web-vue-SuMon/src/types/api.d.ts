@@ -123,6 +123,16 @@ export interface ServerStatus {
 }
 
 /**
+ * Monitor WebSocket 推送的服务器状态转换快照。
+ */
+export interface ServerStatusPushPayload {
+  server_id: number
+  status: ServerStatusKind
+  agent_status: AgentStatusKind
+  last_heartbeat_at: string | null
+}
+
+/**
  * 服务器列表查询参数。
  * 后端 OpenAPI 允许 keyword 单一字段模糊匹配;前端额外提供 name/host
  * 两个独立字段以满足"按 name 搜"与"按 host 搜"的精确场景。

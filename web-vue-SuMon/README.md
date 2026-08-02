@@ -4,7 +4,7 @@ SuSuMonitor 监控平台的 Web 前端工程，基于 Vue 3 + Vite + Element Plu
 
 ## 当前里程碑
 
-**M2-M6 主页面已实现**：认证、主布局、仪表盘、服务器管理、用户审核、实时指标页面以及 MVP-6 告警前端（告警记录 + 告警规则）均已接入真实后端。Web SSH 终端属于 MVP-7，当前尚未实现。
+**M2-M6 主页面已实现**：认证、主布局、仪表盘、服务器管理、用户审核、实时指标页面以及 MVP-6 告警前端（告警记录 + 告警规则）均已接入真实后端。Web SSH 终端属于 MVP-7，~~当前尚未实现~~（T4 xterm.js 前端已于 2026-07-28 实现最小可用版本，路由 `/terminal/:serverId`，详见 [`docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md`](../docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md)）。
 
 详细计划：[`docs-SuMon/Develop-plans/20260720-Web前端详细开发计划.md`](../docs-SuMon/Develop-plans/20260720-Web前端详细开发计划.md)
 当前总览：[`docs-SuMon/Develop-log/20260722-Web前端总览.md`](../docs-SuMon/Develop-log/20260722-Web前端总览.md)
@@ -75,9 +75,9 @@ Vite 已配置代理 `/api → http://localhost:18080`，前端直接以 `/api/*
 
 ## 已知约束
 
-- 实时指标与 MVP-6 告警前端（记录页 + 规则页）已经接入；Web SSH 终端属于 MVP-7，尚未实现。
+- 实时指标与 MVP-6 告警前端（记录页 + 规则页）已经接入；Web SSH 终端属于 MVP-7，~~尚未实现~~（T4 已于 2026-07-28 实现最小可用版本，见 [`docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md`](../docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md)）。
 - Dashboard 通过现有 health、ready、servers 和 pending users 接口聚合，专用 `/api/dashboard/summary` 后置评估。
-- 服务器总数趋势和 SSH 历史卡仍是明确标注的模拟/占位内容。
+- ~~服务器总数趋势和 SSH 历史卡仍是明确标注的模拟/占位内容~~（2026-07-31 更新：服务器总数卡 spark line 已于 Sprint 3 接真实 metrics 历史；仅"SSH 测试历史卡"`DashboardSshCard` 仍为占位，等待 SSH test history 接口）。
 - `package-lock.json` 在执行 `npm install` 后生成，需提交至版本控制。
 
 ## 前端开发
@@ -115,7 +115,7 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | UI E2E 浏览器自动化(ui:e2e,puppeteer-core) | ✅ | 自动化 |
 | 代码拆分重构(Polish-3,拆 9 子组件) | ✅ | 自动化 |
 | pre-commit 钩子(跑 openapi:check) | ✅ | 自动化 |
-| 服务器列表 spark line | ⚠️ mock | 等待 metrics history 接口 |
+| 服务器列表 spark line | ~~⚠️ mock~~ → ✅ 已接真实（Sprint 2） | metrics history 接口已接入 |
 | 上次 SSH 测试结果卡 | ⚠️ 占位 | 等待 SSH test history 接口 |
 | 批量审核/用户搜索/历史记录 | ❌ | 后端无对应接口 |
 

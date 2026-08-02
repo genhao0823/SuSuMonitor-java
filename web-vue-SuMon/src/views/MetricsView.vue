@@ -8,6 +8,9 @@
         <el-tag :type="metrics.connected ? 'success' : 'warning'">
           {{ metrics.connected ? '实时连接' : '连接断开' }}
         </el-tag>
+        <el-tag :type="agentStatus === 'online' ? 'success' : 'info'">
+          {{ agentStatus === 'online' ? 'Agent 在线' : 'Agent 离线' }}
+        </el-tag>
       </template>
     </PageHeader>
     <el-alert
@@ -80,16 +83,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import { useMetricsStore } from '@/stores/metrics'
 import { MonitorWebSocket } from '@/services/websocket'
+import { getServerStatus } from '@/api/server'
+import type { AgentStatusKind, ServerStatusPushPayload } from '@/types/api'
 import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
 const metrics = useMetricsStore()
 const serverId = Number(route.params.serverId)
+const agentStatus = ref<AgentStatusKind>('offline')
+let latestHeartbeatAt: string | null = null
 let socket: MonitorWebSocket | null = null
 
 const cards = computed(() => [
@@ -105,11 +112,33 @@ function format(value: number | null | undefined, suffix: string): string {
   return value === null || value === undefined ? '-' : `${value}${suffix}`
 }
 
+/** 仅应用当前服务器且心跳时间不早于当前快照的状态帧，防止延迟旧帧覆盖重连状态。 */
+function applyServerStatus(payload: ServerStatusPushPayload): void {
+  if (payload.server_id !== serverId) return
+  if (payload.last_heartbeat_at !== null && latestHeartbeatAt !== null
+    && Date.parse(payload.last_heartbeat_at) < Date.parse(latestHeartbeatAt)) {
+    return
+  }
+  agentStatus.value = payload.agent_status
+  latestHeartbeatAt = payload.last_heartbeat_at
+}
+
+async function loadServerStatus(): Promise<void> {
+  try {
+    const response = await getServerStatus(serverId)
+    applyServerStatus(response.data)
+  } catch {
+    // 指标页状态快照失败不阻断指标加载或 Monitor WebSocket 建连。
+  }
+}
+
 onMounted(() => {
   const end = new Date()
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
   void metrics.load(serverId, start.toISOString(), end.toISOString())
-  socket = new MonitorWebSocket(metrics.applyRealtime, metrics.setConnected)
+  void loadServerStatus()
+  socket = new MonitorWebSocket(metrics.applyRealtime, metrics.setConnected, undefined, undefined, undefined,
+    applyServerStatus)
   socket.connect(serverId)
 })
 

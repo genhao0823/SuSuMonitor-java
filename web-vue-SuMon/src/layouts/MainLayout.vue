@@ -31,8 +31,25 @@
     </el-aside>
     <el-container class="main-layout__body">
       <el-header class="main-layout__header">
-        <div class="main-layout__header-title">
-          {{ pageTitle }}
+        <div class="main-layout__header-left">
+          <el-tooltip
+            :content="sidebarToggleLabel"
+            placement="bottom"
+          >
+            <button
+              type="button"
+              class="main-layout__sidebar-toggle"
+              :aria-label="sidebarToggleLabel"
+              @click="toggleSidebar"
+            >
+              <el-icon>
+                <component :is="isSidebarCollapsed ? Expand : Fold" />
+              </el-icon>
+            </button>
+          </el-tooltip>
+          <div class="main-layout__header-title">
+            {{ pageTitle }}
+          </div>
         </div>
         <div class="main-layout__user">
           <el-dropdown
@@ -74,12 +91,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Bell,
   DataLine,
   Document,
+  Expand,
+  Fold,
   Monitor,
   Notification,
   Promotion,
@@ -104,8 +123,14 @@ interface MenuItem {
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const isSidebarCollapsed = ref(true)
 
-const sidebarWidth = '220px'
+const sidebarWidth = computed(() => isSidebarCollapsed.value ? '0px' : '220px')
+const sidebarToggleLabel = computed(() => isSidebarCollapsed.value ? '展开侧栏' : '收起侧栏')
+
+function toggleSidebar(): void {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
 
 /**
  * 主菜单定义。`requiresAdmin` 控制菜单可见性,与路由守卫配合实现双向拦截。
@@ -221,6 +246,7 @@ defineExpose({ iconMap })
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 180ms ease;
 }
 
 .main-layout__brand {
@@ -241,6 +267,7 @@ defineExpose({ iconMap })
 
 .main-layout__body {
   background: var(--el-bg-color-page);
+  transition: width 180ms ease;
 }
 
 .main-layout__header {
@@ -251,6 +278,36 @@ defineExpose({ iconMap })
   background: var(--el-bg-color);
   border-bottom: 1px solid var(--el-border-color-lighter);
   height: 56px;
+}
+
+.main-layout__header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.main-layout__sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--el-text-color-regular);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.main-layout__sidebar-toggle:hover {
+  color: var(--el-color-primary);
+  background: var(--el-fill-color-light);
+}
+
+.main-layout__sidebar-toggle:focus-visible {
+  outline: 2px solid var(--el-color-primary-light-5);
+  outline-offset: 2px;
 }
 
 .main-layout__header-title {

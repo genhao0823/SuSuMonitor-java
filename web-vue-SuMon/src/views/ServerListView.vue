@@ -209,7 +209,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
@@ -268,6 +268,8 @@ function buildQuery(): ServerQuery {
 }
 
 const totalCount = ref<number>(0)
+const STATUS_REFRESH_INTERVAL_MS = 30_000
+let statusRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 async function fetchList(): Promise<void> {
   loading.value = true
@@ -289,6 +291,15 @@ async function reload(): Promise<void> {
   } catch (error) {
     ElMessage.error(explainError(error))
   }
+}
+
+/** 每 30 秒刷新列表状态，不重复拉取指标趋势或修改 URL。 */
+function startStatusRefresh(): void {
+  statusRefreshTimer = setInterval(() => {
+    void fetchList().catch(() => {
+      // 自动刷新失败时保留当前数据，避免周期性弹出错误提示。
+    })
+  }, STATUS_REFRESH_INTERVAL_MS)
 }
 
 /**
@@ -405,7 +416,7 @@ async function loadAllSparkHistories(): Promise<void> {
   const next = new Map<number, number[]>()
   const results = await Promise.allSettled(
     ids.map((id) =>
-      getMetricsHistory(id, startISO, endISO, 1, 200)
+      getMetricsHistory(id, startISO, endISO, 1, 100)
     )
   )
   ids.forEach((id, i) => {
@@ -528,7 +539,15 @@ onMounted(() => {
   suppressWatch = false
   void reload().finally(() => {
     initialized.value = true
+    startStatusRefresh()
   })
+})
+
+onBeforeUnmount(() => {
+  if (statusRefreshTimer !== null) {
+    clearInterval(statusRefreshTimer)
+    statusRefreshTimer = null
+  }
 })
 
 /**

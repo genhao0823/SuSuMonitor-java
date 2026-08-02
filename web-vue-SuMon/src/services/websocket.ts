@@ -1,4 +1,4 @@
-import type { AlertPushPayload } from '@/types/api'
+import type { AlertPushPayload, ServerStatusPushPayload } from '@/types/api'
 import { isAlertPush } from '@/api/alert'
 import type { MetricsLatest } from '@/types/metrics'
 import { issueMonitorTicket } from '@/api/websocket'
@@ -13,6 +13,16 @@ interface MonitorMessage {
   payload?: unknown
 }
 
+/** 校验 Monitor 推送的服务器状态转换载荷。 */
+function isServerStatusPush(value: unknown): value is ServerStatusPushPayload {
+  if (value === null || typeof value !== 'object') return false
+  const payload = value as Record<string, unknown>
+  return typeof payload.server_id === 'number'
+    && (payload.status === 'online' || payload.status === 'offline' || payload.status === 'unknown')
+    && (payload.agent_status === 'online' || payload.agent_status === 'offline')
+    && (typeof payload.last_heartbeat_at === 'string' || payload.last_heartbeat_at === null)
+}
+
 /**
  * 浏览器 Monitor WebSocket 客户端,使用一次性 ticket,不在 URL 中携带长期 JWT。
  *
@@ -24,6 +34,7 @@ interface MonitorMessage {
  * 消息类型处理:
  * - `metrics.update` -> `onMetrics(metrics)`
  * - `alert.push`     -> `onAlertPush(payload)`(可选,仅告警页传入)
+ * - `server.status.update` -> `onServerStatus(payload)`(可选,仅实时监控页传入)
  * - `terminal.*`     -> `onTerminalMessage(frame)`(可选,仅终端页传入)
  * - 其他/非法       -> 忽略
  */
@@ -52,7 +63,9 @@ export class MonitorWebSocket {
      * 可选终端消息回调。TerminalView 传入后,任何 `terminal.*` 帧(含 opened/output/closed/error)
      * 都会原样转发;TerminalWebSocket 自行做 payload 校验与回调分派。
      */
-    private readonly onTerminalMessage?: (frame: MonitorMessage) => void
+    private readonly onTerminalMessage?: (frame: MonitorMessage) => void,
+    /** 可选服务器状态回调，仅实时监控页消费 Agent 在线/离线转换。 */
+    private readonly onServerStatus?: (payload: ServerStatusPushPayload) => void
   ) {}
 
   /**
@@ -147,6 +160,12 @@ export class MonitorWebSocket {
       if (message.type === 'alert.push' && this.onAlertPush !== undefined) {
         if (isAlertPush(message.payload)) {
           this.onAlertPush(message.payload)
+        }
+        return
+      }
+      if (message.type === 'server.status.update' && this.onServerStatus !== undefined) {
+        if (isServerStatusPush(message.payload)) {
+          this.onServerStatus(message.payload)
         }
         return
       }

@@ -130,6 +130,7 @@ const bannerError = ref<string | null>(null)
 
 let monitorWs: MonitorWebSocket | null = null
 let terminalWs: TerminalWebSocket | null = null
+let termResizeObserver: ResizeObserver | null = null
 
 /** 把错误码映射成中文,优先 Terminal 专用码,再退到通用 ErrorCode。 */
 function explainTerminalError(code: number, fallback: string): string {
@@ -213,6 +214,12 @@ function mountXterm(): void {
   })
   // 窗口尺寸变化时 resize PTY
   window.addEventListener('resize', handleResize)
+  if (typeof ResizeObserver !== 'undefined') {
+    termResizeObserver = new ResizeObserver(() => {
+      handleResize()
+    })
+    termResizeObserver.observe(termHost.value)
+  }
 }
 
 function handleResize(): void {
@@ -330,6 +337,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  termResizeObserver?.disconnect()
+  termResizeObserver = null
   if (terminalWs !== null) {
     terminalWs.close()
   }
@@ -372,11 +381,24 @@ onBeforeUnmount(() => {
   border: 1px solid #1e293b;
 }
 
+.terminal-view__card :deep(.el-card__body) {
+  padding: 0;
+  overflow: hidden;
+}
+
 .terminal-view__host {
-  height: 540px;
   width: 100%;
+  min-width: 0;
+  height: 540px;
   padding: 8px;
   box-sizing: border-box;
+  overflow: hidden;
+}
+
+.terminal-view__host :deep(.xterm) {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 .terminal-view__placeholder {
