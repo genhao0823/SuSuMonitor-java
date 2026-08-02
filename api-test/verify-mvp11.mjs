@@ -200,8 +200,8 @@ const registeredUser = await api('/api/auth/register', {
 })
 check('P0', registeredUser.status === 200, '验证用户注册')
 
-const pending = await api('/api/admin/users/pending', { token: adminToken })
-const pendingUser = pending.body.data.find((user) => user.username === userUsername)
+const pending = await api(`/api/admin/users?status=pending&page=1&page_size=50`, { token: adminToken })
+const pendingUser = (pending.body.data?.items ?? []).find((user) => user.username === userUsername)
 check('P0', !!pendingUser, '待审批列表可见验证用户')
 
 const approved = await api(`/api/admin/users/${pendingUser.id}/approve`, { method: 'PUT', token: adminToken })

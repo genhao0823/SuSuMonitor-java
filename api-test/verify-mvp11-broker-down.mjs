@@ -176,8 +176,8 @@ const suffix = Date.now()
 const userUsername = `mvp11bd_user_${suffix}`
 const userPassword = `Validation-${suffix}!`
 await api('/api/auth/register', { method: 'POST', body: { username: userUsername, password: userPassword } })
-const pending = await api('/api/admin/users/pending', { token: adminToken })
-const pendingUser = pending.body.data.find((user) => user.username === userUsername)
+const pending = await api('/api/admin/users?status=pending&page=1&page_size=50', { token: adminToken })
+const pendingUser = (pending.body.data?.items ?? []).find((user) => user.username === userUsername)
 await api(`/api/admin/users/${pendingUser.id}/approve`, { method: 'PUT', token: adminToken })
 const userLogin = await api('/api/auth/login', {
   method: 'POST',
