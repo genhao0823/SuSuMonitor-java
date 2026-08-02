@@ -126,6 +126,7 @@ MVP-9 只完成文档评审、命名冻结和未来测试设计，不执行真�
 | 重复消费幂等 | `message_consume_records(consumer='alert-evaluator', event_id)` 唯一键 + 消费事务内先查后插；重投递幂等命中零业务效果（真实验收：同 event_id 重投无新记录/无推送） |
 | 重试冻结（§五） | 容器级有限重试：max-attempts=3（`ALERT_CONSUME_MAX_ATTEMPTS` 可覆盖）、退避 1s/×2/上限 10s；`AmqpRejectAndDontRequeueException`（含 cause 链）零重试立即 reject |
 | 重试耗尽 → DLQ | 容器 reject(requeue=false) → `susumonitor.dlx` → `susumonitor.alert.metrics.dlq`（真实验收：非法 JSON、schema_version=2、字段契约越界消息均入 DLQ） |
+| 失败留痕（§四） | **已落地（2026-08-02）**：`FailedConsumeRecordRecoverer` 在 reject 前尽力写 `message_consume_records` failed 行（attempts=不可重试 1 / 重试耗尽=max-attempts，last_error 截断 500，best-effort 不阻断 reject）；非法 JSON 无可解析 event_id 不留痕仅告警。`existsConsumed` 仅认 consumed——failed 行不阻塞 DLQ 重放，重放成功后 `upsertConsumed` 将 failed 行翻转回 consumed（failed→consumed 完整生命周期） |
 | 业务处理与消费记录原子 | 同一 `TransactionTemplate` 事务提交，评估 + 幂等记录同生共死 |
 | 消费者重启恢复 | **已验收（2026-08-01）**：Broker 停机期间后端存活（health 200 / ready 50301）、指标照常落库 outbox 堆积；恢复后发布器补发 + 消费者**自动重连补消费**（无需重启后端），业务队列归零、状态机正确（continue/resolve/trigger 无重复）；停机消息 6/6 消费无丢失（`verify-mvp11-broker-down.mjs`，见 `Develop-log/20260801-MVP11-收口.md` §三） |
 | DLQ 受控重放 | **已落地（2026-08-01）**：`api-test/replay-dlq.mjs`（--replay 重放 + 防循环提示 / --purge 清空）；合法信封重放幂等命中零业务效果，数据错误消息重放仍回 DLQ |

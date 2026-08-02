@@ -58,28 +58,32 @@ class ConsumeRecordMapperMybatisTests {
         sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
     }
 
-    /** INSERT 应回填主键。 */
+    /** upsertConsumed 应回填主键。 */
     @Test
-    void insertShouldGenerateId() {
+    void upsertConsumedShouldGenerateId() {
         ConsumeRecordEntity record = newRecord();
 
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            assertEquals(1, session.getMapper(ConsumeRecordMapper.class).insert(record));
+            assertEquals(1, session.getMapper(ConsumeRecordMapper.class).upsertConsumed(record));
         }
 
         assertNotNull(record.getId());
     }
 
-    /** 同一 consumer+event_id 重复插入触发唯一键冲突（消费幂等语义）。 */
+    /** 同一 consumer+event_id 重复成功消费不冲突：upsert 幂等翻转，仍只有一行。 */
     @Test
-    void duplicateConsumerEventShouldConflict() {
+    void upsertConsumedTwiceShouldKeepSingleRow() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             ConsumeRecordMapper mapper = session.getMapper(ConsumeRecordMapper.class);
-            mapper.insert(newRecord());
+            mapper.upsertConsumed(newRecord());
+            mapper.upsertConsumed(newRecord());
 
-            // 纯 MyBatis 环境抛 PersistenceException；Spring 环境由 mybatis-spring 翻译为 DuplicateKeyException。
-            org.junit.jupiter.api.Assertions.assertThrows(
-                    org.apache.ibatis.exceptions.PersistenceException.class, () -> mapper.insert(newRecord()));
+            assertTrue(mapper.existsConsumed("alert-evaluator", "event-1"));
+            try (var rows = session.getConnection().createStatement().executeQuery(
+                    "SELECT COUNT(1) FROM message_consume_records WHERE consumer='alert-evaluator' AND event_id='event-1'")) {
+                rows.next();
+                assertEquals(1, rows.getInt(1));
+            }
         }
     }
 
@@ -91,7 +95,7 @@ class ConsumeRecordMapperMybatisTests {
             assertFalse(mapper.existsConsumed("alert-evaluator", "event-1"));
 
             ConsumeRecordEntity record = newRecord();
-            mapper.insert(record);
+            mapper.upsertConsumed(record);
 
             assertTrue(mapper.existsConsumed("alert-evaluator", "event-1"));
             assertFalse(mapper.existsConsumed("alert-evaluator", "event-other"));
@@ -99,15 +103,48 @@ class ConsumeRecordMapperMybatisTests {
         }
     }
 
-    /** markFailed 回写失败状态与原因。 */
+    /** failed 行不视为幂等命中：DLQ 重放可重新处理该事件。 */
     @Test
-    void markFailedShouldWriteStatusAndError() {
+    void failedRowShouldNotMatchExistsConsumed() {
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             ConsumeRecordMapper mapper = session.getMapper(ConsumeRecordMapper.class);
-            ConsumeRecordEntity record = newRecord();
-            mapper.insert(record);
+            mapper.upsertFailed("alert-evaluator", "event-1", 3, "evaluation failed");
 
-            assertEquals(1, mapper.markFailed(record.getId(), 3, "evaluation failed"));
+            assertFalse(mapper.existsConsumed("alert-evaluator", "event-1"));
+        }
+    }
+
+    /** upsertFailed 写入失败状态与原因（失败留痕）。 */
+    @Test
+    void upsertFailedShouldWriteStatusAndError() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            ConsumeRecordMapper mapper = session.getMapper(ConsumeRecordMapper.class);
+            mapper.upsertConsumed(newRecord());
+
+            // MySQL 语义：命中已有行时 ON DUPLICATE KEY UPDATE 返回 2（insert+update）。
+            assertTrue(mapper.upsertFailed("alert-evaluator", "event-1", 3, "evaluation failed") >= 1);
+
+            assertFalse(mapper.existsConsumed("alert-evaluator", "event-1"));
+            try (var rows = session.getConnection().createStatement().executeQuery(
+                    "SELECT status, attempts, last_error FROM message_consume_records"
+                            + " WHERE consumer='alert-evaluator' AND event_id='event-1'")) {
+                rows.next();
+                assertEquals("failed", rows.getString(1));
+                assertEquals(3, rows.getInt(2));
+                assertEquals("evaluation failed", rows.getString(3));
+            }
+        }
+    }
+
+    /** 重放成功路径：failed 行被 upsertConsumed 翻转为 consumed，恢复幂等命中。 */
+    @Test
+    void upsertConsumedShouldFlipFailedRowToConsumed() {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            ConsumeRecordMapper mapper = session.getMapper(ConsumeRecordMapper.class);
+            mapper.upsertFailed("alert-evaluator", "event-1", 3, "evaluation failed");
+            assertFalse(mapper.existsConsumed("alert-evaluator", "event-1"));
+
+            mapper.upsertConsumed(newRecord());
 
             assertTrue(mapper.existsConsumed("alert-evaluator", "event-1"));
         }

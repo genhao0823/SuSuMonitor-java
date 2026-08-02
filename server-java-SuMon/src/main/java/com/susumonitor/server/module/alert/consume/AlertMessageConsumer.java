@@ -115,6 +115,7 @@ public class AlertMessageConsumer {
         record.setStatus(ConsumeStatus.CONSUMED.ruleValue());
         record.setAttempts(0);
         record.setConsumedAt(LocalDateTime.now(clock));
-        consumeRecordMapper.insert(record);
+        // upsert：若该事件此前失败留痕过（failed 行），重放成功后翻转回 consumed。
+        consumeRecordMapper.upsertConsumed(record);
     }
 }

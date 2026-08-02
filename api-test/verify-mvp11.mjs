@@ -286,9 +286,10 @@ check('C2', (await queueMessages(QUEUE)) === 0, '重复投递被消费（ACK）�
 const badJson = await publishEnvelope('{not-a-json-envelope')
 check('C3', badJson.status === 200, '非法 JSON 信封投递成功')
 
+const badSchemaEventId = crypto.randomUUID()
 const badSchema = await publishEnvelope(
   JSON.stringify({
-    event_id: crypto.randomUUID(),
+    event_id: badSchemaEventId,
     event_type: 'metrics.reported',
     schema_version: 2,
     occurred_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
@@ -298,7 +299,8 @@ const badSchema = await publishEnvelope(
 )
 check('C3', badSchema.status === 200, 'schema_version=2 信封投递成功')
 
-const invalidContract = JSON.parse(envelope(crypto.randomUUID(), serverId, 101))
+const badContractEventId = crypto.randomUUID()
+const invalidContract = JSON.parse(envelope(badContractEventId, serverId, 101))
 const badContract = await publishEnvelope(JSON.stringify(invalidContract))
 check('C3', badContract.status === 200, '字段契约非法信封投递成功')
 
@@ -312,10 +314,20 @@ while (Date.now() < dlqDeadline) {
 check('C3', dlqAfter >= dlqBefore + 3,
   `三类不可重试消息均进入 DLQ（before=${dlqBefore}, after=${dlqAfter}）`)
 
+// ---- C4 失败留痕：数据错误拒绝早于业务事务，不产生告警副作用 ----
+const recordsAfterRejects = await alertRecords(serverId, adminToken)
+check('C4', recordsAfterRejects.length === 1,
+  '三类数据错误消息被拒后无新增告警记录（拒绝在业务事务之前，不留业务效果）')
+check('C4', (await queueMessages(QUEUE)) === 0, '数据错误消息消费后业务队列无堆积')
+
 monitor.close()
 await new Promise((resolve) => monitor.once('close', resolve))
 
 console.log(`\nMVP-11 验收 PASS：${checks.filter((id) => id.startsWith('C')).length} 项消费侧检查项全部通过`)
 console.log(`  event_id 示例：${eventId1}`)
 console.log(`  DLQ 消息数：${dlqAfter}（验收后可清空）`)
-console.log('  DB 侧附加确认（验收记录）：message_consume_records 该 event_id 仅 1 行（消费幂等）')
+console.log('  DB 侧附加确认（验收记录）：')
+console.log(`    1. message_consume_records 中 ${eventId1} 仅 1 行 consumed（消费幂等）`)
+console.log(`    2. ${badSchemaEventId}（schema_version=2）与 ${badContractEventId}（cpu=101）各 1 行 failed，`)
+console.log('       attempts=1、last_error 非空（失败留痕，不可重试零重试）')
+console.log('    3. 非法 JSON 无可解析 event_id，无对应行（仅告警日志）')

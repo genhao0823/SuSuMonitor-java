@@ -148,5 +148,6 @@
   server_id、百分比/非负数/used≤total 不变量）→ `AmqpRejectAndDontRequeueException`
   → 零重试进 DLQ；完整 JSON Schema 引擎仍未引入。
 - `message_consume_records` 落地（V15）：consumer+event_id 唯一键，消费幂等（真实验收：同 event_id 重投仅 1 行记录、无第二次业务效果）。
+- 失败留痕（2026-08-02）：被拒消息（不可重试零重试 / 重试耗尽）在 reject 前写 failed 行（attempts 1 或 max-attempts、last_error 截断 500、best-effort 不阻断 reject）；非法 JSON 无可解析 event_id 不留痕。幂等查询仅认 consumed 行——failed 行不阻塞 DLQ 重放，重放成功后 upsert 翻转回 consumed。
 - 时间口径：`occurred_at`/`collected_at` 解析沿用 UTC 秒级格式，消费记录 `consumed_at` 写入 UTC（应用时钟）。
 - JSON Schema 运行校验仍未引入；已实现无外部依赖的字段级运行校验，确保畸形载荷在进入幂等查询和告警评估前直接拒绝进 DLQ。
