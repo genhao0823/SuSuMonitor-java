@@ -130,7 +130,7 @@
 
 REST 之外的 `/ws/agent` 与 `/ws/monitor` 双通道协议见：
 
-- `docs-SuMon/Protocol-SuMon/websocket-protocol.md`（v1.0）
+- `docs-SuMon/Protocol-SuMon/websocket-protocol.md`（v1.1）
 
 OpenAPI 不覆盖 WS 协议层（消息帧、订阅、推送）。
 

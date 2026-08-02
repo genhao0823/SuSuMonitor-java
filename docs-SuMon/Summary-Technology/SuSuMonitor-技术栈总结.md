@@ -19,21 +19,22 @@
 | MySQL 8.4 集成 | 当前可用 | `application.yml:11` |
 | JWT 72h 认证 + 行锁首管理员 | 当前可用，**空库并发仍未验证**（独立库场景留作下一步验收） | `JwtKeyConfig`、`UserService.java:71-105` |
 | Go Agent WS 鉴权/心跳/重连 | 当前可用 | `wsclient/client.go` |
-| Agent 真实 metrics 上报 | 当前**未实现**（B-005/B-006） | `cmd/susumonitor-agent/main.go:21-72` 未接入 collector/reporter |
-| Linux 构建目标 `build-linux` | 当前**未实现**（B-007） | `agent-go-SuMon/Makefile:1-19` |
-| 完整 Nginx 站点配置 / Java systemd / Dockerfile / Maven Wrapper / DB 备份 | 当前**未实现** | 全仓 0 命中 |
+| Agent 真实 metrics 上报 | 已实现（B-005/B-006 已闭环，2026-07-31 更新） | `cmd/susumonitor-agent/main.go:70-71` 已接入 collector/reporter，本机 + 云端端到端验证 |
+| Linux 构建目标 `build-linux` | 已实现（B-007 已闭环，2026-07-31 更新） | `agent-go-SuMon/Makefile:6` 已含 `build-linux` target；`bin/susumonitor-agent-linux-amd64` 已实测 |
+| 完整 Nginx 站点配置 / Java systemd / Maven Wrapper / `application-prod.yml` | 已实现（2026-07-27 T5 补齐） | `server-java-SuMon/deploy/*` + `mvnw`，云端明文 HTTP 已跑通 |
+| Dockerfile + docker-compose / DB 备份脚本 | 当前**未实现** | 全仓 0 命中 |
 | ECharts 集成 | 当前**未使用** | `package.json` 已声明，源码无引用 |
 | openapi-typescript 类型生成 | 当前**未使用** | devDep 已声明，无生成脚本 |
 | MVP-6 告警后端业务 | 当前可用 | `module/alert/` 25 个 .java、`V10__create_alert_states_and_soft_delete_rules.sql`、`AlertPushPublisher` 推送 `alert.push`、MockMvc 完整 |
-| MVP-6 告警前端 | 计划中 | `web-vue-SuMon/src` 下无 Alert 视图与路由 |
-| MVP-7 Web SSH | 计划中 | 未实现 |
+| MVP-6 告警前端 | 已实现（2026-07-27 Sprint 0-7 收口，2026-07-31 更新） | `views/AlertRecordsView.vue` + `AlertRulesView.vue` + `alert.push` WS 消费；真实端到端链路 2026-07-28 验收通过 |
+| MVP-7 Web SSH 终端 | 已实现 T1-T4（T4 xterm.js 前端 2026-07-28，2026-07-31 更新） | `views/TerminalView.vue` + 路由 `/terminal/:serverId`；T5 云端部署已验证（明文 HTTP）、T6 家庭 Linux 主机部署待验 |
 | Redis / Prometheus / Docker / k8s / GitHub Actions / Android | 计划中 | 均属增强阶段 |
 
 ---
 
 ## 一、项目概览
 
-SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化单体架构**，按 MVP 分阶段推进。当前已落地 MVP-1 核心后端、MVP-2 Go Agent、MVP-3 实时监控链路、MVP-5A Web 主页面和 **MVP-6 告警业务后端闭环**（Commit `7b01a60`，2026-07-25）；MVP-7 终端 T1-T3 已完成（PTY_RELAY_INTEGRATION_OK 2026-07-26）。MVP-1 仍剩首管理员空库并发和部署环境验收缺口；真实 SSH `50003`/`50002` 分类已于 2026-07-25 通过 Apifox 验收。
+SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化单体架构**，按 MVP 分阶段推进。当前已落地 MVP-1 核心后端、MVP-2 Go Agent、MVP-3 实时监控链路、MVP-5A Web 主页面和 **MVP-6 告警业务后端闭环**（Commit `7b01a60`，2026-07-25）；MVP-7 终端 T1-T3 已完成（PTY_RELAY_INTEGRATION_OK 2026-07-26）。MVP-1 仍剩首管理员空库并发和部署环境验收缺口；真实 SSH `50003`/`50002` 分类已于 2026-07-25 通过 Apifox 验收。（**2026-07-31 更新**：MVP-6 告警前端已收口、MVP-7 T4 xterm.js 前端已完成、MVP-9 已收口，详见本文件"当前 vs 计划中"表）
 
 **多模块结构：**
 
@@ -41,7 +42,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 |---|---|---|---|
 | `server-java-SuMon` | Java 21 | 后端服务（REST + WebSocket + SSH） | 开发中，核心闭环已通 |
 | `agent-go-SuMon` | Go 1.23 | 服务器指标采集 Agent | 鉴权、心跳、重连、采集和上报已实现并完成本机运行时验收 |
-| `web-vue-SuMon` | TypeScript + Vue 3 | Web 管理前端 | M2-M6 主页面已实现；告警和 Web SSH 待后续阶段 |
+| `web-vue-SuMon` | TypeScript + Vue 3 | Web 管理前端 | M2-M6 + MVP-6 告警前端 + MVP-7 T4 Web SSH 终端均已实现（2026-07-27/07-28，2026-07-31 更新） |
 | `app-kt-SuMon` | Kotlin | Android App | 空目录，规划中 |
 | `api-test` | Node.js | HTTP/WebSocket 联调脚本 | 本机调试用 |
 
@@ -63,7 +64,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 | MyBatis-Plus | 3.5.12 | 数据访问、分页、条件构造 |
 | MySQL | 8.4 | 主数据库 |
 | HikariCP | - | 连接池 |
-| Flyway | - | 数据库版本化迁移（V1~V9） |
+| Flyway | - | 数据库版本化迁移（V1~V17） |
 | JJWT | 0.12.6 | JWT 签发/校验（HS256） |
 | BCrypt | - | 密码哈希 |
 | JDK JCA AES-256-GCM | - | SSH 凭据加密 |
@@ -204,7 +205,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 
 **在项目中如何使用：**
 - 启用 `baseline-on-migrate: true`，迁移脚本位于 `classpath:db/migration`（`application.yml:18-21`）。
-- 版本脚本 V1~V9：V1 建 users 表、V2 servers、V3 metrics、V4 commands、V5 alert 表、V6 ssh_sessions、V7 auth_bootstrap_state、V8 server SSH 主机密钥字段、V9 agent_token 生命周期字段。
+- 版本脚本 V1~V17：V1 建 users 表、V2 servers、V3 metrics、V4 commands、V5 alert 表、V6 ssh_sessions、V7 auth_bootstrap_state、V8 server SSH 主机密钥字段、V9 agent_token 生命周期字段、V10 告警状态与规则软删除、V11 指标幂等表、V12 终端会话、V13 告警活跃规则唯一索引、V14 outbox 表、V15 消费幂等表、V16 outbox 清理索引、V17 心跳微秒精度。
 - 表结构规范：`BIGINT UNSIGNED` 主键自增、`COMMENT` 字段注释、`InnoDB + utf8mb4_unicode_ci`、合理索引（见 V1 脚本）。
 
 ### 3.12 Spring WebSocket（双通道实时通信）
@@ -457,8 +458,8 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 1. **ECharts**：`package.json` 已声明依赖，前端无任何实际调用代码。当前图表用 SVG/表格替代。
 2. **openapi-typescript**：devDep 已声明，未配置生成脚本，`api.d.ts` 为手写。
 3. **Redis / Prometheus / Docker / k8s / GitHub Actions / Android**：均属增强阶段规划，代码未实现。
-4. **xterm.js Web SSH 终端**：属 MVP-7，尚未实现。
-5. **Alert 告警系统**：属 MVP-6，**后端业务闭环已实现**（含状态机去重、记录、已读、`alert.push`），前端告警页面未实现。
+4. ~~**xterm.js Web SSH 终端**~~：~~属 MVP-7，尚未实现~~（2026-07-31 更新：T4 前端已于 2026-07-28 实现最小可用版本，`views/TerminalView.vue` + 路由 `/terminal/:serverId`；T5 云端部署已验证、T6 家庭主机部署待验）。
+5. ~~**Alert 告警系统前端**~~：~~前端告警页面未实现~~（2026-07-31 更新：MVP-6 告警前端已于 2026-07-27 收口，记录页 + 规则页 + `alert.push` WS 消费，2026-07-28 真实端到端链路验收通过）。
 
 ---
 

@@ -122,8 +122,8 @@ SuSuMonitor/
 | MVP-3 | 指标接收、MySQL 存储、WebSocket 推送、历史指标查询、10 天数据清理 | 指标接收/存储/查询/实时推送/清理已实现 |
 | MVP-4 | OpenAPI 契约基线收口、lint、Apifox 导入和实现漂移检查 | 随接口同步，阶段性收口 |
 | MVP-5A | 登录、注册、仪表盘、服务器列表和详情前端，直接对接真实 API | 已实现；告警与 Web SSH 不在本阶段 |
-| MVP-6 | 模块化单体告警业务闭环：规则、状态机去重、记录、查询、已读、恢复和 WebSocket 推送；暂不依赖 RabbitMQ | 后端业务闭环已实现（Commit `7b01a60`，2026-07-25，含 Flyway `V10__create_alert_states_and_soft_delete_rules`、`AlertPushPublisher` 推送 `alert.push`、OpenAPI 6 端点）；前端告警页面未实现；真实 HTTP/WS 端到端链路未验证 |
-| MVP-7 | SSH 后端代理、PTY、多会话、20 分钟超时和 xterm.js 前端 | T1-T3 已完成（Java 端中继、Go Agent Linux PTY、协议契约），真实 WSL 单 JVM 联调通过 `PTY_RELAY_INTEGRATION_OK`（2026-07-26）；T4（xterm.js 前端）、T5（OpenCloudOS 云端部署）、T6（家庭 Linux 主机 root systemd 部署）未完成；Monitor 1012 真实背压未覆盖（2026-07-27 流控 WSL 验收） |
+| MVP-6 | 模块化单体告警业务闭环：规则、状态机去重、记录、查询、已读、恢复和 WebSocket 推送；暂不依赖 RabbitMQ | 已收口（2026-07-28）：后端业务闭环（Commit `7b01a60`，2026-07-25，含 Flyway `V10__create_alert_states_and_soft_delete_rules`、`AlertPushPublisher` 推送 `alert.push`、OpenAPI 6 端点）+ 前端告警页面（2026-07-27 Sprint 0-7 收口）+ 真实 HTTP/WS 端到端链路 2026-07-28 验收通过 |
+| MVP-7 | SSH 后端代理、PTY、多会话、20 分钟超时和 xterm.js 前端 | T1-T4 已完成：Java 端中继、Go Agent Linux PTY、协议契约、真实 WSL 单 JVM 联调 `PTY_RELAY_INTEGRATION_OK`（2026-07-26）、T4 xterm.js 前端最小可用版本（2026-07-28）；T5 云端部署已验证（明文 HTTP，2026-07-31）；仅 T6 家庭 Linux 主机 root systemd 部署待验；Monitor 1012 真实背压未覆盖 |
 | MVP-8 | 安装、启动、升级、回滚、备份恢复和安全检查文档 | 已收口（2026-07-31）：Use-manual 手册系列（部署安装/升级回滚/备份恢复/安全检查/RabbitMQ 运维）+ `deploy/backup.sh`/`restore.sh` 配套脚本；恢复与安全检查空白已补齐 |
 
 当前 MVP-1 至 MVP-8 默认采用模块化单体架构。微服务只作为 MVP-8 之后的增强路线，不改变当前 MVP-1 的开发顺序，也不作为本机调试前置依赖。
@@ -134,7 +134,6 @@ SuSuMonitor/
 |------|------|----------|
 | MVP-9 | 微服务化准备：模块依赖、数据所有权、RabbitMQ 异步边界与版本化消息契约、统一日志和性能基线 | 已收口（2026-07-31）：性能基线 7 场景实测 + 数据所有权收口 + 契约冻结评审；RabbitMQ 运行时属 MVP-10/11 |
 | MVP-10 | `metrics-service`：Agent 指标处理、Outbox 可靠事件发布、指标存储、最新/历史查询和清理 | 已收口（2026-07-31）：V14 outbox 表 + 同事务写入 + 发布器（Confirm/Return/指数退避）+ 拓扑声明 + ready 检查；真实 Broker 三阶段验收 PASS（见 `Develop-log/20260731-MVP10-Metrics-Outbox.md`）；消费侧属 MVP-11 |
-| MVP-10 | `metrics-service`：Agent 指标处理、Outbox 可靠事件发布、指标存储、最新/历史查询和清理 | 否 |
 | MVP-11 | `alert-service`：通过 RabbitMQ 幂等消费指标事件，完成告警检测、状态迁移、记录和推送 | 已收口（2026-07-31 + 2026-08-01 收口）：V15 消费幂等表 + `MetricsReportedMessage` 契约解析 + `AlertMessageConsumer`（AUTO 确认 + 幂等 + 有限重试）+ DLQ 分类；`verify-alert-ws` 24/24、`verify-mvp11` 17 项验收 PASS；收口：轮询 1000→200ms（延迟 -71%）、DLQ 重放工具、Broker 停机重连验收（见 `Develop-log/20260731-MVP11-Alert-消费侧.md`、`20260801-MVP11-收口.md`） |
 | MVP-12 | `ssh-service`：SSH 连接测试、SSH 会话、PTY、输入输出和超时 | 否 |
 | MVP-13 | Gateway 与服务治理：统一入口、路由、配置管理、服务发现和服务间鉴权 | 否 |
@@ -556,7 +555,7 @@ MVP-1 接口范围：
 | username | 3 到 50 位，允许字母、数字、下划线 |
 | password | 8 到 64 位 |
 | password_hash | 使用 BCrypt 存储 |
-| JWT 有效期 | 默认 24 小时，通过配置项调整 |
+| JWT 有效期 | 默认 72 小时（`JWT_EXPIRE_HOURS`，代码 `application.yml:46` 默认 `72`），通过配置项调整 |
 | 首个用户 | 自动成为 `admin/approved` |
 | 后续注册用户 | 默认为 `user/pending` |
 | 登录限制 | 只有 `approved` 用户可以登录 |
@@ -1018,7 +1017,7 @@ servers.delete_token 支持软删除后同 host 重建
 
 ## 二十六、AI 运维中枢规划
 
-AI 运维属于 MVP-8 完成后的远期增强能力，不纳入且不阻塞 MVP-1 至 MVP-8 的设计、开发、测试与交付。完整规划见 [20260717-AI运维增强路线.md](./20260717-AI运维增强路线.md)。
+AI 运维属于 MVP-8 完成后的远期增强能力，不纳入且不阻塞 MVP-1 至 MVP-8 的设计、开发、测试与交付。完整规划见 `Develop-plans/20260724-公网Agent反向终端与云端部署计划.md` 等后续规划文档（原引用的 `20260717-AI运维增强路线.md` 未在仓库落地，AI 运维路线已并入各阶段开发日志）。
 
 ## 二十七、Git、环境配置与 opencode skill 规划
 

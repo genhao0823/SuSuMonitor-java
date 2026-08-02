@@ -74,6 +74,24 @@ After a committed Metrics transaction, subscribers receive:
 }
 ```
 
+After a successful Agent online/offline state transition, subscribers of the affected server receive `server.status.update`:
+
+```json
+{
+  "type": "server.status.update",
+  "message_id": "uuid",
+  "timestamp": "2026-08-01T12:00:00Z",
+  "payload": {
+    "server_id": 1,
+    "status": "offline",
+    "agent_status": "offline",
+    "last_heartbeat_at": "2026-08-01T11:59:30.123456Z"
+  }
+}
+```
+
+The server sends this frame only when persisted Agent state changes between online and offline, never for an ordinary heartbeat. Delivery is best-effort and can be duplicated or delayed; clients must ignore a frame whose non-null `last_heartbeat_at` is older than their current snapshot. Only sessions subscribed to the affected `server_id` receive the frame.
+
 The broadcast never contains Agent Token, Token hash, SSH credentials, database credentials, or private keys.
 
 ## Security and Lifecycle

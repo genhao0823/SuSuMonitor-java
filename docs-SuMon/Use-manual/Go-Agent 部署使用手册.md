@@ -21,7 +21,7 @@ SuSuMonitor 采用 **Agent 主动出站** 模式，不依赖后端反向连接�
 |----|------|
 | 后端 | 已部署且运行，nginx 80 反代 `/ws/agent` → 后端 18080 |
 | 管理员账号 | 一个 admin 角色账号（首个注册用户自动成为 admin），用于预建 server 与发放 token |
-| 编译机 | Go 1.22+（用于交叉编译 Linux 二进制），或目标机自带 Go |
+| 编译机 | Go 1.23+（`go.mod` 要求 1.23，用于交叉编译 Linux 二进制），或目标机自带 Go |
 | 目标机 | Linux x86_64（PTY 终端功能仅 Linux 支持） |
 | 网络 | 目标机能出站访问 `SERVER_IP_OR_DOMAIN:80` |
 
@@ -52,7 +52,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/susumonitor-agent-linux-am
 
 ### 方式 B：目标机原生编译
 
-若目标机已装 Go 1.22+ 且版本 ≥ go.mod 声明版本：
+若目标机已装 Go 1.23+ 且版本 ≥ go.mod 声明版本：
 
 ```bash
 cd agent-go-SuMon

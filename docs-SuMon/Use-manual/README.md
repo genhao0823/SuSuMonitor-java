@@ -17,6 +17,7 @@
 | 手册 | 适用场景 |
 |---|---|
 | [Go-Agent 部署使用手册.md](./Go-Agent 部署使用手册.md) | Agent 构建（Linux 交叉编译）、Token 发放、systemd 部署、验证、家庭内网部署 |
+| [Go-Agent-WSS公网验收手册.md](./Go-Agent-WSS公网验收手册.md) | 公网 WSS/HTTPS 部署验收清单（域名/TLS/证书/反代与端到端验证步骤） |
 
 ## 配套资产与文档
 
