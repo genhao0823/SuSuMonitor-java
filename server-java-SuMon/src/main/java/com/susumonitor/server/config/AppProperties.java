@@ -553,6 +553,28 @@ public class AppProperties {
         @Max(value = 86400, message = "Outbox max backoff must not exceed 86400 seconds")
         private int maxBackoffSeconds = 300;
 
+        /** 是否启用已发布 Outbox 记录的保留期清理，默认关闭以避免升级即删除历史证据。 */
+        private boolean outboxCleanupEnabled;
+
+        /** 已发布 Outbox 记录的保留天数。 */
+        @Min(value = 1, message = "Outbox retention days must be at least one")
+        @Max(value = 3650, message = "Outbox retention days must not exceed 3650")
+        private int outboxRetentionDays = 30;
+
+        /** 已发布 Outbox 清理 cron。 */
+        @NotBlank(message = "Outbox cleanup cron must not be blank")
+        private String outboxCleanupCron = "0 30 3 * * ?";
+
+        /** 已发布 Outbox 单批清理上限。 */
+        @Min(value = 1, message = "Outbox cleanup batch size must be at least one")
+        @Max(value = 10000, message = "Outbox cleanup batch size must not exceed 10000")
+        private int outboxCleanupBatchSize = 1000;
+
+        /** 单轮已发布 Outbox 清理最多执行的批次数。 */
+        @Min(value = 1, message = "Outbox cleanup max batches must be at least one")
+        @Max(value = 1000, message = "Outbox cleanup max batches must not exceed 1000")
+        private int outboxCleanupMaxBatchesPerRun = 100;
+
         public boolean isEnabled() {
             return enabled;
         }
@@ -607,6 +629,46 @@ public class AppProperties {
 
         public void setMaxBackoffSeconds(int maxBackoffSeconds) {
             this.maxBackoffSeconds = maxBackoffSeconds;
+        }
+
+        public boolean isOutboxCleanupEnabled() {
+            return outboxCleanupEnabled;
+        }
+
+        public void setOutboxCleanupEnabled(boolean outboxCleanupEnabled) {
+            this.outboxCleanupEnabled = outboxCleanupEnabled;
+        }
+
+        public int getOutboxRetentionDays() {
+            return outboxRetentionDays;
+        }
+
+        public void setOutboxRetentionDays(int outboxRetentionDays) {
+            this.outboxRetentionDays = outboxRetentionDays;
+        }
+
+        public String getOutboxCleanupCron() {
+            return outboxCleanupCron;
+        }
+
+        public void setOutboxCleanupCron(String outboxCleanupCron) {
+            this.outboxCleanupCron = outboxCleanupCron;
+        }
+
+        public int getOutboxCleanupBatchSize() {
+            return outboxCleanupBatchSize;
+        }
+
+        public void setOutboxCleanupBatchSize(int outboxCleanupBatchSize) {
+            this.outboxCleanupBatchSize = outboxCleanupBatchSize;
+        }
+
+        public int getOutboxCleanupMaxBatchesPerRun() {
+            return outboxCleanupMaxBatchesPerRun;
+        }
+
+        public void setOutboxCleanupMaxBatchesPerRun(int outboxCleanupMaxBatchesPerRun) {
+            this.outboxCleanupMaxBatchesPerRun = outboxCleanupMaxBatchesPerRun;
         }
     }
 

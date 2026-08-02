@@ -201,6 +201,11 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
             @Param("serverId") Long serverId,
             @Param("revokedAt") LocalDateTime revokedAt);
 
+    /** 仅在 Agent 当前不在线时更新心跳并标记在线，用于识别在线状态转换。 */
+    int markAgentOnlineAndHeartbeat(
+            @Param("serverId") Long serverId,
+            @Param("heartbeatAt") LocalDateTime heartbeatAt);
+
     /** 更新已认证 Agent 的心跳时间和在线状态。 */
     int updateAgentHeartbeat(
             @Param("serverId") Long serverId,

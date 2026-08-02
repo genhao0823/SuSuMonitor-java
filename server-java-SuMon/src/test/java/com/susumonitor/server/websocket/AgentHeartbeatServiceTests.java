@@ -46,6 +46,28 @@ class AgentHeartbeatServiceTests {
         verify(socket).close(CloseStatus.SESSION_NOT_RELIABLE);
     }
 
+    /** 验证当前连接断开时仅在离线 CAS 成功后发布离线状态。 */
+    @Test
+    void shouldPublishOfflineStatusAfterCurrentSessionDisconnects() {
+        Clock clock = Clock.fixed(HEARTBEAT_AT, ZoneOffset.UTC);
+        ServerMapper serverMapper = mock(ServerMapper.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        MonitorServerStatusPublisher statusPublisher = mock(MonitorServerStatusPublisher.class);
+        WebSocketSession socket = mock(WebSocketSession.class);
+        when(socket.getId()).thenReturn("disconnect-session");
+        AgentWebSocketSession session = new AgentWebSocketSession(socket, clock);
+        LocalDateTime heartbeatAt = LocalDateTime.ofInstant(HEARTBEAT_AT, ZoneOffset.UTC).withNano(123_456_000);
+        session.authenticate(SERVER_ID, heartbeatAt);
+        session.heartbeat(heartbeatAt);
+        when(serverMapper.markAgentOffline(SERVER_ID, heartbeatAt)).thenReturn(1);
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, statusPublisher, clock);
+
+        service.markOfflineOnDisconnect(session);
+
+        verify(serverMapper).markAgentOffline(SERVER_ID, heartbeatAt);
+        verify(statusPublisher).publish(SERVER_ID, "offline", "offline", heartbeatAt);
+    }
+
     /** 提供测试可推进的 UTC Clock。 */
     private static final class MutableClock extends Clock {
         private Instant instant;

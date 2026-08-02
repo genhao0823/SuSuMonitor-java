@@ -4,6 +4,7 @@ import com.susumonitor.server.module.server.mapper.ServerMapper;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.CloseStatus;
@@ -17,23 +18,36 @@ public class AgentHeartbeatServiceImpl implements AgentHeartbeatService {
     private static final Duration HEARTBEAT_TIMEOUT = Duration.ofSeconds(90);
     private final ServerMapper serverMapper;
     private final AgentConnectionRegistry connectionRegistry;
+    private final MonitorServerStatusPublisher statusPublisher;
     private final Clock clock;
 
-    /** 注入服务器状态 Mapper 和 Agent 连接注册表。 */
+    /** 注入服务器状态 Mapper、Agent 连接注册表和 Monitor 状态发布器。 */
+    @Autowired
     public AgentHeartbeatServiceImpl(ServerMapper serverMapper, AgentConnectionRegistry connectionRegistry,
-            Clock clock) {
+            MonitorServerStatusPublisher statusPublisher, Clock clock) {
         this.serverMapper = serverMapper;
         this.connectionRegistry = connectionRegistry;
+        this.statusPublisher = statusPublisher;
         this.clock = clock;
     }
 
-    /** 处理已认证 Agent 心跳。 */
+    /** 保留心跳边界单测所需的最小构造入口。 */
+    AgentHeartbeatServiceImpl(ServerMapper serverMapper, AgentConnectionRegistry connectionRegistry, Clock clock) {
+        this(serverMapper, connectionRegistry, null, clock);
+    }
+
+    /** 处理已认证 Agent 心跳，并仅在首次上线时广播状态转换。 */
     public void heartbeat(AgentWebSocketSession session) {
         LocalDateTime heartbeatAt = LocalDateTime.now(clock);
-        if (serverMapper.updateAgentHeartbeat(session.serverId(), heartbeatAt) != 1) {
+        int onlineTransitioned = serverMapper.markAgentOnlineAndHeartbeat(session.serverId(), heartbeatAt);
+        if (onlineTransitioned != 1
+                && serverMapper.updateAgentHeartbeat(session.serverId(), heartbeatAt) != 1) {
             throw new IllegalStateException("Agent heartbeat target is unavailable");
         }
         session.heartbeat(heartbeatAt);
+        if (onlineTransitioned == 1) {
+            publish(session.serverId(), "online", "online", heartbeatAt);
+        }
     }
 
     /** 每 30 秒扫描过期会话并标记服务器离线。 */
@@ -43,7 +57,10 @@ public class AgentHeartbeatServiceImpl implements AgentHeartbeatService {
         for (AgentWebSocketSession session : connectionRegistry.sessions()) {
             if (session.authenticated() && session.lastHeartbeatAt() != null
                     && session.lastHeartbeatAt().isBefore(cutoff)) {
-                serverMapper.markAgentOffline(session.serverId(), session.lastHeartbeatAt());
+                int offlineTransitioned = serverMapper.markAgentOffline(session.serverId(), session.lastHeartbeatAt());
+                if (offlineTransitioned == 1) {
+                    publish(session.serverId(), "offline", "offline", session.lastHeartbeatAt());
+                }
                 connectionRegistry.remove(session);
                 if (session.socketSession().isOpen()) {
                     try {
@@ -65,6 +82,16 @@ public class AgentHeartbeatServiceImpl implements AgentHeartbeatService {
         }
         // 乐观锁:仅当 last_heartbeat_at 仍是断开时的值才设 offline,
         // 防止误把已重连新连接(新心跳更新了 last_heartbeat_at)设为离线。
-        serverMapper.markAgentOffline(session.serverId(), session.lastHeartbeatAt());
+        int offlineTransitioned = serverMapper.markAgentOffline(session.serverId(), session.lastHeartbeatAt());
+        if (offlineTransitioned == 1) {
+            publish(session.serverId(), "offline", "offline", session.lastHeartbeatAt());
+        }
+    }
+
+    /** 有 Monitor 订阅者时发送状态转换；单元测试构造器不注入发布器。 */
+    private void publish(Long serverId, String status, String agentStatus, LocalDateTime lastHeartbeatAt) {
+        if (statusPublisher != null) {
+            statusPublisher.publish(serverId, status, agentStatus, lastHeartbeatAt);
+        }
     }
 }

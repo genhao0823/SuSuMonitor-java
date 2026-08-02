@@ -100,7 +100,7 @@ baseUrl = http://localhost:18080
 
 ## 七、当前阶段
 
-当前已完成：Java 后端工程骨架、统一响应、基础错误码、全局异常处理、request_id、`/api/health`、`/api/ready`、认证（注册/登录/登出/当前用户）、管理员审核（待审核列表/通过/拒绝）、服务器 CRUD（含软删除和排序）、SSH 凭据加密和连接测试（含主机指纹确认）、Agent Token 生命周期（注册/轮换/撤销）、Metrics 接收/存储/查询/清理、Agent 和 Monitor 双 WebSocket 通道（含 Ticket 握手和实时推送）、CORS 跨域配置、WebSocket 错误契约冻结、MVP-6 告警业务闭环（规则 CRUD、状态机去重、恢复、记录查询、标记已读和 alert.push 推送）、终端会话生命周期（创建/状态转换/超时清理）、终端单 JVM 配额（用户 2、服务器 4、操作用户 5、全局 16、并发幂等）、Flyway V1-V13（含 V13 告警活跃规则唯一索引）、部署资产（`application-prod.yml`、systemd unit、Nginx 反代示例、环境变量模板、`DEPLOYMENT.md`、本机 IPv4 smoke 脚本）。
+当前已完成：Java 后端工程骨架、统一响应、基础错误码、全局异常处理、request_id、`/api/health`、`/api/ready`、认证（注册/登录/登出/当前用户）、管理员审核（待审核列表/通过/拒绝）、服务器 CRUD（含软删除和排序）、SSH 凭据加密和连接测试（含主机指纹确认）、Agent Token 生命周期（注册/轮换/撤销）、Metrics 接收/存储/查询/清理、Agent 和 Monitor 双 WebSocket 通道（含 Ticket 握手和实时推送）、CORS 跨域配置、WebSocket 错误契约冻结、MVP-6 告警业务闭环（规则 CRUD、状态机去重、恢复、记录查询、标记已读和 alert.push 推送）、终端会话生命周期（创建/状态转换/超时清理）、终端单 JVM 配额（用户 2、服务器 4、操作用户 5、全局 16、并发幂等）、**MVP-10 Metrics Outbox（V14 同事务写入 + RabbitMQ 发布器 Confirm/Return/指数退避 + ready 50301）**、**MVP-11 Alert 消费侧（V15 消费幂等表 + AUTO 确认 + 3 次有限重试 + DLQ 分类 + 字段级契约校验）**、Flyway V1-V17（V13 告警活跃规则唯一索引 / V14 outbox / V15 消费幂等 / V16 outbox 清理 / V17 心跳微秒精度）、部署资产（`application-prod.yml`、systemd unit、Nginx 反代示例、环境变量模板、`DEPLOYMENT.md`、本机 IPv4 smoke 脚本）。
 
 资源限制语义：
 
@@ -114,14 +114,13 @@ baseUrl = http://localhost:18080
 
 状态区分：
 
-- 已合入 `main`：上述所有能力。
-- 仅工作树存在：Maven Wrapper 脚本 `mvnw`/`mvnw.cmd`、告警和调度的 MyBatis/H2 单元测试。
+- 已合入 `main`：上述所有能力（含 `mvnw`/`mvnw.cmd` 与 `deploy/` 部署资产）。
 - 本机 IPv4 可验证：`/api/health`、`/api/ready`、`127.0.0.1:18080` 监听、Nginx 示例配置静态检查。
-- 真实云环境未验证：systemd、Nginx、`ws://IPv4`/`http://IPv4` 端到端、HTTPS/WSS、MySQL 备份恢复、防火墙。
+- 真实云环境已验证：云端明文 HTTP 部署端到端（2026-07-31，见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md`）。
+- 真实云环境未验证：HTTPS/WSS、MySQL 备份恢复演练、家庭 Linux 主机（T6）部署。
 
 未纳入 `main` 跟踪的代码或计划：
 
-- MVP-10 Metrics Outbox（RabbitMQ + 恢复）。
-- MVP-11 Alert 消费者拆分。
 - 公网 HTTPS/WSS 验收（需先具备域名与公网 CA 证书）。
-- 性能 p50/p95/p99 数字基线。
+- 多消费者并发（双实例）验收、DLQ JSON Schema 校验。
+- 性能 p50/p95/p99 数字基线（见 `docs-SuMon/Develop-log/20260728-MVP-9-Java后端性能基线.md`）。
