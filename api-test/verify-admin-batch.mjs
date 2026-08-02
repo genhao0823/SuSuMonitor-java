@@ -131,7 +131,8 @@ check('A4', Array.isArray(duplicateApprove.body.data.failed_ids)
   'failed_ids 明细包含目标用户')
 
 const pendingAfter = await api('/api/admin/users?status=pending&page=1&page_size=20', { token: adminToken })
-check('A4', pendingAfter.body.data.total === 0, '重复审核后 pending 无残留')
+check('A4', pendingPage.body.data.total - pendingAfter.body.data.total === 3,
+  `重复审核后 pending 恰好减少 3 个（before=${pendingPage.body.data.total} → after=${pendingAfter.body.data.total}，库中可能有历史遗留 pending）`)
 
 // ---- A5 批量拒绝 + rejected 筛选 ----
 const rejectUsername = `${validationPrefix}_reject_${suffix}`
