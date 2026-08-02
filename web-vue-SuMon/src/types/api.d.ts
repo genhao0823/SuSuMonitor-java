@@ -67,9 +67,11 @@ export interface CurrentUser {
 }
 
 /**
- * 管理员待审核用户分页查询参数(与 OpenAPI listPendingUsers parameters 对齐)。
+ * 管理员用户列表分页查询参数(与 OpenAPI listUsers parameters 对齐)。
  */
-export interface AdminPendingQuery {
+export interface AdminUserQuery {
+  /** 审核状态筛选(可选):pending/approved/rejected,不传不过滤。 */
+  status?: 'pending' | 'approved' | 'rejected'
   /** 用户名模糊关键字(可选)。 */
   keyword?: string
   /** 页码,从 1 起,默认 1。 */
@@ -86,6 +88,8 @@ export interface BatchReviewResult {
   processed: number
   /** 失败的用户数(状态已变化/不存在/参数非法)。 */
   failed: number
+  /** 失败的用户 ID 列表(前端可映射用户名展示明细)。 */
+  failed_ids: number[]
 }
 
 /**

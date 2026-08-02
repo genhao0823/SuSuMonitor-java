@@ -1,6 +1,6 @@
 import apiClient from '@/api/client'
 import type {
-  AdminPendingQuery,
+  AdminUserQuery,
   ApiResponse,
   BatchReviewResult,
   CurrentUser,
@@ -13,19 +13,22 @@ import type {
  */
 
 /**
- * 调用 GET /api/admin/users/pending 分页查询待审核用户(支持用户名关键字搜索)。
+ * 调用 GET /api/admin/users 分页查询用户列表(支持审核状态筛选与用户名搜索)。
  *
- * @param query 分页/搜索参数(keyword/page/page_size)
- * @returns 待审核用户分页结果
+ * @param query 分页/搜索/状态参数(status/keyword/page/page_size)
+ * @returns 用户分页结果
  */
-export function listPendingUsers(query: AdminPendingQuery = {}): Promise<ApiResponse<PageResult<CurrentUser>>> {
+export function listUsers(query: AdminUserQuery = {}): Promise<ApiResponse<PageResult<CurrentUser>>> {
   const params: Record<string, string | number> = { page: query.page ?? 1, page_size: query.page_size ?? 20 }
   const keyword = query.keyword?.trim()
   if (keyword !== undefined && keyword.length > 0) {
     params.keyword = keyword
   }
+  if (query.status !== undefined && query.status.length > 0) {
+    params.status = query.status
+  }
   return apiClient
-    .get<ApiResponse<PageResult<CurrentUser>>>('/admin/users/pending', { params })
+    .get<ApiResponse<PageResult<CurrentUser>>>('/admin/users', { params })
     .then((r) => r.data)
 }
 

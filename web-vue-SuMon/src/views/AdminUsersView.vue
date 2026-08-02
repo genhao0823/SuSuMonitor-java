@@ -57,7 +57,24 @@
       shadow="never"
     >
       <div class="admin-users-view__summary">
-        <span class="admin-users-view__summary-label">待审核</span>
+        <el-tabs
+          v-model="activeStatus"
+          class="admin-users-view__tabs"
+          @tab-change="onTabChange"
+        >
+          <el-tab-pane
+            label="待审核"
+            name="pending"
+          />
+          <el-tab-pane
+            label="已通过"
+            name="approved"
+          />
+          <el-tab-pane
+            label="已拒绝"
+            name="rejected"
+          />
+        </el-tabs>
         <el-tag
           :type="pendingTotal > 0 ? 'warning' : 'info'"
           effect="dark"
@@ -67,13 +84,16 @@
         </el-tag>
         <el-input
           v-model="searchKeyword"
-          placeholder="按用户名搜索(回车或输入后确认)"
+          placeholder="按用户名搜索(回车或清除后确认)"
           clearable
           class="admin-users-view__search"
           @keyup.enter="onSearch"
           @clear="onSearch"
         />
-        <div class="admin-users-view__batch">
+        <div
+          v-if="activeStatus === 'pending'"
+          class="admin-users-view__batch"
+        >
           <el-button
             size="small"
             type="success"
@@ -109,10 +129,11 @@
         :data="pendingList"
         stripe
         class="admin-users-view__table"
-        :empty-text="searchKeyword.trim().length > 0 ? '无匹配用户' : '暂无待审核用户,所有申请已处理完毕'"
+        :empty-text="searchKeyword.trim().length > 0 ? '无匹配用户' : emptyTextByStatus"
         @selection-change="onSelectionChange"
       >
         <el-table-column
+          v-if="activeStatus === 'pending'"
           type="selection"
           width="48"
         />
@@ -190,15 +211,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import { ApiBusinessError } from '@/api/client'
 import {
   approveUser,
   batchApproveUsers,
   batchRejectUsers,
-  listPendingUsers,
+  listUsers,
   rejectUser
 } from '@/api/admin'
 import { ErrorCode } from '@/types/error-code'
@@ -219,24 +240,35 @@ const batchBusy = ref(false)
 const pendingList = ref<CurrentUser[]>([])
 const pendingTotal = ref(0)
 
-// 分页状态,与 OpenAPI listPendingUsers 参数对齐。
+// 分页状态,与 OpenAPI listUsers 参数对齐。
 const page = ref(1)
 const pageSizeOptions = [20, 50, 100]
 const pageSize = ref<number>(pageSizeOptions[0])
 /** 用户名搜索关键字(回车/清除时触发远端查询)。 */
 const searchKeyword = ref('')
+/** 当前审核状态 tab:待审核/已通过/已拒绝。 */
+const activeStatus = ref<'pending' | 'approved' | 'rejected'>('pending')
+
+/** 空态文案按状态区分。 */
+const emptyTextByStatus = computed<string>(() => {
+  if (activeStatus.value === 'pending') {
+    return '暂无待审核用户,所有申请已处理完毕'
+  }
+  return activeStatus.value === 'approved' ? '暂无已通过用户' : '暂无已拒绝用户'
+})
 
 // el-table selection 列状态。
 const tableRef = ref<{ clearSelection: () => void } | null>(null)
 const selectedIds = ref<number[]>([])
 
 /**
- * 拉取待审核用户分页列表(远端关键字搜索)。
+ * 拉取用户分页列表(远端状态筛选 + 关键字搜索)。
  */
 async function fetchPending(): Promise<void> {
   loading.value = true
   try {
-    const response = await listPendingUsers({
+    const response = await listUsers({
+      status: activeStatus.value,
       page: page.value,
       page_size: pageSize.value,
       keyword: searchKeyword.value.trim()
@@ -246,6 +278,13 @@ async function fetchPending(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+/** 切换状态 tab:重置到第 1 页并重新查询。 */
+function onTabChange(): void {
+  page.value = 1
+  clearSelection()
+  void fetchPending().catch((error) => ElMessage.error(explainError(error)))
 }
 
 /** 搜索触发:重置到第 1 页并重新查询。 */
@@ -313,7 +352,7 @@ async function batchReject(): Promise<void> {
 }
 
 async function runBatch(
-  action: (ids: number[]) => Promise<{ data: { processed: number; failed: number } }>,
+  action: (ids: number[]) => Promise<{ data: { processed: number; failed: number; failed_ids?: number[] } }>,
   label: string
 ): Promise<void> {
   if (batchBusy.value) {
@@ -323,11 +362,12 @@ async function runBatch(
   const ids = [...selectedIds.value]
   try {
     const response = await action(ids)
-    const { processed, failed } = response.data
+    const { processed, failed, failed_ids } = response.data
     if (failed === 0) {
       ElMessage.success(`已批量${label} ${processed} 个用户`)
     } else {
       ElMessage.warning(`批量${label}完成:成功 ${processed} 个,失败 ${failed} 个(可能已被处理)`)
+      await showFailedDetail(failed_ids ?? [], label)
     }
     clearSelection()
     await fetchPending()
@@ -335,6 +375,23 @@ async function runBatch(
     ElMessage.error(explainError(error))
   } finally {
     batchBusy.value = false
+  }
+}
+
+/** 批量失败明细弹窗:failed_ids 映射当前列表用户名,映射不到的显示 ID。 */
+async function showFailedDetail(failedIds: number[], label: string): Promise<void> {
+  if (failedIds.length === 0) {
+    return
+  }
+  const nameById = new Map(pendingList.value.map((u) => [u.id, u.username]))
+  const lines = failedIds.map((id) => `- ${nameById.get(id) ?? `#${id}（不在当前列表）`}`)
+  try {
+    await ElMessageBox.alert(lines.join('\n'), `批量${label}失败的 ${failedIds.length} 个用户`, {
+      confirmButtonText: '知道了',
+      customClass: 'admin-users-view__failed-dialog'
+    })
+  } catch {
+    // 用户关闭弹窗无需处理。
   }
 }
 
@@ -439,6 +496,10 @@ onMounted(() => {
   gap: 10px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.admin-users-view__tabs {
+  flex: none;
 }
 
 .admin-users-view__search {

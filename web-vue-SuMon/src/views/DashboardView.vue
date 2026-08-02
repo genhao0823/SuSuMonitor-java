@@ -296,14 +296,14 @@ async function probePendingCount(): Promise<void> {
     return
   }
   try {
-    const { listPendingUsers } = await import('@/api/admin')
-    const response = await listPendingUsers()
+    const { listUsers } = await import('@/api/admin')
+    const response = await listUsers({ status: 'pending', page: 1, page_size: 1 })
     pending.value = {
       ok: response.code === ErrorCode.SUCCESS,
       detail: '当前待审核用户数',
       checkedAt: null,
       responseTimeMs: null,
-      count: Array.isArray(response.data) ? response.data.length : 0
+      count: response.data?.total ?? 0
     }
   } catch (error) {
     pending.value = { ...mapErrorToProbe(error, '加载失败'), count: 0 }
