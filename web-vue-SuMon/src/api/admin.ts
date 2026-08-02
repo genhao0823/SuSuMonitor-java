@@ -1,5 +1,11 @@
 import apiClient from '@/api/client'
-import type { ApiResponse, CurrentUser } from '@/types/api'
+import type {
+  AdminPendingQuery,
+  ApiResponse,
+  BatchReviewResult,
+  CurrentUser,
+  PageResult
+} from '@/types/api'
 
 /**
  * 管理员审核模块 API 封装。
@@ -7,13 +13,43 @@ import type { ApiResponse, CurrentUser } from '@/types/api'
  */
 
 /**
- * 调用 GET /api/admin/users/pending 列出待审核用户。
+ * 调用 GET /api/admin/users/pending 分页查询待审核用户(支持用户名关键字搜索)。
  *
- * @returns 待审核用户数组
+ * @param query 分页/搜索参数(keyword/page/page_size)
+ * @returns 待审核用户分页结果
  */
-export function listPendingUsers(): Promise<ApiResponse<CurrentUser[]>> {
+export function listPendingUsers(query: AdminPendingQuery = {}): Promise<ApiResponse<PageResult<CurrentUser>>> {
+  const params: Record<string, string | number> = { page: query.page ?? 1, page_size: query.page_size ?? 20 }
+  const keyword = query.keyword?.trim()
+  if (keyword !== undefined && keyword.length > 0) {
+    params.keyword = keyword
+  }
   return apiClient
-    .get<ApiResponse<CurrentUser[]>>('/admin/users/pending')
+    .get<ApiResponse<PageResult<CurrentUser>>>('/admin/users/pending', { params })
+    .then((r) => r.data)
+}
+
+/**
+ * 调用 PUT /api/admin/users/batch-approve 批量通过待审核用户。
+ *
+ * @param ids 待审核用户 ID 列表(非空)
+ * @returns 处理统计(processed/failed)
+ */
+export function batchApproveUsers(ids: number[]): Promise<ApiResponse<BatchReviewResult>> {
+  return apiClient
+    .put<ApiResponse<BatchReviewResult>>('/admin/users/batch-approve', { user_ids: ids })
+    .then((r) => r.data)
+}
+
+/**
+ * 调用 PUT /api/admin/users/batch-reject 批量拒绝待审核用户。
+ *
+ * @param ids 待审核用户 ID 列表(非空)
+ * @returns 处理统计(processed/failed)
+ */
+export function batchRejectUsers(ids: number[]): Promise<ApiResponse<BatchReviewResult>> {
+  return apiClient
+    .put<ApiResponse<BatchReviewResult>>('/admin/users/batch-reject', { user_ids: ids })
     .then((r) => r.data)
 }
 

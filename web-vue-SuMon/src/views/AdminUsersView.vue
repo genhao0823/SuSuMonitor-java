@@ -59,27 +59,63 @@
       <div class="admin-users-view__summary">
         <span class="admin-users-view__summary-label">待审核</span>
         <el-tag
-          :type="pendingList.length > 0 ? 'warning' : 'info'"
+          :type="pendingTotal > 0 ? 'warning' : 'info'"
           effect="dark"
           size="default"
         >
-          {{ pendingList.length }} 人
+          {{ pendingTotal }} 人
         </el-tag>
         <el-input
           v-model="searchKeyword"
-          placeholder="按用户名过滤"
+          placeholder="按用户名搜索(回车或输入后确认)"
           clearable
           class="admin-users-view__search"
+          @keyup.enter="onSearch"
+          @clear="onSearch"
         />
+        <div class="admin-users-view__batch">
+          <el-button
+            size="small"
+            type="success"
+            :disabled="selectedIds.length === 0 || batchBusy"
+            @click="batchApprove"
+          >
+            批量通过{{ selectedIds.length > 0 ? `(${selectedIds.length})` : '' }}
+          </el-button>
+          <el-popconfirm
+            :title="`确定批量拒绝所选 ${selectedIds.length} 个用户吗?`"
+            confirm-button-text="拒绝"
+            cancel-button-text="取消"
+            :disabled="selectedIds.length === 0 || batchBusy"
+            @confirm="batchReject"
+          >
+            <template #reference>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :disabled="selectedIds.length === 0 || batchBusy"
+              >
+                批量拒绝{{ selectedIds.length > 0 ? `(${selectedIds.length})` : '' }}
+              </el-button>
+            </template>
+          </el-popconfirm>
+        </div>
       </div>
 
       <el-table
         v-loading="loading"
-        :data="filteredPendingList"
+        ref="tableRef"
+        :data="pendingList"
         stripe
         class="admin-users-view__table"
-        :empty-text="searchKeyword.length > 0 ? '无匹配用户' : '暂无待审核用户,所有申请已处理完毕'"
+        :empty-text="searchKeyword.trim().length > 0 ? '无匹配用户' : '暂无待审核用户,所有申请已处理完毕'"
+        @selection-change="onSelectionChange"
       >
+        <el-table-column
+          type="selection"
+          width="48"
+        />
         <el-table-column
           prop="id"
           label="ID"
@@ -137,16 +173,34 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="admin-users-view__pager">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :total="pendingTotal"
+          :page-sizes="pageSizeOptions"
+          layout="total, sizes, prev, pager, next"
+          @current-change="onPageChange"
+          @size-change="onSizeChange"
+        />
+      </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import { ApiBusinessError } from '@/api/client'
-import { approveUser, listPendingUsers, rejectUser } from '@/api/admin'
+import {
+  approveUser,
+  batchApproveUsers,
+  batchRejectUsers,
+  listPendingUsers,
+  rejectUser
+} from '@/api/admin'
 import { ErrorCode } from '@/types/error-code'
 import type { CurrentUser } from '@/types/api'
 import { formatDateTime } from '@/utils/format'
@@ -159,43 +213,48 @@ const refreshing = ref(false)
  */
 const busyId = ref<number | null>(null)
 const busyAction = ref<'approve' | 'reject' | null>(null)
+/** 批量操作进行中(禁用全部批量按钮防止双击)。 */
+const batchBusy = ref(false)
 
 const pendingList = ref<CurrentUser[]>([])
+const pendingTotal = ref(0)
 
-/**
- * 用户名本地过滤关键字。后端暂无 /api/admin/users/search 端点,
- * 此处纯前端 filter;待后端搜索接口就绪后可平滑替换为远端搜索。
- */
+// 分页状态,与 OpenAPI listPendingUsers 参数对齐。
+const page = ref(1)
+const pageSizeOptions = [20, 50, 100]
+const pageSize = ref<number>(pageSizeOptions[0])
+/** 用户名搜索关键字(回车/清除时触发远端查询)。 */
 const searchKeyword = ref('')
 
-/**
- * 按 searchKeyword 过滤后的待审核列表。
- * 不区分大小写,trim 关键字;空关键字返回原列表(避免无谓过滤)。
- */
-const filteredPendingList = computed<CurrentUser[]>(() => {
-  const keyword = searchKeyword.value.trim().toLowerCase()
-  if (keyword.length === 0) {
-    return pendingList.value
-  }
-  return pendingList.value.filter((u) => u.username.toLowerCase().includes(keyword))
-})
+// el-table selection 列状态。
+const tableRef = ref<{ clearSelection: () => void } | null>(null)
+const selectedIds = ref<number[]>([])
 
 /**
- * 拉取待审核列表。
+ * 拉取待审核用户分页列表(远端关键字搜索)。
  */
 async function fetchPending(): Promise<void> {
   loading.value = true
   try {
-    const response = await listPendingUsers()
-    pendingList.value = Array.isArray(response.data) ? response.data : []
+    const response = await listPendingUsers({
+      page: page.value,
+      page_size: pageSize.value,
+      keyword: searchKeyword.value.trim()
+    })
+    pendingList.value = response.data?.items ?? []
+    pendingTotal.value = response.data?.total ?? 0
   } finally {
     loading.value = false
   }
 }
 
-/**
- * 重新加载(顶层刷新按钮用)。
- */
+/** 搜索触发:重置到第 1 页并重新查询。 */
+function onSearch(): void {
+  page.value = 1
+  void fetchPending().catch((error) => ElMessage.error(explainError(error)))
+}
+
+/** 顶层刷新按钮。 */
 async function reload(): Promise<void> {
   if (refreshing.value) {
     return
@@ -210,6 +269,75 @@ async function reload(): Promise<void> {
   }
 }
 
+/** 翻页/改每页大小后重新拉取,并清空勾选避免越页残留。 */
+function onPageChange(targetPage?: number): void {
+  if (targetPage !== undefined) {
+    page.value = targetPage
+  }
+  clearSelection()
+  void fetchPending().catch((error) => ElMessage.error(explainError(error)))
+}
+function onSizeChange(targetSize?: number): void {
+  if (targetSize !== undefined) {
+    pageSize.value = targetSize
+  }
+  page.value = 1
+  clearSelection()
+  void fetchPending().catch((error) => ElMessage.error(explainError(error)))
+}
+
+/** el-table 勾选变化时同步 selectedIds。 */
+function onSelectionChange(rows: unknown[]): void {
+  selectedIds.value = rows.map((row) => (row as CurrentUser).id)
+}
+
+function clearSelection(): void {
+  // el-table 实例在 jsdom/测试环境下可能缺省 clearSelection,防御性调用。
+  tableRef.value?.clearSelection?.()
+}
+
+/** 批量通过:后端逐 id 原子审核,结果展示 processed/failed。 */
+async function batchApprove(): Promise<void> {
+  if (selectedIds.value.length === 0) {
+    return
+  }
+  await runBatch(batchApproveUsers, '通过')
+}
+
+/** 批量拒绝(el-popconfirm 已二次确认)。 */
+async function batchReject(): Promise<void> {
+  if (selectedIds.value.length === 0) {
+    return
+  }
+  await runBatch(batchRejectUsers, '拒绝')
+}
+
+async function runBatch(
+  action: (ids: number[]) => Promise<{ data: { processed: number; failed: number } }>,
+  label: string
+): Promise<void> {
+  if (batchBusy.value) {
+    return
+  }
+  batchBusy.value = true
+  const ids = [...selectedIds.value]
+  try {
+    const response = await action(ids)
+    const { processed, failed } = response.data
+    if (failed === 0) {
+      ElMessage.success(`已批量${label} ${processed} 个用户`)
+    } else {
+      ElMessage.warning(`批量${label}完成:成功 ${processed} 个,失败 ${failed} 个(可能已被处理)`)
+    }
+    clearSelection()
+    await fetchPending()
+  } catch (error) {
+    ElMessage.error(explainError(error))
+  } finally {
+    batchBusy.value = false
+  }
+}
+
 /**
  * 通过用户。无二次确认 — admin 频繁审批场景下多一步会拖慢。
  */
@@ -219,7 +347,7 @@ async function approve(user: CurrentUser): Promise<void> {
   try {
     await approveUser(user.id)
     ElMessage.success(`已通过 ${user.username}`)
-    await fetchPending()
+    removeFromList(user.id)
   } catch (error) {
     ElMessage.error(explainError(error))
   } finally {
@@ -237,12 +365,22 @@ async function reject(user: CurrentUser): Promise<void> {
   try {
     await rejectUser(user.id)
     ElMessage.success(`已拒绝 ${user.username}`)
-    await fetchPending()
+    removeFromList(user.id)
   } catch (error) {
     ElMessage.error(explainError(error))
   } finally {
     busyId.value = null
     busyAction.value = null
+  }
+}
+
+/** 单行审核成功后,本地移除该行并同步总数,避免整页重拉打断分页位置。 */
+function removeFromList(id: number): void {
+  pendingList.value = pendingList.value.filter((u) => u.id !== id)
+  pendingTotal.value = Math.max(0, pendingTotal.value - 1)
+  if (pendingList.value.length === 0 && page.value > 1) {
+    page.value -= 1
+    void fetchPending().catch((error) => ElMessage.error(explainError(error)))
   }
 }
 
@@ -300,11 +438,18 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .admin-users-view__search {
   max-width: 280px;
+}
+
+.admin-users-view__batch {
   margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .admin-users-view__summary-label {
@@ -335,5 +480,11 @@ onMounted(() => {
 .admin-users-view__table {
   border-radius: 8px;
   overflow: hidden;
+}
+
+.admin-users-view__pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

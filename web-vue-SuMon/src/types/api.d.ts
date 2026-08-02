@@ -67,6 +67,28 @@ export interface CurrentUser {
 }
 
 /**
+ * 管理员待审核用户分页查询参数(与 OpenAPI listPendingUsers parameters 对齐)。
+ */
+export interface AdminPendingQuery {
+  /** 用户名模糊关键字(可选)。 */
+  keyword?: string
+  /** 页码,从 1 起,默认 1。 */
+  page?: number
+  /** 每页大小 1~100,默认 20。 */
+  page_size?: number
+}
+
+/**
+ * 批量审核结果(与 OpenAPI BatchReviewResult schema 字段一致)。
+ */
+export interface BatchReviewResult {
+  /** 成功审核的用户数。 */
+  processed: number
+  /** 失败的用户数(状态已变化/不存在/参数非法)。 */
+  failed: number
+}
+
+/**
  * 登录结果(与 OpenAPI LoginResult schema 字段一致)。
  */
 export interface LoginResult {
