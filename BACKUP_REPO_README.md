@@ -72,4 +72,4 @@ git push backup v0.4.0-sprint4
 
 - **后端**:`server-java-SuMon/` 进入下一阶段(SSH 真实实现 + 告警)
 - **前端**:Sprint 5+ 视新需求启动
-- **协作**:Polish 5(GitHub remote)留作后续(等用户提供 URL + 凭据)
+- **协作**:Polish 5(GitHub remote)✅ **完成于 2026-08-02(tag `v0.5.0-cloud`,commit `6d6744e`)**,详见 `docs-SuMon/Develop-log/20260802-Polish-5-GitHub-首次推送.md`
