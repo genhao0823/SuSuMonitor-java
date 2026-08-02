@@ -1,6 +1,4 @@
 // Package reporter 构造并发送 metrics.report 消息。
-//
-// 阶段 0 只定义结构；阶段 4 将实现消息构造和上报。
 package reporter
 
 import (

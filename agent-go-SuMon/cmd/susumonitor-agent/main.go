@@ -65,10 +65,19 @@ func main() {
 	logger.Info("agent shutdown complete")
 }
 
+// metricsReporter 定义 Agent 运行循环所需的最小指标上报能力。
+type metricsReporter interface {
+	Report(collector.Metrics) error
+}
+
 // run 在同一可取消生命周期内运行 WebSocket、指标采集和上报。
 func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *wsclient.Client) error {
-	metricsCollector := collector.NewGopsutilCollector()
-	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client)
+	return runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(), reporter.NewReporter(cfg.ServerID, logger, client))
+}
+
+// runWithDependencies 允许测试替换采集器和上报器，生产环境由 run 注入真实实现。
+func runWithDependencies(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *wsclient.Client,
+	metricsCollector collector.Collector, metricsReporter metricsReporter) error {
 	collectTicker := time.NewTicker(time.Duration(cfg.CollectIntervalSeconds) * time.Second)
 	defer collectTicker.Stop()
 
@@ -77,6 +86,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *w
 		clientErrCh <- client.Run(ctx)
 	}()
 
+	reportMetrics(metricsCollector, metricsReporter, logger)
 	for {
 		select {
 		case <-ctx.Done():
@@ -91,15 +101,20 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *w
 			}
 			return err
 		case <-collectTicker.C:
-			metrics, err := metricsCollector.Collect()
-			if err != nil {
-				logger.Warn("metrics collection failed", "error", err)
-				continue
-			}
-			if err := metricsReporter.Report(metrics); err != nil {
-				logger.Warn("metrics report failed", "error", err)
-			}
+			reportMetrics(metricsCollector, metricsReporter, logger)
 		}
+	}
+}
+
+// reportMetrics 采集并尽力上报一次指标；采集或发送失败不会停止 Agent。
+func reportMetrics(metricsCollector collector.Collector, metricsReporter metricsReporter, logger *slog.Logger) {
+	metrics, err := metricsCollector.Collect()
+	if err != nil {
+		logger.Warn("metrics collection failed", "error", err)
+		return
+	}
+	if err := metricsReporter.Report(metrics); err != nil {
+		logger.Warn("metrics report failed", "error", err)
 	}
 }
 

@@ -1,7 +1,7 @@
 // Package collector 定义系统指标采集能力。
 //
-// 阶段 0 只定义接口和数据结构；阶段 3 将用 gopsutil 实现跨平台采集。
-// Windows 上 temperature 和 load_avg 通常无法采集，对应字段为 nil。
+// gopsutil 实现负责跨平台系统指标采集；Windows 上 temperature 和 load_avg
+// 通常无法采集，对应字段为 nil。
 package collector
 
 // Metrics 是一次采集的系统指标快照，与后端 metrics 固定宽表字段一一对应。
