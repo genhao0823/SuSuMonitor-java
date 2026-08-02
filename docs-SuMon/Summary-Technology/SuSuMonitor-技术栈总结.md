@@ -423,6 +423,8 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 - 前端 ECharts 集成、xterm.js Web SSH 终端（MVP-7）
 - 微服务演进（MVP-9 之后）：按数据所有权拆分 metrics/alert/ssh 服务
 
+> **2026-08-02 更新**：原"已声明未落地"的两项已补齐——① 消费失败留痕（`FailedConsumeRecordRecoverer` + `upsertFailed`，原 `markFailed` 名存实亡已修复，新增 C4 验收场景）；② 告警逃逸窗口（`confirm_count` 连续越界确认，V18，默认 1 向后兼容防瞬时抖动误报）。
+
 ---
 
 ## 八、面试亮点与可深挖点（附代码位置）
