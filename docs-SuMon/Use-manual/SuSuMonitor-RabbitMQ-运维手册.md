@@ -42,6 +42,15 @@ rabbitmqctl delete_user <用户名>
 rabbitmqctl clear_permissions -p susumonitor <用户名>
 ```
 
+> **环境清单（2026-08-02 实测）**：
+>
+> | 环境 | 部署方式 | 版本 | vhost | 用户（密码） | 备注 |
+> |---|---|---|---|---|---|
+> | 本机（local/rmq） | 免安装，`local/rabbitmq.ps1 start` | 4.3.4 | `susumonitor` | `susumonitor`（与 MySQL 同密码 `732682`，2026-08-02 重置） | 凭据已写入 Windows 用户级环境变量 `SPRING_RABBITMQ_*` / `RABBITMQ_MANAGEMENT_*`（新进程生效） |
+> | 云端 82.156.245.102 | Docker `rabbitmq:3.13-management`（容器名 `rabbitmq`，Up 9 天） | 3.13 | `susumonitor`（2026-08-02 新建） | `susumonitor`（`732682`，2026-08-02 新建，administrator） | 默认 guest 仅限容器内 localhost；`docker exec rabbitmq rabbitmqctl ...` 管理；队列拓扑由后端启动时幂等声明，当前 vhost 队列为空 |
+
+> 注：本机 4.3.4 与云端 3.13 为**主版本级差异**（4.x 引入 Khepri 元数据存储等），切换环境时以实际验收为准。
+
 > 凭据管理：RabbitMQ 密码通过 `server.env` 的 `SPRING_RABBITMQ_PASSWORD` 注入；vhost/用户清单建议随《备份与恢复手册》记录。
 
 ## 三、拓扑（冻结 4 件套，幂等声明）
