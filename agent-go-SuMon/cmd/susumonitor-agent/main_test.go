@@ -5,8 +5,10 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"agent-go-SuMon/internal/collector"
+	"agent-go-SuMon/internal/config"
 )
 
 type recordingCollector struct {
@@ -30,6 +32,21 @@ func (r *recordingReporter) Report(metrics collector.Metrics) error {
 	r.calls++
 	r.metrics = metrics
 	return r.err
+}
+
+func TestReporterOptionsMapsAllReliableDeliverySettings(t *testing.T) {
+	options := newReporterOptions(&config.Config{
+		MetricsAckTimeoutSeconds:       15,
+		MetricsRetryInitialSeconds:     2,
+		MetricsRetryMaxSeconds:         60,
+		MetricsRetryJitterEnabled:      true,
+		MetricsReplayMinIntervalMillis: 2500,
+	})
+	if options.AckTimeout != 15*time.Second || options.RetryInitial != 2*time.Second ||
+		options.RetryMax != 60*time.Second || !options.RetryJitter ||
+		options.ReplayMinInterval != 2500*time.Millisecond {
+		t.Fatalf("unexpected reporter options: %+v", options)
+	}
 }
 
 func TestReportMetricsReportsCollectedSnapshot(t *testing.T) {

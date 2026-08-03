@@ -55,13 +55,7 @@ func main() {
 		logger.Error("metrics buffer initialization failed", "error", err)
 		os.Exit(1)
 	}
-	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, reporter.Options{
-		AckTimeout:        time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
-		RetryInitial:      time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
-		RetryMax:          time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
-		RetryJitter:       cfg.MetricsRetryJitterEnabled,
-		ReplayMinInterval: time.Duration(cfg.MetricsReplayMinIntervalMillis) * time.Millisecond,
-	})
+	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, newReporterOptions(cfg))
 	client.SetMessageHandler(terminalAgent.handle)
 	client.SetMetricsAckHandler(metricsReporter.HandleMetricsAck)
 	client.SetAuthenticatedHandler(metricsReporter.HandleAuthenticated)
@@ -81,6 +75,18 @@ func main() {
 	logger.Info("agent shutdown complete")
 }
 
+// newReporterOptions converts validated Agent configuration into the single
+// Reporter option set used by both the production and test-support paths.
+func newReporterOptions(cfg *config.Config) reporter.Options {
+	return reporter.Options{
+		AckTimeout:        time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
+		RetryInitial:      time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
+		RetryMax:          time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
+		RetryJitter:       cfg.MetricsRetryJitterEnabled,
+		ReplayMinInterval: time.Duration(cfg.MetricsReplayMinIntervalMillis) * time.Millisecond,
+	}
+}
+
 // metricsReporter 定义 Agent 运行循环所需的最小指标上报能力。
 type metricsReporter interface {
 	Report(collector.Metrics) error
@@ -93,11 +99,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *w
 		return fmt.Errorf("open metrics buffer: %w", err)
 	}
 	return runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(),
-		reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, reporter.Options{
-			AckTimeout:   time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
-			RetryInitial: time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
-			RetryMax:     time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
-		}))
+		reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, newReporterOptions(cfg)))
 }
 
 // runWithDependencies 允许测试替换采集器和上报器，生产环境由 run 注入真实实现。
