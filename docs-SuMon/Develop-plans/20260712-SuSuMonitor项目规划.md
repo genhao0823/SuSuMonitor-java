@@ -2,10 +2,10 @@
 
 **日期**: 2026-07-12  
 **依据**: 根目录 `项目需求与规范.md`  
-**最后核对日期**: 2026-08-01
-**当前实施阶段**: **MVP-11 收口完成（2026-08-01 + 2026-08-02 加固）**；下一阶段按矩阵推进
-**最新进度**（2026-08-02 补充）：**Sprint 5+ 用户管理增强已完成**——admin 待审核用户分页/搜索/批量审核接口（openapi-admin 3→5 端点）+ 前端用户审核页远端搜索/分页/批量选择 + 告警逃逸窗口 `confirm_count` 前端控件；后端 409 tests / 前端 116 tests 全绿（详见 `Develop-log/20260802-Sprint5-用户管理增强与逃逸窗口控件.md`）
-**当前状态**（2026-08-02 对齐）：MVP-1 核心 + MVP-2 Go Agent + MVP-3 实时监控 + MVP-5A Web 主页面 + MVP-6 告警业务闭环 + MVP-7 终端（T1-T4） 已完成；**MVP-9 微服务化准备收口完成**（性能基线 7 场景、数据所有权审计、契约冻结）；**MVP-10 Metrics Outbox 收口完成**（发布侧真实 Broker 三阶段验收 PASS）；**MVP-11 告警消费侧收口完成**：消息通道幂等消费 + 评估切换 + DLQ 分类，`verify-alert-ws` 24/24 + `verify-mvp11` 17 项验收 PASS；**MVP-11 收口（2026-08-01）**：outbox 轮询 1000→200ms（告警推送延迟 -71%）、DLQ 受控重放工具、Broker 停机消费侧重连验收 PASS；**2026-08-02 加固收口**：消费失败留痕落地（`FailedConsumeRecordRecoverer` + `upsertFailed`）+ 告警逃逸窗口（`confirm_count` 连续越界确认，V18），401 测试全绿（详见 `Develop-log/20260731-MVP10-Metrics-Outbox.md`、`20260731-MVP11-Alert-消费侧.md`、`20260801-MVP11-收口.md`、`20260802-收口加固-失败留痕与逃逸窗口.md`）。仍属"未验证"：首管理员独立空库真实并发、公网部署环境、多实例及跨 JVM 事件推送、Monitor 1012 真实背压、多消费者并发消费（验收脚本已备，`verify-mvp11-concurrency.mjs` 保留为扩容前资产）。
+**最后核对日期**: 2026-08-03
+**当前实施阶段**: **MVP-11 收口完成（2026-08-01 + 2026-08-02 加固）**；Agent 指标可靠投递 M1/M2 已完成，下一阶段按矩阵推进
+**最新进度**（2026-08-03 补充）：**Agent 指标可靠投递 M1/M2 已完成**——Server `metrics.ack` 入口确认（`773fc4d`）+ Agent 有界持久化 FIFO、同 UUID 断线重放与单条 in-flight 保序（`7db29b6`）；Server 414 tests、Go test/vet/build 全通过。真实断网/重启联合 E2E、ACK 超时/NACK 策略、重放节流和积压展示仍待独立模块（详见 `Develop-log/20260803-Agent指标可靠投递（ACK确认与离线缓冲）.md`）。
+**当前状态**（2026-08-03 对齐）：MVP-1 核心 + MVP-2 Go Agent + MVP-3 实时监控 + MVP-5A Web 主页面 + MVP-6 告警业务闭环 + MVP-7 终端（T1-T4） 已完成；**MVP-9 微服务化准备收口完成**（性能基线 7 场景、数据所有权审计、契约冻结）；**MVP-10 Metrics Outbox 收口完成**（发布侧真实 Broker 三阶段验收 PASS）；**MVP-11 告警消费侧收口完成**：消息通道幂等消费 + 评估切换 + DLQ 分类，`verify-alert-ws` 24/24 + `verify-mvp11` 17 项验收 PASS；**MVP-11 收口（2026-08-01）**：outbox 轮询 1000→200ms（告警推送延迟 -71%）、DLQ 受控重放工具、Broker 停机消费侧重连验收 PASS；**2026-08-02 加固收口**：消费失败留痕落地（`FailedConsumeRecordRecoverer` + `upsertFailed`）+ 告警逃逸窗口（`confirm_count` 连续越界确认，V18），401 测试全绿。仍属"未验证"：首管理员独立空库真实并发、公网部署环境、M1/M2 Agent 真实断网/重启联合验收、多实例及跨 JVM 事件推送、Monitor 1012 真实背压、多消费者并发消费（验收脚本已备，`verify-mvp11-concurrency.mjs` 保留为扩容前资产）。
 
 当前状态以本节矩阵和最新开发日志为准，后文历史实施顺序不代表当前完成状态。
 

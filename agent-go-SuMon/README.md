@@ -2,7 +2,7 @@
 
 SuSuMonitor 监控采集 Agent，Go 实现。
 
-> **当前状态（2026-07-31）**：WebSocket 鉴权、心跳、指数退避重连、gopsutil 指标采集、`metrics.report` 上报和 Linux PTY 终端链路已实现，并完成本机及云端明文 WS 联调。正式生产部署应使用 HTTPS/WSS。
+> **当前状态（2026-08-03）**：WebSocket 鉴权、心跳、指数退避重连、gopsutil 指标采集、`metrics.report` 上报、`metrics.ack` 入口确认、有界本地 FIFO 缓冲和 Linux PTY 终端链路已实现。正式生产部署应使用 HTTPS/WSS。
 
 - Go 1.23（`go.mod` 要求 1.23）
 - gopsutil（跨平台系统指标采集）
@@ -29,7 +29,8 @@ agent-go-SuMon/
 │   ├── config/       配置加载与校验
 │   ├── wsclient/     WebSocket 连接、鉴权、重连
 │   ├── collector/    系统指标采集
-│   └── reporter/     metrics.report 消息构造与上报
+│   ├── metricbuffer/ 未确认指标的持久化 FIFO
+│   └── reporter/     metrics.report 构造、入队与确认后发送
 └── bin/              构建产物（不提交 Git）
 ```
 
@@ -59,12 +60,18 @@ cp .env.example .env
 | `SUSUMONITOR_BACKEND_URL` | 后端 WebSocket 地址，如 `ws://localhost:18080` |
 | `SUSUMONITOR_SERVER_ID` | 服务器 ID（admin 预建后获得） |
 | `SUSUMONITOR_AGENT_TOKEN` | Agent Token（admin 通过 REST 预发放，明文仅一次性返回） |
+| `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标 FIFO 文件，默认 `/var/lib/susumonitor/metrics-buffer.json` |
+| `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` | 待确认指标最大条数，默认 720（约 1 小时的 5 秒采集） |
 
 ## 指标上报边界
 
-- Agent 启动后会立即采集并尝试上报一次，之后按 `SUSUMONITOR_COLLECT_INTERVAL_SECONDS` 周期采集。
-- 指标上报是在线 best-effort：连接未认证、断线或写入失败时会记录告警，本地不会缓存、补报或重用失败帧的 `message_id`。
-- `metrics.report` 当前没有服务端提交 ACK；若需要离线保留或端到端至少一次确认，应单独设计有界队列和协议 ACK，不能将本地写成功当作后端已提交。
+- Agent 启动后会立即采集一次，之后按 `SUSUMONITOR_COLLECT_INTERVAL_SECONDS` 周期采集。
+- 每条 `metrics.report` 在网络发送前先以完整协议帧、固定 UUID 和采集时间落入本地严格 FIFO；仅收到同一 `message_id` 的 `metrics.ack` 才删除。
+- 写入失败、断线或 ACK 丢失时，下一次认证会重放队首的**原 UUID**；Server 对重复 ID 的入口幂等接受可避免重复指标与重复事件。
+- 为保持 Server 对 `collected_at` 的严格递增规则，最多只有一条指标处于 in-flight 状态，后续记录等待前一条 ACK。
+- 缓冲满时拒绝最新采样并记录错误，保留既有 FIFO；缓存文件损坏、版本不兼容或 `server_id` 不匹配时启动失败，避免静默丢弃未确认数据。
+- Agent 部署前必须先升级 Server 至支持 `metrics.ack` 的版本（`773fc4d` 或后续）；旧 Server 不会确认，队首将按可靠语义持续保留。
+- 当前未实现 ACK 超时主动重发、队列字节上限、恢复期节流、`metrics.nack` 策略及管理端积压展示；真实断网/重启联合 E2E 仍待隔离环境执行。
 
 ## 平台支持
 
