@@ -1,37 +1,41 @@
-// Package reporter 构造并发送 metrics.report 消息。
+// Package reporter constructs, durably queues, and sends metrics.report messages.
 package reporter
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"agent-go-SuMon/internal/collector"
+	"agent-go-SuMon/internal/metricbuffer"
 	"agent-go-SuMon/internal/wsclient"
 )
 
-// MetricsSender 定义 Reporter 上报 metrics.report 所需的最小发送能力。
-type MetricsSender interface {
-	SendMetrics(payload wsclient.MetricsPayload) error
+// MessageSender defines the minimal authenticated WebSocket write operation.
+type MessageSender interface {
+	SendMessage(context.Context, wsclient.AgentMessage) error
 }
 
-// Reporter 负责将采集的指标构造为 metrics.report 消息并通过连接发送。
+// Reporter persists metrics before sending and permits only one unacknowledged
+// frame at a time. This preserves the server's strict collected_at ordering.
 type Reporter struct {
 	serverID int64
 	logger   *slog.Logger
-	sender   MetricsSender
+	sender   MessageSender
+	queue    *metricbuffer.Queue
+	mu       sync.Mutex
+	inFlight bool
 }
 
-// NewReporter 创建 Reporter。
-func NewReporter(serverID int64, logger *slog.Logger, sender MetricsSender) *Reporter {
-	return &Reporter{
-		serverID: serverID,
-		logger:   logger,
-		sender:   sender,
-	}
+// NewReporter creates a reliable metrics reporter backed by queue.
+func NewReporter(serverID int64, logger *slog.Logger, sender MessageSender, queue *metricbuffer.Queue) *Reporter {
+	return &Reporter{serverID: serverID, logger: logger, sender: sender, queue: queue}
 }
 
-// Report 将采集的指标构造为 metrics.report 消息并发送。
+// Report creates a metrics frame, persists it before network I/O, and then
+// attempts to send the FIFO head. Offline operation remains locally durable.
 func (r *Reporter) Report(metrics collector.Metrics) error {
 	payload := wsclient.MetricsPayload{
 		ServerID:      r.serverID,
@@ -48,9 +52,79 @@ func (r *Reporter) Report(metrics collector.Metrics) error {
 		Temperature:   metrics.Temperature,
 		LoadAvg:       metrics.LoadAvg,
 	}
-	if err := r.sender.SendMetrics(payload); err != nil {
-		return fmt.Errorf("send metrics: %w", err)
+	message := wsclient.NewMessage("metrics.report", payload)
+	if err := r.queue.Enqueue(message); err != nil {
+		return fmt.Errorf("queue metrics: %w", err)
 	}
-	r.logger.Debug("metrics reported", "server_id", r.serverID, "collected_at", payload.CollectedAt)
+	r.logger.Debug("metrics queued", "server_id", r.serverID, "message_id", message.MessageID,
+		"collected_at", payload.CollectedAt)
+	return r.TrySend()
+}
+
+// TrySend attempts the oldest queued frame when no prior frame is awaiting its
+// server acknowledgement. A write error leaves the durable frame untouched.
+func (r *Reporter) TrySend() error {
+	r.mu.Lock()
+	if r.inFlight {
+		r.mu.Unlock()
+		return nil
+	}
+	message, ok := r.queue.Head()
+	if !ok {
+		r.mu.Unlock()
+		return nil
+	}
+	r.inFlight = true
+	r.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := r.sender.SendMessage(ctx, message); err != nil {
+		r.mu.Lock()
+		r.inFlight = false
+		r.mu.Unlock()
+		return fmt.Errorf("send queued metrics: %w", err)
+	}
+	r.logger.Debug("queued metrics sent; awaiting acknowledgement", "message_id", message.MessageID)
 	return nil
+}
+
+// HandleMetricsAck removes the FIFO head only for the exact acknowledged ID,
+// then advances delivery without holding the reporter state lock during I/O.
+func (r *Reporter) HandleMetricsAck(messageID string) {
+	acknowledged, err := r.queue.Acknowledge(messageID)
+	if err != nil {
+		r.logger.Error("persist metrics acknowledgement failed", "message_id", messageID, "error", err)
+		return
+	}
+	if !acknowledged {
+		r.logger.Warn("ignored unknown or out-of-order metrics acknowledgement", "message_id", messageID)
+		return
+	}
+	r.mu.Lock()
+	r.inFlight = false
+	r.mu.Unlock()
+	r.logger.Debug("metrics acknowledgement persisted", "message_id", messageID)
+	if err := r.TrySend(); err != nil {
+		r.logger.Warn("send next queued metrics failed", "error", err)
+	}
+}
+
+// HandleAuthenticated resets an in-flight write whose previous connection may
+// have lost its ACK, then replays the durable FIFO head on the new connection.
+func (r *Reporter) HandleAuthenticated() {
+	r.mu.Lock()
+	r.inFlight = false
+	r.mu.Unlock()
+	if err := r.TrySend(); err != nil {
+		r.logger.Warn("replay queued metrics after authentication failed", "error", err)
+	}
+}
+
+// HandleDisconnect permits the unchanged FIFO head to be replayed after the
+// next authenticated connection; an ACK lost with the connection is harmless.
+func (r *Reporter) HandleDisconnect() {
+	r.mu.Lock()
+	r.inFlight = false
+	r.mu.Unlock()
 }

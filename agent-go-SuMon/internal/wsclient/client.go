@@ -32,18 +32,20 @@ const (
 
 // Client 管理 WebSocket 连接、鉴权、心跳和重连。
 type Client struct {
-	backendURL        string
-	serverID          int64
-	token             string
-	logger            *slog.Logger
-	heartbeatInterval time.Duration
-	reconnectInitial  time.Duration
-	reconnectMax      time.Duration
-	connectionMu      sync.RWMutex
-	connection        *websocket.Conn
-	authenticated     bool
-	messageHandler    func(context.Context, AgentMessage)
-	disconnectHandler func()
+	backendURL           string
+	serverID             int64
+	token                string
+	logger               *slog.Logger
+	heartbeatInterval    time.Duration
+	reconnectInitial     time.Duration
+	reconnectMax         time.Duration
+	connectionMu         sync.RWMutex
+	connection           *websocket.Conn
+	authenticated        bool
+	messageHandler       func(context.Context, AgentMessage)
+	metricsAckHandler    func(string)
+	authenticatedHandler func()
+	disconnectHandler    func()
 }
 
 // SetMessageHandler 设置认证后服务端消息处理器。
@@ -51,6 +53,21 @@ type Client struct {
 // 调用方必须在 Run 前设置，运行期间不允许更换处理器。
 func (c *Client) SetMessageHandler(handler func(context.Context, AgentMessage)) {
 	c.messageHandler = handler
+}
+
+// SetMetricsAckHandler sets the handler for a server metrics.ack frame.
+//
+// The callback receives the correlated metrics.report message ID and must be
+// registered before Run starts.
+func (c *Client) SetMetricsAckHandler(handler func(string)) {
+	c.metricsAckHandler = handler
+}
+
+// SetAuthenticatedHandler sets a callback invoked after an authenticated
+// connection is published, so callers can safely send durable queued messages.
+// The callback must be registered before Run starts and return quickly.
+func (c *Client) SetAuthenticatedHandler(handler func()) {
+	c.authenticatedHandler = handler
 }
 
 // SetDisconnectHandler 设置已认证连接异常断开时的清理回调。
@@ -131,6 +148,7 @@ func (c *Client) Run(ctx context.Context) error {
 		c.connection = conn
 		c.authenticated = true
 		c.connectionMu.Unlock()
+		c.notifyAuthenticated()
 
 		err = c.runLoops(ctx, conn)
 		c.connectionMu.Lock()
@@ -154,6 +172,20 @@ func (c *Client) Run(ctx context.Context) error {
 		}
 		backoff = min(backoff*2, c.reconnectMax)
 	}
+}
+
+// notifyAuthenticated synchronously invokes the registered connection-ready
+// callback after the authenticated connection is visible to SendMessage.
+func (c *Client) notifyAuthenticated() {
+	if c.authenticatedHandler == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.Error("authenticated handler panicked", "panic", r)
+		}
+	}()
+	c.authenticatedHandler()
 }
 
 // notifyDisconnect 同步调用已注册的断连回调并防御 panic。
@@ -333,14 +365,22 @@ func (c *Client) sendHeartbeat(ctx context.Context, conn *websocket.Conn) error 
 	return nil
 }
 
-// handleMessage 处理接收到的非 error 服务端消息。
-//
-// heartbeat.ack → Debug 日志；default → 交给业务处理器。
+// heartbeat.ack → Debug 日志；metrics.ack → 专用确认处理器；default → 交给业务处理器。
 // 顶层 error 帧由 runLoops 的接收 goroutine 先行拦截，不进入这里。
 func (c *Client) handleMessage(ctx context.Context, msg AgentMessage) {
 	switch msg.Type {
 	case "heartbeat.ack":
 		c.logger.Debug("heartbeat ack received", "message_id", msg.MessageID)
+	case "metrics.ack":
+		if msg.MessageID == "" {
+			c.logger.Warn("ignored metrics acknowledgement without message ID")
+			return
+		}
+		if c.metricsAckHandler != nil {
+			c.metricsAckHandler(msg.MessageID)
+			return
+		}
+		c.logger.Debug("metrics acknowledgement received", "message_id", msg.MessageID)
 	default:
 		if c.messageHandler != nil {
 			c.messageHandler(ctx, msg)

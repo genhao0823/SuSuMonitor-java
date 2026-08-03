@@ -27,6 +27,10 @@ type Config struct {
 	ReconnectInitialSeconds int
 	// ReconnectMaxSeconds 是重连最大间隔，默认 60 秒。
 	ReconnectMaxSeconds int
+	// MetricsBufferPath 是未确认指标的持久化 FIFO 文件路径。
+	MetricsBufferPath string
+	// MetricsBufferMaxEntries 是未确认指标的最大条数，默认 720。
+	MetricsBufferMaxEntries int
 	// LogLevel 是日志级别，如 info、debug。
 	LogLevel string
 	// TerminalEnabled 控制是否接受远程终端协议消息，默认关闭。
@@ -64,10 +68,11 @@ type Config struct {
 //   - SUSUMONITOR_LOG_LEVEL
 func Load() (*Config, error) {
 	cfg := &Config{
-		BackendURL:    os.Getenv("SUSUMONITOR_BACKEND_URL"),
-		AgentToken:    os.Getenv("SUSUMONITOR_AGENT_TOKEN"),
-		LogLevel:      getenvDefault("SUSUMONITOR_LOG_LEVEL", "info"),
-		TerminalShell: getenvDefault("SUSUMONITOR_TERMINAL_SHELL", "/bin/bash"),
+		BackendURL:        os.Getenv("SUSUMONITOR_BACKEND_URL"),
+		AgentToken:        os.Getenv("SUSUMONITOR_AGENT_TOKEN"),
+		MetricsBufferPath: getenvDefault("SUSUMONITOR_METRICS_BUFFER_PATH", "/var/lib/susumonitor/metrics-buffer.json"),
+		LogLevel:          getenvDefault("SUSUMONITOR_LOG_LEVEL", "info"),
+		TerminalShell:     getenvDefault("SUSUMONITOR_TERMINAL_SHELL", "/bin/bash"),
 	}
 
 	var err error
@@ -81,6 +86,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.ReconnectMaxSeconds, err = getenvIntDefault("SUSUMONITOR_RECONNECT_MAX_SECONDS", 60); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsBufferMaxEntries, err = getenvIntDefault("SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES", 720); err != nil {
 		return nil, err
 	}
 	if cfg.TerminalEnabled, err = getenvBoolDefault("SUSUMONITOR_TERMINAL_ENABLED", false); err != nil {
@@ -146,6 +154,12 @@ func (c *Config) validate() error {
 	if c.ReconnectMaxSeconds < c.ReconnectInitialSeconds {
 		return fmt.Errorf("reconnect max (%d) must be >= initial (%d)",
 			c.ReconnectMaxSeconds, c.ReconnectInitialSeconds)
+	}
+	if !filepath.IsAbs(c.MetricsBufferPath) || filepath.Clean(c.MetricsBufferPath) != c.MetricsBufferPath {
+		return fmt.Errorf("SUSUMONITOR_METRICS_BUFFER_PATH must be a clean absolute path")
+	}
+	if c.MetricsBufferMaxEntries < 1 || c.MetricsBufferMaxEntries > 100000 {
+		return fmt.Errorf("metrics buffer max entries must be between 1 and 100000")
 	}
 	if c.TerminalMaxSessions < 1 || c.TerminalMaxSessions > 4 {
 		return fmt.Errorf("terminal max sessions must be between 1 and 4")

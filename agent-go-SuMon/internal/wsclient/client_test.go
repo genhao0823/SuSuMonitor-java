@@ -82,6 +82,79 @@ func TestSendRequiresAuthenticatedConnection(t *testing.T) {
 	}
 }
 
+func TestMetricsAckUsesDedicatedHandler(t *testing.T) {
+	client := newTestClient("ws://127.0.0.1:1", 42, 100*time.Millisecond)
+	acknowledged := make(chan string, 1)
+	forwarded := make(chan AgentMessage, 1)
+	client.SetMetricsAckHandler(func(messageID string) { acknowledged <- messageID })
+	client.SetMessageHandler(func(_ context.Context, message AgentMessage) { forwarded <- message })
+
+	client.handleMessage(context.Background(), AgentMessage{Type: "metrics.ack", MessageID: "ack-1"})
+
+	select {
+	case messageID := <-acknowledged:
+		if messageID != "ack-1" {
+			t.Fatalf("ack message ID = %q, want ack-1", messageID)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("metrics acknowledgement handler was not called")
+	}
+	select {
+	case message := <-forwarded:
+		t.Fatalf("metrics acknowledgement was forwarded to generic handler: %+v", message)
+	default:
+	}
+}
+
+func TestAuthenticatedHandlerCanSendMessage(t *testing.T) {
+	server := newTestServer(t, func(ctx context.Context, conn *websocket.Conn) {
+		var authenticate AgentMessage
+		if err := wsjson.Read(ctx, conn, &authenticate); err != nil {
+			return
+		}
+		if err := wsjson.Write(ctx, conn, newMessage("agent.authenticated", map[string]any{})); err != nil {
+			return
+		}
+		var message AgentMessage
+		if err := wsjson.Read(ctx, conn, &message); err != nil {
+			t.Errorf("read message from authenticated callback: %v", err)
+			return
+		}
+		if message.Type != "metrics.report" {
+			t.Errorf("callback message type = %q, want metrics.report", message.Type)
+		}
+		<-ctx.Done()
+	})
+	defer server.Close()
+
+	client := newTestClient(server.URL, 42, 100*time.Millisecond)
+	callbackDone := make(chan error, 1)
+	client.SetAuthenticatedHandler(func() {
+		callbackDone <- client.SendMessage(context.Background(), newMessage("metrics.report", MetricsPayload{ServerID: 42, CollectedAt: "2026-08-03T00:00:00Z"}))
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+	select {
+	case err := <-callbackDone:
+		if err != nil {
+			t.Fatalf("authenticated callback SendMessage() error = %v", err)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("authenticated callback was not called")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != context.Canceled {
+			t.Fatalf("Run() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("Run() did not stop after cancellation")
+	}
+}
+
 func TestRunLoopsStopsAfterPeerClose(t *testing.T) {
 	clientConn, serverConn := newConnectionPair(t)
 	defer serverConn.CloseNow()

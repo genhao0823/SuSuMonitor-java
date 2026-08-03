@@ -15,6 +15,7 @@ import (
 
 	"agent-go-SuMon/internal/collector"
 	"agent-go-SuMon/internal/config"
+	"agent-go-SuMon/internal/metricbuffer"
 	"agent-go-SuMon/internal/reporter"
 	"agent-go-SuMon/internal/wsclient"
 )
@@ -49,15 +50,24 @@ func main() {
 		logger.Error("terminal initialization failed", "error", err)
 		os.Exit(1)
 	}
+	metricsBuffer, err := metricbuffer.Open(cfg.MetricsBufferPath, cfg.ServerID, cfg.MetricsBufferMaxEntries)
+	if err != nil {
+		logger.Error("metrics buffer initialization failed", "error", err)
+		os.Exit(1)
+	}
+	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer)
 	client.SetMessageHandler(terminalAgent.handle)
+	client.SetMetricsAckHandler(metricsReporter.HandleMetricsAck)
+	client.SetAuthenticatedHandler(metricsReporter.HandleAuthenticated)
 	client.SetDisconnectHandler(func() {
+		metricsReporter.HandleDisconnect()
 		terminalAgent.manager.CloseAll("agent_disconnected")
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, cfg, logger, client); err != nil {
+	if err := runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(), metricsReporter); err != nil {
 		logger.Error("agent exited with error", "error", err)
 		os.Exit(1)
 	}
@@ -72,7 +82,12 @@ type metricsReporter interface {
 
 // run 在同一可取消生命周期内运行 WebSocket、指标采集和上报。
 func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *wsclient.Client) error {
-	return runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(), reporter.NewReporter(cfg.ServerID, logger, client))
+	metricsBuffer, err := metricbuffer.Open(cfg.MetricsBufferPath, cfg.ServerID, cfg.MetricsBufferMaxEntries)
+	if err != nil {
+		return fmt.Errorf("open metrics buffer: %w", err)
+	}
+	return runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(),
+		reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer))
 }
 
 // runWithDependencies 允许测试替换采集器和上报器，生产环境由 run 注入真实实现。

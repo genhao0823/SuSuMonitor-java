@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func setValidEnvironment(t *testing.T) {
 	t.Helper()
@@ -11,6 +14,8 @@ func setValidEnvironment(t *testing.T) {
 	t.Setenv("SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS", "30")
 	t.Setenv("SUSUMONITOR_RECONNECT_INITIAL_SECONDS", "5")
 	t.Setenv("SUSUMONITOR_RECONNECT_MAX_SECONDS", "60")
+	t.Setenv("SUSUMONITOR_METRICS_BUFFER_PATH", filepath.Join(t.TempDir(), "metrics-buffer.json"))
+	t.Setenv("SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES", "720")
 	t.Setenv("SUSUMONITOR_LOG_LEVEL", "debug")
 	t.Setenv("SUSUMONITOR_TERMINAL_ENABLED", "false")
 	t.Setenv("SUSUMONITOR_TERMINAL_SHELL", "/bin/bash")
@@ -70,6 +75,8 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"zero collect interval", "SUSUMONITOR_COLLECT_INTERVAL_SECONDS", "0"},
 		{"zero heartbeat interval", "SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS", "0"},
 		{"zero reconnect initial", "SUSUMONITOR_RECONNECT_INITIAL_SECONDS", "0"},
+		{"metrics buffer relative path", "SUSUMONITOR_METRICS_BUFFER_PATH", "metrics-buffer.json"},
+		{"metrics buffer capacity zero", "SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES", "0"},
 		{"terminal sessions too large", "SUSUMONITOR_TERMINAL_MAX_SESSIONS", "5"},
 		{"terminal input too large", "SUSUMONITOR_TERMINAL_MAX_INPUT_BYTES", "16385"},
 		{"terminal output rate zero", "SUSUMONITOR_TERMINAL_OUTPUT_RATE_BYTES_PER_SECOND", "0"},
