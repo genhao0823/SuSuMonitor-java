@@ -166,3 +166,33 @@ func TestReporterAuthenticationInvalidatesPriorDeadline(t *testing.T) {
 		t.Fatalf("sent messages after new deadline = %d, want 3", len(sender.snapshot()))
 	}
 }
+
+// TestReporterPacesBacklogAfterAcknowledgement verifies the next queued frame
+// waits for the configured replay interval instead of draining at ACK speed.
+func TestReporterPacesBacklogAfterAcknowledgement(t *testing.T) {
+	sender := &recordingSender{}
+	options := Options{AckTimeout: time.Second, RetryInitial: time.Millisecond, RetryMax: time.Second,
+		ReplayMinInterval: 45 * time.Millisecond}
+	reporter, _ := newTestReporter(t, sender, options)
+	if err := reporter.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("first Report() error = %v", err)
+	}
+	firstID := waitForMessages(t, sender, 1)[0].MessageID
+	if err := reporter.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("second Report() error = %v", err)
+	}
+
+	started := time.Now()
+	reporter.HandleMetricsAck(firstID)
+	time.Sleep(20 * time.Millisecond)
+	if len(sender.snapshot()) != 1 {
+		t.Fatalf("backlog replay ignored minimum interval; sent %d messages", len(sender.snapshot()))
+	}
+	messages := waitForMessages(t, sender, 2)
+	if elapsed := time.Since(started); elapsed < options.ReplayMinInterval-10*time.Millisecond {
+		t.Fatalf("backlog replay delay = %s, want at least %s", elapsed, options.ReplayMinInterval-10*time.Millisecond)
+	}
+	if messages[0].MessageID == messages[1].MessageID {
+		t.Fatal("second queued metric did not advance after acknowledgement")
+	}
+}

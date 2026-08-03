@@ -37,6 +37,8 @@ type Config struct {
 	MetricsRetryInitialSeconds int
 	// MetricsRetryMaxSeconds 是确认超时重传的最大等待时间。
 	MetricsRetryMaxSeconds int
+	// MetricsReplayMinIntervalMillis 是积压 FIFO 相邻重放之间的最小间隔。
+	MetricsReplayMinIntervalMillis int
 	// LogLevel 是日志级别，如 info、debug。
 	LogLevel string
 	// TerminalEnabled 控制是否接受远程终端协议消息，默认关闭。
@@ -104,6 +106,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.MetricsRetryMaxSeconds, err = getenvIntDefault("SUSUMONITOR_METRICS_RETRY_MAX_SECONDS", 60); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsReplayMinIntervalMillis, err = getenvIntDefault("SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS", 2500); err != nil {
 		return nil, err
 	}
 	if cfg.TerminalEnabled, err = getenvBoolDefault("SUSUMONITOR_TERMINAL_ENABLED", false); err != nil {
@@ -185,6 +190,9 @@ func (c *Config) validate() error {
 	if c.MetricsRetryMaxSeconds < c.MetricsRetryInitialSeconds {
 		return fmt.Errorf("metrics retry max (%d) must be >= initial (%d)",
 			c.MetricsRetryMaxSeconds, c.MetricsRetryInitialSeconds)
+	}
+	if c.MetricsReplayMinIntervalMillis < 0 || c.MetricsReplayMinIntervalMillis > 60000 {
+		return fmt.Errorf("metrics replay minimum interval must be between 0 and 60000 milliseconds")
 	}
 	if c.TerminalMaxSessions < 1 || c.TerminalMaxSessions > 4 {
 		return fmt.Errorf("terminal max sessions must be between 1 and 4")

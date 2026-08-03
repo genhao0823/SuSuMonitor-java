@@ -19,6 +19,7 @@ func setValidEnvironment(t *testing.T) {
 	t.Setenv("SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS", "15")
 	t.Setenv("SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS", "2")
 	t.Setenv("SUSUMONITOR_METRICS_RETRY_MAX_SECONDS", "60")
+	t.Setenv("SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS", "2500")
 	t.Setenv("SUSUMONITOR_LOG_LEVEL", "debug")
 	t.Setenv("SUSUMONITOR_TERMINAL_ENABLED", "false")
 	t.Setenv("SUSUMONITOR_TERMINAL_SHELL", "/bin/bash")
@@ -83,6 +84,7 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"metrics acknowledgement timeout zero", "SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS", "0"},
 		{"metrics retry initial zero", "SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS", "0"},
 		{"metrics retry max below initial", "SUSUMONITOR_METRICS_RETRY_MAX_SECONDS", "1"},
+		{"metrics replay interval too large", "SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS", "60001"},
 		{"terminal sessions too large", "SUSUMONITOR_TERMINAL_MAX_SESSIONS", "5"},
 		{"terminal input too large", "SUSUMONITOR_TERMINAL_MAX_INPUT_BYTES", "16385"},
 		{"terminal output rate zero", "SUSUMONITOR_TERMINAL_OUTPUT_RATE_BYTES_PER_SECOND", "0"},

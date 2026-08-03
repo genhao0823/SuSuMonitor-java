@@ -56,9 +56,10 @@ func main() {
 		os.Exit(1)
 	}
 	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, reporter.Options{
-		AckTimeout:   time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
-		RetryInitial: time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
-		RetryMax:     time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
+		AckTimeout:        time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
+		RetryInitial:      time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
+		RetryMax:          time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
+		ReplayMinInterval: time.Duration(cfg.MetricsReplayMinIntervalMillis) * time.Millisecond,
 	})
 	client.SetMessageHandler(terminalAgent.handle)
 	client.SetMetricsAckHandler(metricsReporter.HandleMetricsAck)

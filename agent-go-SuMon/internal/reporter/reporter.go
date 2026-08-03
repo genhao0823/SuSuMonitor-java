@@ -20,9 +20,10 @@ type MessageSender interface {
 
 // Options controls acknowledgement deadlines and retransmission delays.
 type Options struct {
-	AckTimeout   time.Duration
-	RetryInitial time.Duration
-	RetryMax     time.Duration
+	AckTimeout        time.Duration
+	RetryInitial      time.Duration
+	RetryMax          time.Duration
+	ReplayMinInterval time.Duration
 }
 
 // Reporter persists metrics before sending and permits only one unacknowledged
@@ -184,13 +185,20 @@ func (r *Reporter) HandleMetricsAck(messageID string) {
 		r.logger.Warn("ignored unknown or out-of-order metrics acknowledgement", "message_id", messageID)
 		return
 	}
+	next, backlog := r.queue.Head()
 	r.mu.Lock()
 	r.clearDeliveryLocked()
+	if backlog {
+		r.messageID = next.MessageID
+		r.scheduleRetryLocked(next.MessageID, r.generation, r.options.ReplayMinInterval)
+	}
 	r.mu.Unlock()
 	r.logger.Debug("metrics acknowledgement persisted", "message_id", messageID)
-	if err := r.TrySend(); err != nil {
-		r.logger.Warn("send next queued metrics failed", "error", err)
+	if !backlog {
+		return
 	}
+	r.logger.Debug("queued metrics replay scheduled", "message_id", next.MessageID,
+		"minimum_interval", r.options.ReplayMinInterval)
 }
 
 // HandleAuthenticated resets a previous connection's delivery state and replays
