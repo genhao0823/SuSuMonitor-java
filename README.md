@@ -278,7 +278,7 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - **后端**:~~管理员批量审核 / 用户搜索接口~~（**Sprint 5+ 已完成 2026-08-02**：pending 分页+keyword 搜索 + batch-approve/reject，openapi-admin 3→5 端点，见 `Develop-log/20260802-Sprint5-用户管理增强与逃逸窗口控件.md`）
 - **前端**:~~Sprint 5+（搜索 / 批量审核）~~（**已完成 2026-08-02**：用户审核页远端搜索/分页/批量选择 + 状态 Tabs + 批量失败明细 + 告警逃逸窗口 confirm_count 控件，vitest 118 全绿）；剩余候选：按状态管理增强、ECharts 图表启用、T4 Web SSH 终端增强
 - **隔离环境验收**（**已完成 2026-08-02**）：verify-mvp11（C1-C4 + 失败留痕 DB 断言）、verify-admin-batch（18 项）、verify-go-agent-reconnect（6 checks）、verify-mvp11-broker-down（B1-B7）四脚本全 PASS；RabbitMQ 凭据已重置（susumonitor/732682，建议登记 local/server.env），见 `Develop-log/20260802-隔离环境端到端验收.md`
-- **Agent 可靠投递**（**M1/M2 已完成 2026-08-03**）：Server `metrics.ack` 入口确认 + Agent 完整帧持久化 FIFO、同 UUID 断线重放、单条 in-flight 保序、队列边界与受限 spool 目录；Server 414 tests、Go test/vet/build 均通过。真实断网/重启联合 E2E 和积压状态展示待后续独立模块，见 `Develop-log/20260803-Agent指标可靠投递（ACK确认与离线缓冲）.md`
+- **Agent 可靠投递**（**M1/M2/M3 已完成 2026-08-03**）：Server `metrics.ack` 入口确认 + Agent 完整帧持久化 FIFO、同 UUID 断线/ACK 超时重传、单条 in-flight 保序、指数退避/equal jitter、积压重放节流、队列边界与受限 spool 目录；Server 414 tests、Go test/race/vet/build 均通过。真实 Agent+Server 隔离联合 E2E 与积压状态展示仍待后续独立模块，见 `Develop-log/20260803-Agent指标可靠投递（ACK确认与离线缓冲）.md`
 - **协作**:在 GitHub 上创建 PR / 提 issue
 
 ## 协议 / 工具
