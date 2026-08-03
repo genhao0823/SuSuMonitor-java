@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ type Options struct {
 	AckTimeout        time.Duration
 	RetryInitial      time.Duration
 	RetryMax          time.Duration
+	RetryJitter       bool
 	ReplayMinInterval time.Duration
 }
 
@@ -138,7 +140,7 @@ func (r *Reporter) handleAckDeadline(messageID string, generation uint64) {
 	r.ackTimer = nil
 	delay := r.retryDelayLocked()
 	attempts := r.attempts
-	r.scheduleRetryLocked(messageID, generation, delay)
+	r.scheduleRetryLocked(messageID, generation, r.jitterDelay(delay))
 	r.mu.Unlock()
 	r.logger.Warn("metrics acknowledgement timed out; retaining and retrying queued frame",
 		"message_id", messageID, "attempt", attempts, "retry_delay", delay)
@@ -153,6 +155,14 @@ func (r *Reporter) retryDelayLocked() time.Duration {
 		}
 	}
 	return delay
+}
+
+func (r *Reporter) jitterDelay(delay time.Duration) time.Duration {
+	if !r.options.RetryJitter || delay <= 1 {
+		return delay
+	}
+	half := delay / 2
+	return half + time.Duration(rand.Int63n(int64(half)+1))
 }
 
 func (r *Reporter) scheduleRetryLocked(messageID string, generation uint64, delay time.Duration) {

@@ -39,6 +39,8 @@ type Config struct {
 	MetricsRetryMaxSeconds int
 	// MetricsReplayMinIntervalMillis 是积压 FIFO 相邻重放之间的最小间隔。
 	MetricsReplayMinIntervalMillis int
+	// MetricsRetryJitterEnabled 控制确认超时重传是否使用 equal jitter。
+	MetricsRetryJitterEnabled bool
 	// LogLevel 是日志级别，如 info、debug。
 	LogLevel string
 	// TerminalEnabled 控制是否接受远程终端协议消息，默认关闭。
@@ -109,6 +111,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.MetricsReplayMinIntervalMillis, err = getenvIntDefault("SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS", 2500); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsRetryJitterEnabled, err = getenvBoolDefault("SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED", true); err != nil {
 		return nil, err
 	}
 	if cfg.TerminalEnabled, err = getenvBoolDefault("SUSUMONITOR_TERMINAL_ENABLED", false); err != nil {

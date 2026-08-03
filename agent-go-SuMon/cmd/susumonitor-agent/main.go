@@ -59,6 +59,7 @@ func main() {
 		AckTimeout:        time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
 		RetryInitial:      time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
 		RetryMax:          time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
+		RetryJitter:       cfg.MetricsRetryJitterEnabled,
 		ReplayMinInterval: time.Duration(cfg.MetricsReplayMinIntervalMillis) * time.Millisecond,
 	})
 	client.SetMessageHandler(terminalAgent.handle)

@@ -196,3 +196,20 @@ func TestReporterPacesBacklogAfterAcknowledgement(t *testing.T) {
 		t.Fatal("second queued metric did not advance after acknowledgement")
 	}
 }
+
+// TestReporterJitterDelay verifies disabled retry jitter preserves the exact
+// retry delay and enabled jitter stays within the equal-jitter interval.
+func TestReporterJitterDelay(t *testing.T) {
+	sender := &recordingSender{}
+	reporter, _ := newTestReporter(t, sender, Options{RetryJitter: false})
+	if actual := reporter.jitterDelay(20 * time.Millisecond); actual != 20*time.Millisecond {
+		t.Fatalf("disabled jitter delay = %s, want 20ms", actual)
+	}
+	reporter.options.RetryJitter = true
+	for index := 0; index < 20; index++ {
+		actual := reporter.jitterDelay(20 * time.Millisecond)
+		if actual < 10*time.Millisecond || actual > 20*time.Millisecond {
+			t.Fatalf("jitter delay = %s, want within [10ms, 20ms]", actual)
+		}
+	}
+}

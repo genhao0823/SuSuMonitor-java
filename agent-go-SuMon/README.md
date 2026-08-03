@@ -66,6 +66,7 @@ cp .env.example .env
 | `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` | ACK 超时后的首次重传等待，默认 2 秒 |
 | `SUSUMONITOR_METRICS_RETRY_MAX_SECONDS` | ACK 超时重传退避上限，默认 60 秒 |
 | `SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS` | 积压 FIFO 相邻发送的最小间隔，默认 2500ms（约 24 条/分钟） |
+| `SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED` | ACK 超时重传是否使用 equal jitter，默认 `true`（实际等待为退避值的 1/2 至 1 倍） |
 
 ## 指标上报边界
 
