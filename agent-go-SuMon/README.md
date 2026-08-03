@@ -62,16 +62,20 @@ cp .env.example .env
 | `SUSUMONITOR_AGENT_TOKEN` | Agent Token（admin 通过 REST 预发放，明文仅一次性返回） |
 | `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标 FIFO 文件，默认 `/var/lib/susumonitor/metrics-buffer.json` |
 | `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` | 待确认指标最大条数，默认 720（约 1 小时的 5 秒采集） |
+| `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` | 一次指标写入后等待 `metrics.ack` 的最长时间，默认 15 秒 |
+| `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` | ACK 超时后的首次重传等待，默认 2 秒 |
+| `SUSUMONITOR_METRICS_RETRY_MAX_SECONDS` | ACK 超时重传退避上限，默认 60 秒 |
 
 ## 指标上报边界
 
 - Agent 启动后会立即采集一次，之后按 `SUSUMONITOR_COLLECT_INTERVAL_SECONDS` 周期采集。
 - 每条 `metrics.report` 在网络发送前先以完整协议帧、固定 UUID 和采集时间落入本地严格 FIFO；仅收到同一 `message_id` 的 `metrics.ack` 才删除。
 - 写入失败、断线或 ACK 丢失时，下一次认证会重放队首的**原 UUID**；Server 对重复 ID 的入口幂等接受可避免重复指标与重复事件。
+- 已认证连接中若 `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` 内未收到 ACK，Agent 保留队首并按 `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` 至 `SUSUMONITOR_METRICS_RETRY_MAX_SECONDS` 的指数退避重发；重发仍使用原完整帧和 UUID。
 - 为保持 Server 对 `collected_at` 的严格递增规则，最多只有一条指标处于 in-flight 状态，后续记录等待前一条 ACK。
 - 缓冲满时拒绝最新采样并记录错误，保留既有 FIFO；缓存文件损坏、版本不兼容或 `server_id` 不匹配时启动失败，避免静默丢弃未确认数据。
 - Agent 部署前必须先升级 Server 至支持 `metrics.ack` 的版本（`773fc4d` 或后续）；旧 Server 不会确认，队首将按可靠语义持续保留。
-- 当前未实现 ACK 超时主动重发、队列字节上限、恢复期节流、`metrics.nack` 策略及管理端积压展示；真实断网/重启联合 E2E 仍待隔离环境执行。
+- 当前未实现队列字节上限、恢复期节流、`metrics.nack` 策略及管理端积压展示；真实断网/重启联合 E2E 仍待隔离环境执行。
 
 ## 平台支持
 

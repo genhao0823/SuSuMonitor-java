@@ -55,7 +55,11 @@ func main() {
 		logger.Error("metrics buffer initialization failed", "error", err)
 		os.Exit(1)
 	}
-	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer)
+	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, reporter.Options{
+		AckTimeout:   time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
+		RetryInitial: time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
+		RetryMax:     time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
+	})
 	client.SetMessageHandler(terminalAgent.handle)
 	client.SetMetricsAckHandler(metricsReporter.HandleMetricsAck)
 	client.SetAuthenticatedHandler(metricsReporter.HandleAuthenticated)
@@ -87,7 +91,11 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *w
 		return fmt.Errorf("open metrics buffer: %w", err)
 	}
 	return runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(),
-		reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer))
+		reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, reporter.Options{
+			AckTimeout:   time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
+			RetryInitial: time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
+			RetryMax:     time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
+		}))
 }
 
 // runWithDependencies 允许测试替换采集器和上报器，生产环境由 run 注入真实实现。

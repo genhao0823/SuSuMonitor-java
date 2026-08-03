@@ -31,6 +31,12 @@ type Config struct {
 	MetricsBufferPath string
 	// MetricsBufferMaxEntries 是未确认指标的最大条数，默认 720。
 	MetricsBufferMaxEntries int
+	// MetricsAckTimeoutSeconds 是一次指标写入后等待服务端确认的最长时间。
+	MetricsAckTimeoutSeconds int
+	// MetricsRetryInitialSeconds 是确认超时后的首次重传等待时间。
+	MetricsRetryInitialSeconds int
+	// MetricsRetryMaxSeconds 是确认超时重传的最大等待时间。
+	MetricsRetryMaxSeconds int
 	// LogLevel 是日志级别，如 info、debug。
 	LogLevel string
 	// TerminalEnabled 控制是否接受远程终端协议消息，默认关闭。
@@ -89,6 +95,15 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.MetricsBufferMaxEntries, err = getenvIntDefault("SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES", 720); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsAckTimeoutSeconds, err = getenvIntDefault("SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS", 15); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsRetryInitialSeconds, err = getenvIntDefault("SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS", 2); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsRetryMaxSeconds, err = getenvIntDefault("SUSUMONITOR_METRICS_RETRY_MAX_SECONDS", 60); err != nil {
 		return nil, err
 	}
 	if cfg.TerminalEnabled, err = getenvBoolDefault("SUSUMONITOR_TERMINAL_ENABLED", false); err != nil {
@@ -160,6 +175,16 @@ func (c *Config) validate() error {
 	}
 	if c.MetricsBufferMaxEntries < 1 || c.MetricsBufferMaxEntries > 100000 {
 		return fmt.Errorf("metrics buffer max entries must be between 1 and 100000")
+	}
+	if c.MetricsAckTimeoutSeconds < 1 || c.MetricsAckTimeoutSeconds > 300 {
+		return fmt.Errorf("metrics acknowledgement timeout must be between 1 and 300 seconds")
+	}
+	if c.MetricsRetryInitialSeconds < 1 {
+		return fmt.Errorf("metrics retry initial seconds must be positive")
+	}
+	if c.MetricsRetryMaxSeconds < c.MetricsRetryInitialSeconds {
+		return fmt.Errorf("metrics retry max (%d) must be >= initial (%d)",
+			c.MetricsRetryMaxSeconds, c.MetricsRetryInitialSeconds)
 	}
 	if c.TerminalMaxSessions < 1 || c.TerminalMaxSessions > 4 {
 		return fmt.Errorf("terminal max sessions must be between 1 and 4")
