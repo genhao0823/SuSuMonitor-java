@@ -148,6 +148,11 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
                 MetricsReportPayload reportPayload = objectMapper.treeToValue(
                         agentMessage.payload(), MetricsReportPayload.class);
                 metricsService.report(session.serverId(), agentMessage.messageId(), reportPayload);
+                // 仅在指标事务成功返回后确认入口持久化；异步 Outbox 发布和告警评估不属于本帧语义。
+                var ackPayload = objectMapper.createObjectNode()
+                        .put("server_id", session.serverId())
+                        .put("collected_at", reportPayload.getCollectedAt().toString());
+                send(session.socketSession(), AgentMessageType.METRICS_ACK, agentMessage.messageId(), ackPayload);
             } else if (agentMessage.type() != null && agentMessage.type().startsWith("terminal.")
                     && session.authenticated()) {
                 if (terminalRelayService == null) {

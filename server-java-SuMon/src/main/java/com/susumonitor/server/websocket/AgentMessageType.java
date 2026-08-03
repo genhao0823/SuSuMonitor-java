@@ -8,6 +8,7 @@ public enum AgentMessageType {
     AGENT_AUTHENTICATED("agent.authenticated"),
     HEARTBEAT("heartbeat"),
     HEARTBEAT_ACK("heartbeat.ack"),
+    METRICS_ACK("metrics.ack"),
     ERROR("error");
 
     private final String value;

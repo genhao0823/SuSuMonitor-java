@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -245,6 +246,76 @@ class AgentWebSocketHandlerTests {
                 """));
 
         verify(metricsService).report(eq(5005L), eq(messageId), any());
+    }
+
+    /** 验证指标事务成功后返回关联请求 ID 的 metrics.ack，不承诺异步告警已完成。 */
+    @Test
+    void metricsReportShouldAcknowledgeCommittedIngress() throws Exception {
+        MutableClock clock = new MutableClock(CONNECTED_AT);
+        WebSocketSession socket = socket("agent-metrics-ack");
+        AgentAuthenticationService authenticationService = mock(AgentAuthenticationService.class);
+        AgentHeartbeatService heartbeatService = mock(AgentHeartbeatService.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        MetricsService metricsService = mock(MetricsService.class);
+        ServerEntity server = new ServerEntity();
+        server.setId(6006L);
+        when(authenticationService.authenticate(6006L, "test-token")).thenReturn(server);
+        when(registry.replace(any())).thenReturn(java.util.Optional.empty());
+        AgentWebSocketHandler handler = new AgentWebSocketHandler(new ObjectMapper().findAndRegisterModules(),
+                authenticationService, heartbeatService, registry, metricsService, clock);
+        handler.afterConnectionEstablished(socket);
+        handler.handleTextMessage(socket, new TextMessage(
+                "{\"type\":\"agent.authenticate\",\"payload\":{\"server_id\":6006,\"token\":\"test-token\"}}"));
+        org.mockito.Mockito.clearInvocations(socket);
+        String messageId = "2f9678a1-f5f0-4c6c-b9b0-2f9556b2f543";
+
+        handler.handleTextMessage(socket, new TextMessage("""
+                {"type":"metrics.report","message_id":"2f9678a1-f5f0-4c6c-b9b0-2f9556b2f543","payload":{"server_id":6006,"collected_at":"2026-07-22T00:00:00Z","cpu_percent":10}}
+                """));
+
+        org.mockito.ArgumentCaptor<TextMessage> captor =
+                org.mockito.ArgumentCaptor.forClass(TextMessage.class);
+        verify(socket).sendMessage(captor.capture());
+        JsonNode response = new ObjectMapper().readTree(captor.getValue().getPayload());
+        assertEquals("metrics.ack", response.get("type").asText());
+        assertEquals(messageId, response.get("message_id").asText());
+        assertEquals(6006L, response.get("payload").get("server_id").asLong());
+        assertEquals("2026-07-22T00:00Z", response.get("payload").get("collected_at").asText());
+        verify(metricsService).report(eq(6006L), eq(messageId), any());
+    }
+
+    /** 验证指标事务失败时只发送既有 error 帧，绝不确认尚未接受的指标。 */
+    @Test
+    void metricsReportShouldNotAcknowledgeFailedIngress() throws Exception {
+        MutableClock clock = new MutableClock(CONNECTED_AT);
+        WebSocketSession socket = socket("agent-metrics-error");
+        AgentAuthenticationService authenticationService = mock(AgentAuthenticationService.class);
+        AgentHeartbeatService heartbeatService = mock(AgentHeartbeatService.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        MetricsService metricsService = mock(MetricsService.class);
+        ServerEntity server = new ServerEntity();
+        server.setId(7007L);
+        when(authenticationService.authenticate(7007L, "test-token")).thenReturn(server);
+        when(registry.replace(any())).thenReturn(java.util.Optional.empty());
+        doThrow(new com.susumonitor.server.common.BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER))
+                .when(metricsService).report(eq(7007L), any(), any());
+        AgentWebSocketHandler handler = new AgentWebSocketHandler(new ObjectMapper().findAndRegisterModules(),
+                authenticationService, heartbeatService, registry, metricsService, clock);
+        handler.afterConnectionEstablished(socket);
+        handler.handleTextMessage(socket, new TextMessage(
+                "{\"type\":\"agent.authenticate\",\"payload\":{\"server_id\":7007,\"token\":\"test-token\"}}"));
+        org.mockito.Mockito.clearInvocations(socket);
+
+        handler.handleTextMessage(socket, new TextMessage("""
+                {"type":"metrics.report","message_id":"ad19a0dc-3ae2-46d7-8410-85ef50257eaf","payload":{"server_id":7007,"collected_at":"2026-07-22T00:00:00Z","cpu_percent":10}}
+                """));
+
+        org.mockito.ArgumentCaptor<TextMessage> captor =
+                org.mockito.ArgumentCaptor.forClass(TextMessage.class);
+        verify(socket).sendMessage(captor.capture());
+        JsonNode response = new ObjectMapper().readTree(captor.getValue().getPayload());
+        assertEquals("error", response.get("type").asText());
+        assertEquals(ErrorCode.INVALID_REQUEST_PARAMETER.getCode(), response.get("payload").get("code").asInt());
     }
 
     /** 验证已建立连接因总连接配额耗尽时返回 42901 并以策略违规关闭。 */
