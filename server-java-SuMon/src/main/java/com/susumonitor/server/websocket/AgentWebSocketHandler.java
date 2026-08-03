@@ -6,6 +6,7 @@ import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.module.server.entity.ServerEntity;
 import com.susumonitor.server.module.metrics.dto.MetricsReportPayload;
+import com.susumonitor.server.module.metrics.service.MetricsRejectedException;
 import com.susumonitor.server.module.metrics.service.MetricsService;
 import java.io.IOException;
 import java.time.Clock;
@@ -147,12 +148,22 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
                 }
                 MetricsReportPayload reportPayload = objectMapper.treeToValue(
                         agentMessage.payload(), MetricsReportPayload.class);
-                metricsService.report(session.serverId(), agentMessage.messageId(), reportPayload);
-                // 仅在指标事务成功返回后确认入口持久化；异步 Outbox 发布和告警评估不属于本帧语义。
-                var ackPayload = objectMapper.createObjectNode()
-                        .put("server_id", session.serverId())
-                        .put("collected_at", reportPayload.getCollectedAt().toString());
-                send(session.socketSession(), AgentMessageType.METRICS_ACK, agentMessage.messageId(), ackPayload);
+                try {
+                    metricsService.report(session.serverId(), agentMessage.messageId(), reportPayload);
+                    // 仅在指标事务成功返回后确认入口持久化；异步 Outbox 发布和告警评估不属于本帧语义。
+                    var ackPayload = objectMapper.createObjectNode()
+                            .put("server_id", session.serverId())
+                            .put("collected_at", reportPayload.getCollectedAt().toString());
+                    send(session.socketSession(), AgentMessageType.METRICS_ACK, agentMessage.messageId(), ackPayload);
+                } catch (MetricsRejectedException exception) {
+                    // 只有可关联且永久无效的指标才返回 NACK；泛化 error 不能触发 Agent 删除队首。
+                    var nackPayload = objectMapper.createObjectNode()
+                            .put("server_id", session.serverId())
+                            .put("code", exception.getErrorCode().getCode())
+                            .put("reason", exception.getReason().value())
+                            .put("message", exception.getErrorCode().getMessage());
+                    send(session.socketSession(), AgentMessageType.METRICS_NACK, agentMessage.messageId(), nackPayload);
+                }
             } else if (agentMessage.type() != null && agentMessage.type().startsWith("terminal.")
                     && session.authenticated()) {
                 if (terminalRelayService == null) {

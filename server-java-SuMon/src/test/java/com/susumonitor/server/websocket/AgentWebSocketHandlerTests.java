@@ -318,6 +318,45 @@ class AgentWebSocketHandlerTests {
         assertEquals(ErrorCode.INVALID_REQUEST_PARAMETER.getCode(), response.get("payload").get("code").asInt());
     }
 
+    /** 验证可确定永久拒绝的指标返回关联请求 ID 的 metrics.nack，而非泛化 error。 */
+    @Test
+    void metricsReportShouldNackPermanentRejection() throws Exception {
+        MutableClock clock = new MutableClock(CONNECTED_AT);
+        WebSocketSession socket = socket("agent-metrics-nack");
+        AgentAuthenticationService authenticationService = mock(AgentAuthenticationService.class);
+        AgentHeartbeatService heartbeatService = mock(AgentHeartbeatService.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        MetricsService metricsService = mock(MetricsService.class);
+        ServerEntity server = new ServerEntity();
+        server.setId(8008L);
+        when(authenticationService.authenticate(8008L, "test-token")).thenReturn(server);
+        when(registry.replace(any())).thenReturn(java.util.Optional.empty());
+        doThrow(new com.susumonitor.server.module.metrics.service.MetricsRejectedException(
+                com.susumonitor.server.module.metrics.service.MetricsRejectionReason.STALE_COLLECTED_AT))
+                .when(metricsService).report(eq(8008L), any(), any());
+        AgentWebSocketHandler handler = new AgentWebSocketHandler(new ObjectMapper().findAndRegisterModules(),
+                authenticationService, heartbeatService, registry, metricsService, clock);
+        handler.afterConnectionEstablished(socket);
+        handler.handleTextMessage(socket, new TextMessage(
+                "{\"type\":\"agent.authenticate\",\"payload\":{\"server_id\":8008,\"token\":\"test-token\"}}"));
+        org.mockito.Mockito.clearInvocations(socket);
+        String messageId = "6b8e58e1-d7a9-4b35-8c86-52a7ab5a337d";
+
+        handler.handleTextMessage(socket, new TextMessage("""
+                {"type":"metrics.report","message_id":"6b8e58e1-d7a9-4b35-8c86-52a7ab5a337d","payload":{"server_id":8008,"collected_at":"2026-07-22T00:00:00Z","cpu_percent":10}}
+                """));
+
+        org.mockito.ArgumentCaptor<TextMessage> captor =
+                org.mockito.ArgumentCaptor.forClass(TextMessage.class);
+        verify(socket).sendMessage(captor.capture());
+        JsonNode response = new ObjectMapper().readTree(captor.getValue().getPayload());
+        assertEquals("metrics.nack", response.get("type").asText());
+        assertEquals(messageId, response.get("message_id").asText());
+        assertEquals(8008L, response.get("payload").get("server_id").asLong());
+        assertEquals(ErrorCode.INVALID_REQUEST_PARAMETER.getCode(), response.get("payload").get("code").asInt());
+        assertEquals("stale_collected_at", response.get("payload").get("reason").asText());
+    }
+
     /** 验证已建立连接因总连接配额耗尽时返回 42901 并以策略违规关闭。 */
     @Test
     void connectionLimitShouldSendErrorAndClose() throws Exception {

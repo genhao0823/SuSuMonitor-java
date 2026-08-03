@@ -58,7 +58,7 @@ public class MetricsServiceImpl implements MetricsService {
     public void report(Long authenticatedServerId, String messageId, MetricsReportPayload payload) {
         validatePayload(authenticatedServerId, messageId, payload);
         if (!serverService.existsActiveForUpdate(authenticatedServerId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+            throw new MetricsRejectedException(MetricsRejectionReason.SERVER_NOT_FOUND);
         }
         if (isDuplicateIngestion(authenticatedServerId, messageId, payload.getCollectedAt())) {
             return;
@@ -66,7 +66,7 @@ public class MetricsServiceImpl implements MetricsService {
         MetricsEntity entity = toEntity(payload);
         LocalDateTime latestCollectedAt = metricsMapper.selectLatestCollectedAt(authenticatedServerId);
         if (latestCollectedAt != null && !entity.getCollectedAt().isAfter(latestCollectedAt)) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.STALE_COLLECTED_AT);
         }
         if (metricsMapper.insertMetric(entity) != 1) {
             throw new BusinessException(ErrorCode.DATABASE_ERROR);
@@ -133,7 +133,7 @@ public class MetricsServiceImpl implements MetricsService {
                 || !authenticatedServerId.equals(payload.getServerId())
                 || payload.getCollectedAt() == null
                 || payload.getCollectedAt().isAfter(OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5))) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
         validatePercent(payload.getCpuPercent());
         validatePercent(payload.getMemoryPercent());
@@ -149,7 +149,7 @@ public class MetricsServiceImpl implements MetricsService {
                 && payload.getMemoryUsed() > payload.getMemoryTotal()
                 || payload.getDiskUsed() != null && payload.getDiskTotal() != null
                 && payload.getDiskUsed() > payload.getDiskTotal()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
     }
 
@@ -168,13 +168,13 @@ public class MetricsServiceImpl implements MetricsService {
 
     private void validatePercent(BigDecimal value) {
         if (value != null && (value.signum() < 0 || value.compareTo(BigDecimal.valueOf(100)) > 0)) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
     }
 
     private void validateNonNegative(Number value) {
         if (value != null && value.doubleValue() < 0) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
     }
 

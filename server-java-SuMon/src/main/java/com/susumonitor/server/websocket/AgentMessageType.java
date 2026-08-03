@@ -9,6 +9,7 @@ public enum AgentMessageType {
     HEARTBEAT("heartbeat"),
     HEARTBEAT_ACK("heartbeat.ack"),
     METRICS_ACK("metrics.ack"),
+    METRICS_NACK("metrics.nack"),
     ERROR("error");
 
     private final String value;
