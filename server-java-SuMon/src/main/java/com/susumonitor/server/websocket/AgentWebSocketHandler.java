@@ -129,7 +129,10 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
                             ErrorCode.AGENT_MESSAGE_RATE_LIMIT_REACHED);
                     return;
                 }
-                heartbeatService.heartbeat(session);
+                // 心跳可携带投递遥测统计；老版本 Agent 载荷为空对象，字段全部为 null。
+                AgentHeartbeatPayload deliveryStats = objectMapper.treeToValue(
+                        agentMessage.payload(), AgentHeartbeatPayload.class);
+                heartbeatService.heartbeat(session, deliveryStats);
                 // 冻结 heartbeat.ack payload，返回确认的心跳时间，供 Agent 校验心跳周期。
                 var ackPayload = objectMapper.createObjectNode()
                         .put("server_id", session.serverId())

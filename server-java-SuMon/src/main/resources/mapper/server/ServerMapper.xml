@@ -211,7 +211,13 @@
             id,
             status,
             agent_status,
-            last_heartbeat_at
+            last_heartbeat_at,
+            delivery_pending_count,
+            delivery_pending_bytes,
+            delivery_oldest_collected_at,
+            delivery_drop_count,
+            delivery_dead_letter_count,
+            delivery_dead_letter_bytes
         FROM servers
         WHERE id = #{serverId}
           AND deleted = 0
@@ -337,6 +343,19 @@
           AND deleted = 0
           AND agent_token_hash IS NOT NULL
           AND agent_token_revoked_at IS NULL
+    </update>
+
+    <!-- 心跳携带的投递遥测统计；null 字段保持原值，不参与在线状态转换。 -->
+    <update id="updateDeliveryStats">
+        UPDATE servers
+        SET delivery_pending_count = #{pendingCount},
+            delivery_pending_bytes = #{pendingBytes},
+            delivery_oldest_collected_at = #{oldestCollectedAt},
+            delivery_drop_count = #{dropCount},
+            delivery_dead_letter_count = #{deadLetterCount},
+            delivery_dead_letter_bytes = #{deadLetterBytes}
+        WHERE id = #{serverId}
+          AND deleted = 0
     </update>
 
     <!-- 心跳超时或主动离线时把 status 同步置为 offline。 -->

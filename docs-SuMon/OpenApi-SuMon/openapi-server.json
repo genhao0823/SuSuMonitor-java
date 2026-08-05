@@ -716,6 +716,12 @@
           "status": {"type": "string"},
           "agent_status": {"type": "string"},
           "last_heartbeat_at": {"type": "string", "format": "date-time", "nullable": true},
+          "delivery_pending_count": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
+          "delivery_pending_bytes": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
+          "delivery_oldest_collected_at": {"type": "string", "format": "date-time", "nullable": true},
+          "delivery_drop_count": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
+          "delivery_dead_letter_count": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
+          "delivery_dead_letter_bytes": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
           "checked_at": {"type": "string", "format": "date-time"}
         }
       },

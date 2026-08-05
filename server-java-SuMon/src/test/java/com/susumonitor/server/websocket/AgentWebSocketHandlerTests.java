@@ -21,6 +21,7 @@ import com.susumonitor.server.module.server.entity.ServerEntity;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
@@ -186,6 +187,42 @@ class AgentWebSocketHandlerTests {
         assertEquals("heartbeat.ack", payload.get("type").asText());
         assertEquals(3003, payload.get("payload").get("server_id").asInt());
         assertTrue(payload.get("payload").has("last_heartbeat_at"));
+    }
+
+    /** 验证心跳携带投递遥测时解析并转发给心跳服务。 */
+    @Test
+    void heartbeatDeliveryStatsShouldBeForwarded() throws Exception {
+        MutableClock clock = new MutableClock(CONNECTED_AT);
+        WebSocketSession socket = socket("agent-heartbeat-stats");
+        AgentAuthenticationService authenticationService = mock(AgentAuthenticationService.class);
+        AgentHeartbeatService heartbeatService = mock(AgentHeartbeatService.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        when(registry.replace(any())).thenReturn(java.util.Optional.empty());
+        ServerEntity server = new ServerEntity();
+        server.setId(3003L);
+        when(authenticationService.authenticate(3003L, "test-token")).thenReturn(server);
+
+        AgentWebSocketHandler handler = new AgentWebSocketHandler(
+                new ObjectMapper().findAndRegisterModules(),
+                authenticationService, heartbeatService, registry, mock(MetricsService.class), clock);
+        handler.afterConnectionEstablished(socket);
+        handler.handleTextMessage(socket, new TextMessage(
+                "{\"type\":\"agent.authenticate\",\"payload\":{\"server_id\":3003,\"token\":\"test-token\"}}"));
+
+        handler.handleTextMessage(socket, new TextMessage("""
+                {"type":"heartbeat","message_id":"hb-stats","payload":{"pending_count":3,"pending_bytes":456,
+                 "oldest_collected_at":"2026-08-03T00:00:00Z","drop_count":2,"dead_letter_count":1,"dead_letter_bytes":789}}"""));
+
+        org.mockito.ArgumentCaptor<AgentHeartbeatPayload> captor =
+                org.mockito.ArgumentCaptor.forClass(AgentHeartbeatPayload.class);
+        verify(heartbeatService).heartbeat(any(AgentWebSocketSession.class), captor.capture());
+        AgentHeartbeatPayload stats = captor.getValue();
+        assertEquals(3L, stats.pendingCount());
+        assertEquals(456L, stats.pendingBytes());
+        assertEquals(OffsetDateTime.parse("2026-08-03T00:00:00Z"), stats.oldestCollectedAt());
+        assertEquals(2L, stats.dropCount());
+        assertEquals(1L, stats.deadLetterCount());
+        assertEquals(789L, stats.deadLetterBytes());
     }
 
     /** 验证 metrics.report 缺少 UUID message_id 时被拒绝，且不会进入 Metrics 写入服务。 */

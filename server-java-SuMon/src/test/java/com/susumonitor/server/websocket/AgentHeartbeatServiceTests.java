@@ -1,5 +1,6 @@
 package com.susumonitor.server.websocket;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -9,6 +10,7 @@ import com.susumonitor.server.module.server.mapper.ServerMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -66,6 +68,47 @@ class AgentHeartbeatServiceTests {
 
         verify(serverMapper).markAgentOffline(SERVER_ID, heartbeatAt);
         verify(statusPublisher).publish(SERVER_ID, "offline", "offline", heartbeatAt);
+    }
+
+    /** 验证心跳携带投递遥测时按 UTC 转换并落库。 */
+    @Test
+    void shouldPersistDeliveryStatsFromHeartbeatPayload() {
+        Clock clock = Clock.fixed(HEARTBEAT_AT, ZoneOffset.UTC);
+        ServerMapper serverMapper = mock(ServerMapper.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        LocalDateTime heartbeatAt = LocalDateTime.ofInstant(HEARTBEAT_AT, ZoneOffset.UTC);
+        when(serverMapper.markAgentOnlineAndHeartbeat(SERVER_ID, heartbeatAt)).thenReturn(1);
+        WebSocketSession socket = mock(WebSocketSession.class);
+        when(socket.getId()).thenReturn("stats-session");
+        AgentWebSocketSession session = new AgentWebSocketSession(socket, clock);
+        session.authenticate(SERVER_ID, heartbeatAt);
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, clock);
+
+        service.heartbeat(session, new AgentHeartbeatPayload(3L, 456L,
+                OffsetDateTime.parse("2026-08-03T00:00:00Z"), 2L, 1L, 789L));
+
+        verify(serverMapper).updateDeliveryStats(SERVER_ID,
+                LocalDateTime.ofInstant(Instant.parse("2026-08-03T00:00:00Z"), ZoneOffset.UTC),
+                3L, 456L, 2L, 1L, 789L);
+    }
+
+    /** 验证心跳未携带投递遥测时不触发统计更新。 */
+    @Test
+    void shouldSkipDeliveryStatsUpdateWhenPayloadHasNone() {
+        Clock clock = Clock.fixed(HEARTBEAT_AT, ZoneOffset.UTC);
+        ServerMapper serverMapper = mock(ServerMapper.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        LocalDateTime heartbeatAt = LocalDateTime.ofInstant(HEARTBEAT_AT, ZoneOffset.UTC);
+        when(serverMapper.markAgentOnlineAndHeartbeat(SERVER_ID, heartbeatAt)).thenReturn(1);
+        WebSocketSession socket = mock(WebSocketSession.class);
+        when(socket.getId()).thenReturn("stats-empty-session");
+        AgentWebSocketSession session = new AgentWebSocketSession(socket, clock);
+        session.authenticate(SERVER_ID, heartbeatAt);
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, clock);
+
+        service.heartbeat(session, new AgentHeartbeatPayload(null, null, null, null, null, null));
+
+        verify(serverMapper, never()).updateDeliveryStats(any(), any(), any(), any(), any(), any(), any());
     }
 
     /** 提供测试可推进的 UTC Clock。 */

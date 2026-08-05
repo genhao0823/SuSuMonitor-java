@@ -4,6 +4,8 @@ import com.susumonitor.server.module.server.mapper.ServerMapper;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,24 @@ public class AgentHeartbeatServiceImpl implements AgentHeartbeatService {
         if (onlineTransitioned == 1) {
             publish(session.serverId(), "online", "online", heartbeatAt);
         }
+    }
+
+    /** 处理已认证 Agent 心跳，并持久化心跳携带的投递遥测统计。 */
+    public void heartbeat(AgentWebSocketSession session, AgentHeartbeatPayload deliveryStats) {
+        heartbeat(session);
+        if (deliveryStats == null || !deliveryStats.hasDeliveryStats()) {
+            return;
+        }
+        // 遥测统计是附属数据：更新失败不打断心跳，也不误报心跳目标不可用。
+        serverMapper.updateDeliveryStats(session.serverId(),
+                toUtcLocalDateTime(deliveryStats.oldestCollectedAt()),
+                deliveryStats.pendingCount(), deliveryStats.pendingBytes(), deliveryStats.dropCount(),
+                deliveryStats.deadLetterCount(), deliveryStats.deadLetterBytes());
+    }
+
+    /** 将 UTC 时刻转换为数据库存储的 LocalDateTime。 */
+    private static LocalDateTime toUtcLocalDateTime(OffsetDateTime value) {
+        return value == null ? null : value.atZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
     }
 
     /** 每 30 秒扫描过期会话并标记服务器离线。 */
