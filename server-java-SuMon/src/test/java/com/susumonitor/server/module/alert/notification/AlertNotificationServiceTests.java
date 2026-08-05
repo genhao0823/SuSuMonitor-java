@@ -131,12 +131,22 @@ class AlertNotificationServiceTests {
         verify(recordMapper).updateNotifiedInfo(eq(100L), any(), eq("email,dingtalk,webhook"));
     }
 
-    /** 通知发送失败不影响告警记录主流程（只记录日志，不抛异常）。 */
+    /** 单渠道失败不影响其他成功渠道，且 channels 只记录成功渠道。 */
     @Test
     void shouldTolerateChannelFailure() {
         org.mockito.Mockito.doThrow(new RuntimeException("smtp down")).when(mailSender).send(any(SimpleMailMessage.class));
         service.notify(rule("ops@example.com", "https://dingtalk", null), record());
-        verify(recordMapper).updateNotifiedInfo(eq(100L), any(), eq("email,dingtalk"));
+        verify(recordMapper).updateNotifiedInfo(eq(100L), any(), eq("dingtalk"));
+    }
+
+    /** 全部渠道失败时不回写 notified_at/notify_channels，前端可识别"发送失败"。 */
+    @Test
+    void shouldNotWriteNotifiedWhenAllChannelsFail() {
+        org.mockito.Mockito.doThrow(new RuntimeException("smtp down")).when(mailSender).send(any(SimpleMailMessage.class));
+        org.mockito.Mockito.doThrow(new RuntimeException("webhook down"))
+                .when(restTemplate).postForObject(anyString(), any(), eq(String.class));
+        service.notify(rule("ops@example.com", null, "https://webhook"), record());
+        verify(recordMapper, never()).updateNotifiedInfo(any(), any(), anyString());
     }
 
     /** 无 JavaMailSender（SMTP 未配置）时邮件渠道被跳过。 */

@@ -44,25 +44,27 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
     public void notify(AlertRuleEntity rule, AlertRecordVo record) {
         List<String> sentChannels = new ArrayList<>();
         if (appProperties.getAlert().isNotificationEnabled()
-                && mailSender.isPresent() && StringUtils.hasText(rule.getNotifyEmail())) {
-            sendEmail(rule.getNotifyEmail(), rule, record);
+                && mailSender.isPresent() && StringUtils.hasText(rule.getNotifyEmail())
+                && sendEmail(rule.getNotifyEmail(), rule, record)) {
             sentChannels.add("email");
         }
-        if (StringUtils.hasText(rule.getNotifyDingtalk())) {
-            sendDingtalk(rule.getNotifyDingtalk(), rule, record);
+        if (StringUtils.hasText(rule.getNotifyDingtalk())
+                && sendDingtalk(rule.getNotifyDingtalk(), rule, record)) {
             sentChannels.add("dingtalk");
         }
-        if (StringUtils.hasText(rule.getNotifyWebhook())) {
-            sendWebhook(rule.getNotifyWebhook(), rule, record);
+        if (StringUtils.hasText(rule.getNotifyWebhook())
+                && sendWebhook(rule.getNotifyWebhook(), rule, record)) {
             sentChannels.add("webhook");
         }
+        // 仅在至少一个渠道发送成功后回写通知时间与成功渠道；
+        // 全部失败不回写 notified_at，前端可据此识别"发送失败"。
         if (!sentChannels.isEmpty()) {
             recordMapper.updateNotifiedInfo(record.getId(), LocalDateTime.now(clock),
                     String.join(",", sentChannels));
         }
     }
 
-    private void sendEmail(String to, AlertRuleEntity rule, AlertRecordVo record) {
+    private boolean sendEmail(String to, AlertRuleEntity rule, AlertRecordVo record) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(appProperties.getAlert().getMailFrom());
@@ -71,29 +73,35 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
             message.setText(AlertMessageBuilder.body(rule, record));
             mailSender.get().send(message);
             log.info("alert email notification sent to {}", to);
+            return true;
         } catch (Exception exception) {
             log.warn("alert email notification failed, ruleId={}: {}", rule.getId(), exception.getMessage());
+            return false;
         }
     }
 
-    private void sendDingtalk(String url, AlertRuleEntity rule, AlertRecordVo record) {
+    private boolean sendDingtalk(String url, AlertRuleEntity rule, AlertRecordVo record) {
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("msgtype", "text");
             payload.put("text", Map.of("content", AlertMessageBuilder.dingtalkText(rule, record)));
             restTemplate.postForObject(url, payload, String.class);
             log.info("alert dingtalk notification sent");
+            return true;
         } catch (Exception exception) {
             log.warn("alert dingtalk notification failed, ruleId={}: {}", rule.getId(), exception.getMessage());
+            return false;
         }
     }
 
-    private void sendWebhook(String url, AlertRuleEntity rule, AlertRecordVo record) {
+    private boolean sendWebhook(String url, AlertRuleEntity rule, AlertRecordVo record) {
         try {
             restTemplate.postForObject(url, record, String.class);
             log.info("alert webhook notification sent");
+            return true;
         } catch (Exception exception) {
             log.warn("alert webhook notification failed, ruleId={}: {}", rule.getId(), exception.getMessage());
+            return false;
         }
     }
 }
