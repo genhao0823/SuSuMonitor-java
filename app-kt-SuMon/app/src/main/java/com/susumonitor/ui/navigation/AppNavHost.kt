@@ -31,6 +31,7 @@ import com.susumonitor.ui.servers.ServerDetailScreen
 import com.susumonitor.ui.servers.ServerFormScreen
 import com.susumonitor.ui.servers.ServerListScreen
 import com.susumonitor.ui.servers.ServerMetricsScreen
+import com.susumonitor.ui.terminal.TerminalScreen
 
 /** 底部导航目的地。 */
 enum class BottomTab(val route: String, val label: String, val icon: ImageVector) {
@@ -48,6 +49,7 @@ enum class BottomTab(val route: String, val label: String, val icon: ImageVector
 @Composable
 fun AppNavHost(
     isAdmin: Boolean,
+    isApproved: Boolean,
     onLogout: () -> Unit,
 ) {
     val navController = rememberNavController()
@@ -60,6 +62,7 @@ fun AppNavHost(
                 "serverDetail/{serverId}",
                 "serverForm/{serverId}",
                 "serverMetrics/{serverId}",
+                "serverTerminal/{serverId}",
                 "alertRules",
                 "adminUsers",
             )
@@ -138,6 +141,7 @@ fun AppNavHost(
                 ServerDetailScreen(
                     serverId = serverId,
                     isAdmin = isAdmin,
+                    isApproved = isApproved,
                     onBack = { navController.popBackStack() },
                     onEdit = {
                         navController.navigate("serverForm/$serverId")
@@ -145,6 +149,16 @@ fun AppNavHost(
                     onMetrics = {
                         navController.navigate("serverMetrics/$serverId")
                     },
+                    onTerminal = {
+                        navController.navigate("serverTerminal/$serverId")
+                    },
+                )
+            }
+            composable("serverTerminal/{serverId}") { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getString("serverId")?.toLongOrNull() ?: 0L
+                TerminalScreen(
+                    serverId = serverId,
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable("serverForm/{serverId}") { backStackEntry ->

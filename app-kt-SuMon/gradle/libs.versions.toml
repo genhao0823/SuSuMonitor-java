@@ -25,6 +25,8 @@ androidxJunit = "1.2.1"
 mockk = "1.13.13"
 kotlinxCoroutinesTest = "1.9.0"
 turbine = "1.2.0"
+# Termux terminal-view 经 JitPack 发布（官方 wiki Termux-Libraries；tag 为 v0.118.0）
+termuxTerminalView = "v0.118.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

@@ -195,6 +195,24 @@ class WsClient @Inject constructor(
         ws.send(frame.toString())
     }
 
+    /**
+     * 发送终端控制帧（terminal.open/input/resize/close）。
+     * 帧外壳：type + UUID message_id + UTC timestamp + payload。
+     * 仅当连接已建立（CONNECTED）时发送，否则静默丢弃（由调用方判断连接状态）。
+     *
+     * @return 是否发送成功（连接是否可用）
+     */
+    fun sendTerminalFrame(type: String, payload: kotlinx.serialization.json.JsonObject): Boolean {
+        val ws = webSocket ?: return false
+        val frame = buildJsonObject {
+            put("type", type)
+            put("message_id", UUID.randomUUID().toString())
+            put("timestamp", java.time.Instant.now().toString())
+            put("payload", payload)
+        }
+        return ws.send(frame.toString())
+    }
+
     private fun sendFrame(jsonObject: kotlinx.serialization.json.JsonObject) {
         webSocket?.send(jsonObject.toString())
     }

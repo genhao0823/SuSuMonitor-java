@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
                     } else {
                         AppNavHost(
                             isAdmin = session?.user?.role == "admin",
+                            isApproved = session?.user?.reviewStatus == "approved",
                             onLogout = {
                                 MonitorForegroundService.stop(applicationContext)
                                 mainViewModel.logout()

@@ -151,6 +151,11 @@ class MonitorForegroundService : Service() {
                     is WsMessage.MetricsUpdate -> _metricsUpdates.tryEmit(message.payload)
                     is WsMessage.ServerStatusUpdate -> _statusUpdates.tryEmit(message.payload)
                     is WsMessage.Error -> Log.w(TAG, "ws error code=${message.payload.code} msg=${message.payload.message}")
+                    // 终端帧由 TerminalClient 独立收集，前台服务不处理
+                    is WsMessage.TerminalOpened,
+                    is WsMessage.TerminalOutput,
+                    is WsMessage.TerminalClosed,
+                    is WsMessage.TerminalError -> Unit
                 }
             }
         }

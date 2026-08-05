@@ -38,4 +38,74 @@ object WsFrameType {
     const val ALERT_PUSH = "alert.push"
     const val SERVER_STATUS_UPDATE = "server.status.update"
     const val ERROR = "error"
+
+    // 终端帧（浏览器 → /ws/monitor，Agent → /ws/agent 响应）
+    const val TERMINAL_OPEN = "terminal.open"
+    const val TERMINAL_OPENED = "terminal.opened"
+    const val TERMINAL_INPUT = "terminal.input"
+    const val TERMINAL_OUTPUT = "terminal.output"
+    const val TERMINAL_RESIZE = "terminal.resize"
+    const val TERMINAL_CLOSE = "terminal.close"
+    const val TERMINAL_CLOSED = "terminal.closed"
+    const val TERMINAL_ERROR = "terminal.error"
 }
+
+/**
+ * terminal.open 帧 payload：浏览器 → /ws/monitor。
+ * cols 1-300，rows 1-100。
+ */
+@Serializable
+data class TerminalOpenPayload(
+    @SerialName("server_id") val serverId: Long,
+    val cols: Int,
+    val rows: Int,
+)
+
+/**
+ * terminal.opened 帧 payload：Agent → /ws/agent → 浏览器。
+ * session_id 由 Java 生成（UUID），浏览器不可选择。
+ */
+@Serializable
+data class TerminalOpenedPayload(
+    @SerialName("server_id") val serverId: Long,
+    @SerialName("session_id") val sessionId: String,
+    val shell: String,
+)
+
+/**
+ * terminal.input / terminal.output 帧 payload。
+ * data 为 Base64 编码（解码后 1-16 KiB）。
+ */
+@Serializable
+data class TerminalDataPayload(
+    @SerialName("server_id") val serverId: Long? = null,
+    @SerialName("session_id") val sessionId: String,
+    val data: String,
+)
+
+/**
+ * terminal.resize 帧 payload：浏览器 → /ws/monitor。
+ */
+@Serializable
+data class TerminalResizePayload(
+    @SerialName("server_id") val serverId: Long? = null,
+    @SerialName("session_id") val sessionId: String,
+    val cols: Int,
+    val rows: Int,
+)
+
+/** terminal.closed 帧 payload：Agent → 浏览器。 */
+@Serializable
+data class TerminalClosedPayload(
+    @SerialName("server_id") val serverId: Long,
+    @SerialName("session_id") val sessionId: String,
+    val reason: String,
+    @SerialName("exit_code") val exitCode: Int? = null,
+)
+
+/** terminal.error 帧 payload。 */
+@Serializable
+data class TerminalErrorPayload(
+    val code: Int,
+    val message: String,
+)
