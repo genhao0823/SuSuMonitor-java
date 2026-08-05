@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -66,6 +67,8 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                // 键盘弹出时内容避让，保证输入框可见且保持焦点（配合 adjustResize）
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 32.dp),
             verticalArrangement = Arrangement.Center,
