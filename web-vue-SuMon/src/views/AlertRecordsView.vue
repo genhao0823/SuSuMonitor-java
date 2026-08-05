@@ -152,6 +152,22 @@
           </template>
         </el-table-column>
         <el-table-column
+          label="通知状态"
+          min-width="150"
+        >
+          <template #default="{ row }">
+            <span v-if="row.notify_channels">
+              {{ channelLabel(row.notify_channels) }}
+            </span>
+            <span
+              v-else
+              class="alert-records-view__not-failed"
+            >
+              未发送
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="操作"
           width="120"
           fixed="right"
@@ -248,6 +264,19 @@ function statusTagType(status: AlertStatus | string): 'success' | 'info' | 'warn
 function formatNumber(value: number): string {
   if (typeof value !== 'number' || Number.isNaN(value)) return '-'
   return Number.isInteger(value) ? value.toString() : value.toFixed(2)
+}
+
+/** 将成功渠道字符串（email,dingtalk,webhook）转为可读文案。 */
+function channelLabel(channels: string): string {
+  return channels
+    .split(',')
+    .map((channel) => {
+      if (channel === 'email') return '📧 邮件'
+      if (channel === 'dingtalk') return '💬 钉钉'
+      if (channel === 'webhook') return '🔗 Webhook'
+      return channel
+    })
+    .join(' / ')
 }
 
 /**
@@ -425,5 +454,10 @@ onBeforeUnmount(() => {
 .alert-records-view__pagination {
   margin-top: 16px;
   justify-content: flex-end;
+}
+
+.alert-records-view__not-failed {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 </style>

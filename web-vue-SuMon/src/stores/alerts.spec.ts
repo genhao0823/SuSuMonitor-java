@@ -52,6 +52,8 @@ function makeRecord(overrides: Partial<AlertRecord> = {}): AlertRecord {
     read_by: null,
     read_at: null,
     triggered_at: '2026-07-22T00:00:00Z',
+    notified_at: null,
+    notify_channels: null,
     created_at: '2026-07-22T00:00:00Z',
     ...overrides
   }

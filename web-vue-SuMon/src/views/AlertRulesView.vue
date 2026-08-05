@@ -107,6 +107,25 @@
           </template>
         </el-table-column>
         <el-table-column
+          label="通知方式"
+          min-width="160"
+        >
+          <template #default="{ row }">
+            <template v-if="ruleChannels(row as AlertRule).length > 0">
+              <el-tag
+                v-for="channel in ruleChannels(row as AlertRule)"
+                :key="channel"
+                size="small"
+                effect="plain"
+                class="alert-rules-view__channel-tag"
+              >
+                {{ channelLabel(channel) }}
+              </el-tag>
+            </template>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="启用"
           width="90"
         >
@@ -206,6 +225,22 @@ function metricLabel(metric: string): string {
   }
 }
 
+/** 返回规则已配置的非空通知渠道列表。 */
+function ruleChannels(rule: AlertRule): string[] {
+  const channels: string[] = []
+  if (rule.notify_email) channels.push('email')
+  if (rule.notify_dingtalk) channels.push('dingtalk')
+  if (rule.notify_webhook) channels.push('webhook')
+  return channels
+}
+
+function channelLabel(channel: string): string {
+  if (channel === 'email') return '📧 邮件'
+  if (channel === 'dingtalk') return '💬 钉钉'
+  if (channel === 'webhook') return '🔗 Webhook'
+  return channel
+}
+
 function serverName(serverId: number): string {
   const found = serverOptions.value.find((s) => s.id === serverId)
   return found?.name ?? `#${serverId}`
@@ -283,6 +318,10 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.alert-rules-view__channel-tag {
+  margin-right: 4px;
+}
+</style>
 .alert-rules-view {
   max-width: 1280px;
   margin: 0 auto;

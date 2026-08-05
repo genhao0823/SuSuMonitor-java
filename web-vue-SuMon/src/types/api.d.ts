@@ -295,6 +295,10 @@ export interface AlertRecord {
   read_by: number | null
   read_at: string | null
   triggered_at: string
+  /** 外部通知发送完成时间;null=未成功发送。 */
+  notified_at: string | null
+  /** 成功送达的渠道,逗号分隔(email/dingtalk/webhook);null=未成功发送。 */
+  notify_channels: string | null
   created_at: string
 }
 
