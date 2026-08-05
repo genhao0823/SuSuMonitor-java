@@ -145,6 +145,12 @@ export interface ServerStatus {
   status: ServerStatusKind
   agent_status: AgentStatusKind
   last_heartbeat_at: string | null
+  delivery_pending_count: number | null
+  delivery_pending_bytes: number | null
+  delivery_oldest_collected_at: string | null
+  delivery_drop_count: number | null
+  delivery_dead_letter_count: number | null
+  delivery_dead_letter_bytes: number | null
   checked_at: string
 }
 

@@ -225,6 +225,30 @@
               </span>
             </div>
             <div class="server-detail-view__status-item">
+              <span class="server-detail-view__status-label">投递积压</span>
+              <span class="server-detail-view__status-value">
+                {{ formatDeliveryPending(status) }}
+              </span>
+            </div>
+            <div class="server-detail-view__status-item">
+              <span class="server-detail-view__status-label">最旧积压采样</span>
+              <span class="server-detail-view__status-value">
+                {{ formatDateTime(status.delivery_oldest_collected_at) }}
+              </span>
+            </div>
+            <div class="server-detail-view__status-item">
+              <span class="server-detail-view__status-label">缓冲丢弃</span>
+              <span class="server-detail-view__status-value">
+                {{ status.delivery_drop_count ?? '-' }}
+              </span>
+            </div>
+            <div class="server-detail-view__status-item">
+              <span class="server-detail-view__status-label">本地死信</span>
+              <span class="server-detail-view__status-value">
+                {{ formatDeliveryDeadLetter(status) }}
+              </span>
+            </div>
+            <div class="server-detail-view__status-item">
               <span class="server-detail-view__status-label">查询时间</span>
               <span class="server-detail-view__status-value">
                 {{ formatDateTime(status.checked_at) }}
@@ -325,7 +349,7 @@ import { revokeAgentToken } from '@/api/agent-token'
 import { ErrorCode } from '@/types/error-code'
 import { useAuthStore } from '@/stores/auth'
 import type { Server, ServerStatus, SshHostKey, SshTestResult } from '@/types/api'
-import { formatDateTime, serverStatusLabel } from '@/utils/format'
+import { formatBytes, formatDateTime, serverStatusLabel } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -397,6 +421,22 @@ function startStatusRefresh(): void {
         // 自动刷新失败时不打断当前页面，也不重复弹出错误提示。
       })
   }, STATUS_REFRESH_INTERVAL_MS)
+}
+
+/** 投递积压展示:条数 + 字节;统计缺失(老版本 Agent)时显示 '-'. */
+function formatDeliveryPending(snapshot: ServerStatus | null): string {
+  if (!snapshot || snapshot.delivery_pending_count === null) {
+    return '-'
+  }
+  return `${snapshot.delivery_pending_count} 条 / ${formatBytes(snapshot.delivery_pending_bytes)}`
+}
+
+/** 本地死信展示:条数 + 字节;统计缺失(老版本 Agent)时显示 '-'. */
+function formatDeliveryDeadLetter(snapshot: ServerStatus | null): string {
+  if (!snapshot || snapshot.delivery_dead_letter_count === null) {
+    return '-'
+  }
+  return `${snapshot.delivery_dead_letter_count} 条 / ${formatBytes(snapshot.delivery_dead_letter_bytes)}`
 }
 
 function goBack(): void {
