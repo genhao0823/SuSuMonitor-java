@@ -42,11 +42,12 @@ type Client struct {
 	connectionMu         sync.RWMutex
 	connection           *websocket.Conn
 	authenticated        bool
-	messageHandler       func(context.Context, AgentMessage)
-	metricsAckHandler    func(string)
-	metricsNackHandler   func(string, MetricsNack)
-	authenticatedHandler func()
-	disconnectHandler    func()
+	messageHandler         func(context.Context, AgentMessage)
+	metricsAckHandler      func(string)
+	metricsNackHandler     func(string, MetricsNack)
+	heartbeatStatsProvider func() HeartbeatPayload
+	authenticatedHandler   func()
+	disconnectHandler      func()
 }
 
 // SetMessageHandler 设置认证后服务端消息处理器。
@@ -70,6 +71,13 @@ func (c *Client) SetMetricsAckHandler(handler func(string)) {
 // permanent rejection payload, and must be registered before Run starts.
 func (c *Client) SetMetricsNackHandler(handler func(string, MetricsNack)) {
 	c.metricsNackHandler = handler
+}
+
+// SetHeartbeatStatsProvider sets a provider for delivery telemetry included in
+// each heartbeat payload. The provider must be registered before Run starts
+// and return quickly; nil payloads keep the heartbeat payload empty.
+func (c *Client) SetHeartbeatStatsProvider(provider func() HeartbeatPayload) {
+	c.heartbeatStatsProvider = provider
 }
 
 // SetAuthenticatedHandler sets a callback invoked after an authenticated
@@ -362,9 +370,13 @@ func (c *Client) runLoops(ctx context.Context, conn *websocket.Conn) error {
 	return err
 }
 
-// sendHeartbeat 发送 heartbeat 消息。
+// sendHeartbeat 发送 heartbeat 消息，可选携带投递遥测统计。
 func (c *Client) sendHeartbeat(ctx context.Context, conn *websocket.Conn) error {
-	msg := newHeartbeatMessage()
+	payload := HeartbeatPayload{}
+	if c.heartbeatStatsProvider != nil {
+		payload = c.heartbeatStatsProvider()
+	}
+	msg := newMessage("heartbeat", payload)
 	writeCtx, cancel := context.WithTimeout(ctx, writeTimeout)
 	defer cancel()
 	if err := wsjson.Write(writeCtx, conn, msg); err != nil {

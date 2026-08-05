@@ -59,6 +59,11 @@ func main() {
 	client.SetMessageHandler(terminalAgent.handle)
 	client.SetMetricsAckHandler(metricsReporter.HandleMetricsAck)
 	client.SetMetricsNackHandler(metricsReporter.HandleMetricsNack)
+	client.SetHeartbeatStatsProvider(func() wsclient.HeartbeatPayload {
+		stats := metricsBuffer.Stats()
+		return wsclient.NewHeartbeatPayloadWithDeliveryStats(stats.PendingCount, stats.PendingBytes,
+			stats.OldestCollectedAt, stats.DropCount, stats.DeadLetterCount, stats.DeadLetterBytes)
+	})
 	client.SetAuthenticatedHandler(metricsReporter.HandleAuthenticated)
 	client.SetDisconnectHandler(func() {
 		metricsReporter.HandleDisconnect()

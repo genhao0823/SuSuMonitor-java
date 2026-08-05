@@ -180,6 +180,80 @@ func TestMetricsNackMalformedPayloadIgnored(t *testing.T) {
 	}
 }
 
+func TestHeartbeatIncludesDeliveryStats(t *testing.T) {
+	var mu sync.Mutex
+	var received HeartbeatPayload
+	heartbeats := 0
+	server := newTestServer(t, func(ctx context.Context, conn *websocket.Conn) {
+		for {
+			var message AgentMessage
+			if err := wsjson.Read(ctx, conn, &message); err != nil {
+				return
+			}
+			switch message.Type {
+			case "agent.authenticate":
+				if err := wsjson.Write(ctx, conn, newMessage("agent.authenticated", map[string]any{})); err != nil {
+					return
+				}
+			case "heartbeat":
+				mu.Lock()
+				heartbeats++
+				_ = json.Unmarshal(message.Payload, &received)
+				mu.Unlock()
+				if err := wsjson.Write(ctx, conn, newMessage("heartbeat.ack", map[string]any{})); err != nil {
+					return
+				}
+			}
+		}
+	})
+	defer server.Close()
+
+	client := newTestClient(server.URL, 1, 100*time.Millisecond)
+	oldest := "2026-08-03T00:00:00Z"
+	client.SetHeartbeatStatsProvider(func() HeartbeatPayload {
+		return NewHeartbeatPayloadWithDeliveryStats(3, 456, oldest, 2, 1, 789)
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		count := heartbeats
+		stats := received
+		mu.Unlock()
+		if count >= 1 && stats.PendingCount != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	stats := received
+	mu.Unlock()
+	if stats.PendingCount == nil || *stats.PendingCount != 3 || stats.PendingBytes == nil || *stats.PendingBytes != 456 {
+		t.Fatalf("heartbeat delivery stats = %+v, want pending 3/456", stats)
+	}
+	if stats.OldestCollectedAt == nil || *stats.OldestCollectedAt != oldest {
+		t.Fatalf("heartbeat oldest = %v, want %s", stats.OldestCollectedAt, oldest)
+	}
+	if stats.DropCount == nil || *stats.DropCount != 2 || stats.DeadLetterCount == nil || *stats.DeadLetterCount != 1 ||
+		stats.DeadLetterBytes == nil || *stats.DeadLetterBytes != 789 {
+		t.Fatalf("heartbeat delivery stats = %+v, want drop 2 / dead-letter 1/789", stats)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("Run() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("client did not stop after cancellation")
+	}
+}
+
 func TestAuthenticatedHandlerCanSendMessage(t *testing.T) {
 	server := newTestServer(t, func(ctx context.Context, conn *websocket.Conn) {
 		var authenticate AgentMessage
