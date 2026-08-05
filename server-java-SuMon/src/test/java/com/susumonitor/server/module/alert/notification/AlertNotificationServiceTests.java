@@ -1,22 +1,24 @@
 package com.susumonitor.server.module.alert.notification;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.alert.entity.AlertRuleEntity;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.vo.AlertRecordVo;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,13 +27,14 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.web.client.RestTemplate;
 
-/** 验证告警外部通知的渠道分发、失败隔离与通知状态回写。 */
+/** 验证告警外部通知的渠道分发、退避重试与通知状态回写。 */
 class AlertNotificationServiceTests {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-05T00:00:00Z"), ZoneOffset.UTC);
 
     private AppProperties appProperties;
     private AlertRecordMapper recordMapper;
+    private AlertNotificationMapper notificationMapper;
     private RestTemplate restTemplate;
     private JavaMailSender mailSender;
     private AlertNotificationService service;
@@ -41,10 +44,11 @@ class AlertNotificationServiceTests {
         appProperties = new AppProperties();
         appProperties.getAlert().setNotificationEnabled(true);
         recordMapper = mock(AlertRecordMapper.class);
+        notificationMapper = mock(AlertNotificationMapper.class);
         restTemplate = mock(RestTemplate.class);
         mailSender = mock(JavaMailSender.class);
-        service = new AlertNotificationServiceImpl(appProperties, recordMapper, restTemplate,
-                Optional.of(mailSender), CLOCK);
+        service = new AlertNotificationServiceImpl(appProperties, recordMapper, notificationMapper,
+                restTemplate, Optional.of(mailSender), CLOCK);
     }
 
     private AlertRuleEntity rule(String email, String dingtalk, String webhook) {
@@ -82,6 +86,7 @@ class AlertNotificationServiceTests {
         assertEquals("noreply@susumonitor.local", message.getFrom());
         assertEquals("ops@example.com", message.getTo()[0]);
         assertEquals("[告警] WARNING cpu 超过阈值（当前 92.3）", message.getSubject());
+        verify(notificationMapper).markAttempt(any(), eq("sent"), eq(1), isNull(), isNull());
         verify(recordMapper).updateNotifiedInfo(eq(100L), any(), eq("email"));
     }
 
@@ -91,6 +96,7 @@ class AlertNotificationServiceTests {
         appProperties.getAlert().setNotificationEnabled(false);
         service.notify(rule("ops@example.com", null, null), record());
         verify(mailSender, never()).send(any(SimpleMailMessage.class));
+        verify(notificationMapper, never()).insert(any());
         verify(recordMapper, never()).updateNotifiedInfo(any(), any(), anyString());
     }
 
@@ -113,6 +119,7 @@ class AlertNotificationServiceTests {
         @SuppressWarnings("unchecked")
         java.util.Map<String, Object> body = (java.util.Map<String, Object>) bodyCaptor.getValue();
         assertEquals("text", body.get("msgtype"));
+        verify(notificationMapper).markAttempt(any(), eq("sent"), eq(1), isNull(), isNull());
         verify(recordMapper).updateNotifiedInfo(eq(100L), any(), eq("dingtalk"));
     }
 
@@ -136,6 +143,8 @@ class AlertNotificationServiceTests {
     void shouldTolerateChannelFailure() {
         org.mockito.Mockito.doThrow(new RuntimeException("smtp down")).when(mailSender).send(any(SimpleMailMessage.class));
         service.notify(rule("ops@example.com", "https://dingtalk", null), record());
+        verify(notificationMapper).markAttempt(any(), eq("pending"), eq(1), any(), anyString());
+        verify(notificationMapper).markAttempt(any(), eq("sent"), eq(1), isNull(), isNull());
         verify(recordMapper).updateNotifiedInfo(eq(100L), any(), eq("dingtalk"));
     }
 
@@ -152,10 +161,41 @@ class AlertNotificationServiceTests {
     /** 无 JavaMailSender（SMTP 未配置）时邮件渠道被跳过。 */
     @Test
     void shouldSkipEmailWhenMailSenderAbsent() {
-        service = new AlertNotificationServiceImpl(appProperties, recordMapper, restTemplate,
-                Optional.empty(), CLOCK);
+        service = new AlertNotificationServiceImpl(appProperties, recordMapper, notificationMapper,
+                restTemplate, Optional.empty(), CLOCK);
         service.notify(rule("ops@example.com", "https://dingtalk", null), record());
         verify(restTemplate).postForObject(eq("https://dingtalk"), any(), eq(String.class));
         verify(recordMapper).updateNotifiedInfo(eq(100L), any(), eq("dingtalk"));
+    }
+
+    /** 退避时间：2^attempts 秒，上限 60 秒。 */
+    @Test
+    void backoffSecondsShouldGrowExponentiallyWithCap() {
+        assertEquals(2, AlertNotificationServiceImpl.backoffSeconds(1));
+        assertEquals(4, AlertNotificationServiceImpl.backoffSeconds(2));
+        assertEquals(8, AlertNotificationServiceImpl.backoffSeconds(3));
+        assertEquals(16, AlertNotificationServiceImpl.backoffSeconds(4));
+        assertEquals(60, AlertNotificationServiceImpl.backoffSeconds(6));
+        assertEquals(60, AlertNotificationServiceImpl.backoffSeconds(10));
+    }
+
+    /** 失败原因摘要截断到 last_error 列长度。 */
+    @Test
+    void rootMessageShouldBeTruncated() {
+        RuntimeException nested = new RuntimeException("x".repeat(1000));
+        String summary = AlertNotificationServiceImpl.rootMessage(nested);
+        assertTrue(summary.length() <= AlertNotificationServiceImpl.MAX_ERROR_LENGTH);
+    }
+
+    /** 重试：对一条 pending 通知再尝试一次，尝试次数递增。 */
+    @Test
+    void retryShouldIncrementAttempts() {
+        var notification = new com.susumonitor.server.module.alert.entity.AlertNotificationEntity();
+        notification.setId(55L);
+        notification.setChannel("dingtalk");
+        notification.setAttempts(1);
+        service.retry(notification, rule(null, "https://dingtalk", null), record());
+        verify(restTemplate).postForObject(eq("https://dingtalk"), any(), eq(String.class));
+        verify(notificationMapper).markAttempt(eq(55L), eq("sent"), eq(2), isNull(), isNull());
     }
 }

@@ -21,6 +21,12 @@ public class GlobalExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * 处理业务异常，从异常中提取 ErrorCode 并返回对应的 HTTP 状态和响应体。
+     *
+     * @param exception 业务异常，携带 ErrorCode
+     * @return 统一错误响应，状态码和文案由 ErrorCode 决定
+     */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
         ErrorCode errorCode = exception.getErrorCode();
@@ -28,6 +34,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorCode));
     }
 
+    /**
+     * 处理 @Valid 请求体校验失败，仅记录校验不通过的字段名，不记录字段值。
+     *
+     * @param exception 请求体校验异常，包含校验失败的字段信息
+     * @return 统一参数错误响应（400）
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
@@ -44,7 +56,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorCode));
     }
 
-    // 只记录约束路径，避免日志输出查询参数或路径参数的实际值。
+    /**
+     * 处理 @Validated 参数/路径参数校验失败，仅记录约束路径，不记录参数实际值。
+     *
+     * @param exception 约束校验异常，包含校验失败的参数路径
+     * @return 统一参数错误响应（400）
+     */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
             ConstraintViolationException exception) {
@@ -103,6 +120,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorCode));
     }
 
+    /**
+     * 兜底处理所有未匹配的异常，返回 500 内部错误，完整堆栈仅记录到日志。
+     *
+     * @param exception 未处理的异常
+     * @return 固定内部错误响应（500）
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
         LOGGER.error("Unhandled exception", exception);
