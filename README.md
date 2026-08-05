@@ -13,11 +13,11 @@
 |---|---|
 | GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-jvav-> |
 | 本次 tag | [`v0.5.0-cloud`](https://github.com/genhao0823/SuSuMonitor-jvav-/releases/tag/v0.5.0-cloud) |
-| 当前基线 | `main` HEAD(`dcb4382`，投递遥测 Web 展示收口) |
+| 当前基线 | `main` HEAD(`21a2061`，M4 文档收口) |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
 | 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）已实现；既有本机与真实 Broker 验收通过 |
 | 首次上云端部署 | 腾讯云 OpenCloudOS 公网明文 HTTP 已跑通(2026-07-31,前端 5173 + 后端 18080 + Agent 8089 + RabbitMQ 5672,端到端联调 PASS),详见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md` |
-| 已知遗留 | HTTPS/WSS 待域名与证书就绪后切 TLS；真实 Agent+Server 断网/重启/ACK 联合 E2E、队列字节上限、多实例并发验证、`Dockerfile/docker-compose` 仍属后续阶段 |
+| 已知遗留 | HTTPS/WSS 待域名与证书就绪后切 TLS；真实 Agent+Server 断网/重启/ACK 联合 E2E 的 Java 侧场景待 DB 管理员凭据运行（fixture 15 项已 PASS）；队列字节上限、多实例并发验证、`Dockerfile/docker-compose` 仍属后续阶段 |
 
 > 本节反映 2026-08-05 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录。
 
@@ -210,7 +210,7 @@ SuSuMonitor(Jvav)/
 │   ├── Develop-log/         # 90+ dev-log(实施记录)
 │   ├── Develop-plans/       # 10 plan(规划)
 │   ├── OpenApi-SuMon/       # 5 个 OpenAPI 契约 JSON(auth / server / system / admin / alert),共 31 个 endpoint
-│   ├── Protocol-SuMon/     # WebSocket 协议(v1.2)
+│   ├── Protocol-SuMon/     # WebSocket 协议(v1.3)
 │   ├── Bug-fix/             # 9 篇 bug 修复记录 + README 索引
 │   ├── 本机开发环境配置.md   # 本机开发约定(JWT/AES/SSH/Metrics/Outbox 环境变量)
 │   └── Summary-Technology/  # 项目架构总览
@@ -278,13 +278,13 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - **后端**:~~管理员批量审核 / 用户搜索接口~~（**Sprint 5+ 已完成 2026-08-02**：pending 分页+keyword 搜索 + batch-approve/reject，openapi-admin 3→5 端点，见 `Develop-log/20260802-Sprint5-用户管理增强与逃逸窗口控件.md`）
 - **前端**:~~Sprint 5+（搜索 / 批量审核）~~（**已完成 2026-08-02**：用户审核页远端搜索/分页/批量选择 + 状态 Tabs + 批量失败明细 + 告警逃逸窗口 confirm_count 控件，vitest 118 全绿）；剩余候选：按状态管理增强、ECharts 图表启用、T4 Web SSH 终端增强
 - **隔离环境验收**（**已完成 2026-08-02**）：verify-mvp11（C1-C4 + 失败留痕 DB 断言）、verify-admin-batch（18 项）、verify-go-agent-reconnect（6 checks）、verify-mvp11-broker-down（B1-B7）四脚本全 PASS；RabbitMQ 凭据已重置（susumonitor/732682，建议登记 local/server.env），见 `Develop-log/20260802-隔离环境端到端验收.md`
-- **Agent 可靠投递**（**M1/M2/M3 + 隔离联合 E2E 已完成 2026-08-03**）：Server `metrics.ack` 入口确认 + Agent 完整帧持久化 FIFO、同 UUID 断线/ACK 超时重传、单条 in-flight 保序、指数退避/equal jitter、积压重放节流、队列边界与受限 spool 目录；真实 Agent + loopback ACK 故障 fixture 13 项、真实 Agent + Java/MySQL 独立 schema 6 项，共 19 项 PASS。NACK/dead-letter、队列字节上限和积压状态展示仍待后续独立模块，见 `Develop-log/20260803-Agent指标可靠投递（ACK确认与离线缓冲）.md`
+- **Agent 可靠投递**（**M1-M4 已完成 2026-08-05**）：M1 Server `metrics.ack` 入口确认 + M2 Agent 完整帧持久化 FIFO + M3 同 UUID 断线/ACK 超时重传、指数退避/equal jitter、积压重放节流 + **M4** Server 永久拒绝分类 `metrics.nack`（invalid_metrics_payload / stale_collected_at / server_not_found）、Agent 本地持久化死信（snapshot v2，v1 自动迁移）、心跳投递遥测（pending/bytes、oldest、drop、dead-letter）→ Flyway V19 → 状态接口 → 服务器详情页展示；loopback fixture 15 项 PASS，真实 Agent + Java/MySQL 独立 schema 场景待 DB 管理员凭据运行；队列字节上限仍属后续独立模块，见 `Develop-log/20260805-Agent指标可靠投递（NACK死信与投递遥测）.md`
 - **协作**:在 GitHub 上创建 PR / 提 issue
 
 ## 协议 / 工具
 
 - **OpenAPI 契约**:`docs-SuMon/OpenApi-SuMon/{openapi-auth,server,system,admin,alert}.json`(5 个文件 / 31 个 endpoint)
-- **WebSocket 协议**:`docs-SuMon/Protocol-SuMon/websocket-protocol.md`(v1.2)
+- **WebSocket 协议**:`docs-SuMon/Protocol-SuMon/websocket-protocol.md`(v1.3)
 - **后端 OpenAPI 自动化**:`web-vue-SuMon/scripts/check-openapi.mjs`(pre-commit 钩子)
 - **代码质量门**:`web-vue-SuMon/scripts/audit-catchup.mjs`(11 条规则)
 - **API E2E**:`web-vue-SuMon/scripts/api-e2e-test.mjs`

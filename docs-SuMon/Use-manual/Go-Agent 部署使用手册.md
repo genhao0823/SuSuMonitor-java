@@ -132,6 +132,14 @@ SUSUMONITOR_TERMINAL_OUTPUT_BURST_BYTES=524288
 SUSUMONITOR_TERMINAL_OUTPUT_QUEUE_SIZE=64
 SUSUMONITOR_TERMINAL_IDLE_TIMEOUT_SECONDS=1200
 SUSUMONITOR_TERMINAL_MAX_LIFETIME_SECONDS=28800
+# --- 指标可靠投递(默认值即生产推荐,可省略) ---
+SUSUMONITOR_METRICS_BUFFER_PATH=/var/lib/susumonitor/metrics-buffer.json
+SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES=720
+SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS=15
+SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS=2
+SUSUMONITOR_METRICS_RETRY_MAX_SECONDS=60
+SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED=true
+SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS=2500
 ```
 
 关键配置项：
@@ -147,6 +155,15 @@ SUSUMONITOR_TERMINAL_MAX_LIFETIME_SECONDS=28800
 | `SUSUMONITOR_LOG_LEVEL` | `info` / `debug` / `warn` / `error`，排障时用 `debug` 可见 `metrics sent/reported` |
 | `SUSUMONITOR_TERMINAL_ENABLED` | 是否接受 Web 终端协议帧，默认 `false`。开启终端功能设 `true` |
 | `SUSUMONITOR_TERMINAL_SHELL` | PTY 启动 shell，须干净绝对路径，默认 `/bin/bash` |
+| `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标 FIFO 快照文件，必须是 clean absolute path（含本地死信，v2 格式，v1 自动迁移），默认 `/var/lib/susumonitor/metrics-buffer.json` |
+| `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` | 待确认指标与死信共用的条数上限，默认 720（约 1 小时 5 秒采集；死信超限丢最旧） |
+| `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` | 写入后等待 `metrics.ack` 的最长时间，默认 15；超时保留队首并按退避重传原 UUID |
+| `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` / `_MAX_SECONDS` | ACK 超时重传的指数退避初始 / 上限，默认 2 / 60；max ≥ initial |
+| `SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED` | 重传是否使用 equal jitter，默认 `true`（实际等待为退避值的 1/2 至 1 倍） |
+| `SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS` | ACK/NACK 后积压相邻发送的最小间隔，默认 2500ms |
+| `SUSUMONITOR_LOG_LEVEL` | `info` / `debug` / `warn` / `error`，排障时用 `debug` 可见 `metrics sent/reported`；NACK 死信处置为 warn 级 |
+
+> **可靠投递语义（2026-08-05）**：仅收到同一 `message_id` 的 `metrics.ack` 才删除队首；`metrics.nack`（永久拒绝：载荷非法 / 乱序 / 服务器不存在）把队首移入本地死信且不重试；泛化 `error` 帧不删队首。心跳携带投递遥测（pending/bytes、最旧采样、丢弃、死信），后端落库后可在服务器详情页"状态快照"查看。
 
 ## 六、systemd 部署
 

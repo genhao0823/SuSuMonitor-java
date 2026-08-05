@@ -117,7 +117,8 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | pre-commit 钩子(跑 openapi:check) | ✅ | 自动化 |
 | 服务器列表 spark line | ~~⚠️ mock~~ → ✅ 已接真实（Sprint 2） | metrics history 接口已接入 |
 | 上次 SSH 测试结果卡 | ⚠️ 占位 | 等待 SSH test history 接口 |
-| 批量审核/用户搜索/历史记录 | ❌ | 后端无对应接口 |
+| 批量审核/用户搜索/历史记录 | ✅ 批量审核 + 用户搜索已实现（2026-08-02，Sprint 5）；历史记录待后端接口 | admin API 已接入 |
+| 服务器详情投递状态（积压/最旧采样/缓冲丢弃/本地死信） | ✅ | M4-3（2026-08-05） |
 
 ### 扩展命令
 
@@ -130,7 +131,7 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | `npm run format` | Prettier 格式化 |
 | `npm run openapi:check` | OpenAPI 契约 lint |
 | `npm run audit:catchup` | catch-up 静态审计(11 条规则,扫魔法数字 / 参数名 / API 路径 / 占位密码 / TS any / 残留日志) |
-| `npm run test` | Vitest 单元测试(62 用例,覆盖 stores + utils + composables + api/services) |
+| `npm run test` | Vitest 单元测试(118 用例,覆盖 stores + utils + composables + api/services) |
 | `npm run api:e2e` | HTTP API 自动化测试(覆盖 17 路径中的 HTTP 部分) |
 | `npm run ui:e2e` | UI E2E 浏览器自动化(puppeteer-core + 系统 Chrome,17 路径) |
 

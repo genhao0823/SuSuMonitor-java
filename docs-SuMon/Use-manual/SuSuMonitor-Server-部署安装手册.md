@@ -18,7 +18,7 @@ Nginx (宝塔托管，80/443)
   └─ /ws/agent → 127.0.0.1:18080（Agent 通道）
 
 Java 后端 (susumonitor-server, systemd, 127.0.0.1:18080)
-  ├─ MySQL 8.4（127.0.0.1:3306，Flyway 管理迁移 V1-V14）
+  ├─ MySQL 8.4（127.0.0.1:3306，Flyway 管理迁移 V1-V19）
   └─ RabbitMQ（127.0.0.1:5672，vhost susumonitor，MVP-10 Outbox 发布）
 
 Go Agent（部署到被监控服务器）
@@ -30,7 +30,7 @@ Go Agent（部署到被监控服务器）
 | 组件 | 版本要求 | 说明 |
 |---|---|---|
 | JDK | 21 LTS | 云上使用 Tencent Kona JDK 21 验证通过 |
-| MySQL | 8.4 | Flyway V1-V14；`utf8mb4`；专用账号最小权限 |
+| MySQL | 8.4 | Flyway V1-V19；`utf8mb4`；专用账号最小权限 |
 | RabbitMQ | 4.x + Erlang 27 | **版本匹配约束**：RabbitMQ 4.3 与 Erlang 29 不兼容（horus 机制），生产必须用官方支持的 Erlang 27.x（本机验收实测 4.3.4 + 27.3.4.13） |
 | Node.js | ≥18.18（仅构建前端时需要） | 构建 Vue 静态资源 |
 | Nginx | 宝塔 1.30+（云上现状） | 反代 + SPA fallback + WS Upgrade |
@@ -134,7 +134,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/ready   # �
 
 | # | 检查项 | 命令/资产 |
 |---|---|---|
-| 1 | 后端启动 + Flyway V1-V14 迁移成功 | `journalctl -u susumonitor-server` 无 ERROR |
+| 1 | 后端启动 + Flyway V1-V19 迁移成功 | `journalctl -u susumonitor-server` 无 ERROR |
 | 2 | health/ready 正常 | 见 §五 |
 | 3 | RabbitMQ 拓扑已声明 | `rabbitmqctl list_queues` 见 `susumonitor.alert.metrics`（durable） |
 | 4 | 告警全链路 24 项 | `node api-test/verify-alert-ws.mjs`（需验证库 + 管理员账号） |

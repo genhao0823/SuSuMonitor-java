@@ -2,7 +2,7 @@
 
 SuSuMonitor 监控采集 Agent，Go 实现。
 
-> **当前状态（2026-08-03）**：WebSocket 鉴权、心跳、指数退避重连、gopsutil 指标采集、`metrics.report` 上报、`metrics.ack` 入口确认、有界本地 FIFO 缓冲和 Linux PTY 终端链路已实现。正式生产部署应使用 HTTPS/WSS。
+> **当前状态（2026-08-05）**：WebSocket 鉴权、心跳、指数退避重连、gopsutil 指标采集、`metrics.report` 上报、`metrics.ack` 入口确认、有界本地 FIFO 缓冲、`metrics.nack` 永久拒绝死信（snapshot v2，v1 自动迁移）、心跳携带投递遥测和 Linux PTY 终端链路已实现。正式生产部署应使用 HTTPS/WSS。
 
 - Go 1.23（`go.mod` 要求 1.23）
 - gopsutil（跨平台系统指标采集）
@@ -75,9 +75,11 @@ cp .env.example .env
 - 写入失败、断线或 ACK 丢失时，下一次认证会重放队首的**原 UUID**；Server 对重复 ID 的入口幂等接受可避免重复指标与重复事件。
 - 已认证连接中若 `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` 内未收到 ACK，Agent 保留队首并按 `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` 至 `SUSUMONITOR_METRICS_RETRY_MAX_SECONDS` 的指数退避重发；重发仍使用原完整帧和 UUID。
 - 为保持 Server 对 `collected_at` 的严格递增规则，最多只有一条指标处于 in-flight 状态，后续记录等待前一条 ACK；若 ACK 后仍有积压，下一条会等待 `SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS`，避免恢复时触发服务端指标限流。
-- 缓冲满时拒绝最新采样并记录错误，保留既有 FIFO；缓存文件损坏、版本不兼容或 `server_id` 不匹配时启动失败，避免静默丢弃未确认数据。
+- 缓冲满时拒绝最新采样并记录错误，保留既有 FIFO；缓存文件损坏、不支持的版本或 `server_id` 不匹配时启动失败，避免静默丢弃未确认数据；v1 快照会自动原地迁移为 v2（新增本地死信）。
+- 服务端对可关联且永久无效的指标（`invalid_metrics_payload` / `stale_collected_at` / `server_not_found`）返回 correlated `metrics.nack`；Agent 将队首移入本地持久化死信（`dead_letter` 数组，与队列共用容量上限、超限丢最旧）且不重试；泛化 `error` 帧不会删除队首。
+- 心跳帧携带投递遥测（pending count/bytes、最旧采样、丢弃计数、死信条数/字节），Server 落库后经 `GET /api/servers/{id}/status` 在服务器详情页展示。
 - Agent 部署前必须先升级 Server 至支持 `metrics.ack` 的版本（`773fc4d` 或后续）；旧 Server 不会确认，队首将按可靠语义持续保留。
-- 当前未实现队列字节上限、`metrics.nack` 策略及管理端积压展示；可靠投递已完成两层隔离 E2E：真实 Agent + loopback ACK 故障 fixture 验证重传/重启/FIFO/容量/节流，真实 Agent + Java/MySQL 独立 schema 验证 ingress/ACK/spool 清理。两层均不覆盖永久业务错误的 dead-letter 处置。
+- 当前未实现队列字节上限（死信与队列按条数共用 `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` 上限）；可靠投递已完成两层隔离 E2E：真实 Agent + loopback fixture 15 项（含 NACK 死信/重启持久化/泛化 error 不移队首）PASS，真实 Agent + Java/MySQL 独立 schema 场景待 DB 管理员凭据运行。
 
 ## 平台支持
 

@@ -15,7 +15,7 @@
 | 能力 | 状态 | 依据 |
 |---|---|---|
 | Spring Boot 3.4.7 后端 | 当前可用 | `pom.xml:7-26` |
-| Flyway V1-V9 | 当前可用 | `db/migration/` |
+| Flyway V1-V19 | 当前可用 | `db/migration/` |
 | MySQL 8.4 集成 | 当前可用 | `application.yml:11` |
 | JWT 72h 认证 + 行锁首管理员 | 当前可用，**空库并发仍未验证**（独立库场景留作下一步验收） | `JwtKeyConfig`、`UserService.java:71-105` |
 | Go Agent WS 鉴权/心跳/重连 | 当前可用 | `wsclient/client.go` |
@@ -64,7 +64,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 | MyBatis-Plus | 3.5.12 | 数据访问、分页、条件构造 |
 | MySQL | 8.4 | 主数据库 |
 | HikariCP | - | 连接池 |
-| Flyway | - | 数据库版本化迁移（V1~V17） |
+| Flyway | - | 数据库版本化迁移（V1~V19） |
 | JJWT | 0.12.6 | JWT 签发/校验（HS256） |
 | BCrypt | - | 密码哈希 |
 | JDK JCA AES-256-GCM | - | SSH 凭据加密 |
@@ -205,7 +205,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 
 **在项目中如何使用：**
 - 启用 `baseline-on-migrate: true`，迁移脚本位于 `classpath:db/migration`（`application.yml:18-21`）。
-- 版本脚本 V1~V17：V1 建 users 表、V2 servers、V3 metrics、V4 commands、V5 alert 表、V6 ssh_sessions、V7 auth_bootstrap_state、V8 server SSH 主机密钥字段、V9 agent_token 生命周期字段、V10 告警状态与规则软删除、V11 指标幂等表、V12 终端会话、V13 告警活跃规则唯一索引、V14 outbox 表、V15 消费幂等表、V16 outbox 清理索引、V17 心跳微秒精度。
+- 版本脚本 V1~V19：V1 建 users 表、V2 servers、V3 metrics、V4 commands、V5 alert 表、V6 ssh_sessions、V7 auth_bootstrap_state、V8 server SSH 主机密钥字段、V9 agent_token 生命周期字段、V10 告警状态与规则软删除、V11 指标幂等表、V12 终端会话、V13 告警活跃规则唯一索引、V14 outbox 表、V15 消费幂等表、V16 outbox 清理索引、V17 心跳微秒精度、V18 告警确认窗口、V19 投递统计列。
 - 表结构规范：`BIGINT UNSIGNED` 主键自增、`COMMENT` 字段注释、`InnoDB + utf8mb4_unicode_ci`、合理索引（见 V1 脚本）。
 
 ### 3.12 Spring WebSocket（双通道实时通信）
@@ -420,7 +420,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 - Docker / Docker Compose / Kubernetes / Helm：容器化部署
 - GitHub Actions：CI/CD
 - Android App：Kotlin + Jetpack Compose + Retrofit + OkHttp + 前台 Service
-- 前端 ECharts 集成、xterm.js Web SSH 终端（MVP-7）
+- ~~前端 ECharts 集成、xterm.js Web SSH 终端（MVP-7）~~（**已落地 2026-07-28**：MetricsView ECharts 图表、TerminalView xterm.js 终端）
 - 微服务演进（MVP-9 之后）：按数据所有权拆分 metrics/alert/ssh 服务
 
 > **2026-08-02 更新**：原"已声明未落地"的两项已补齐——① 消费失败留痕（`FailedConsumeRecordRecoverer` + `upsertFailed`，原 `markFailed` 名存实亡已修复，新增 C4 验收场景）；② 告警逃逸窗口（`confirm_count` 连续越界确认，V18，默认 1 向后兼容防瞬时抖动误报）。

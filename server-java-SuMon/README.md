@@ -100,7 +100,7 @@ baseUrl = http://localhost:18080
 
 ## 七、当前阶段
 
-当前已完成：Java 后端工程骨架、统一响应、基础错误码、全局异常处理、request_id、`/api/health`、`/api/ready`、认证（注册/登录/登出/当前用户）、管理员审核（待审核列表/通过/拒绝）、服务器 CRUD（含软删除和排序）、SSH 凭据加密和连接测试（含主机指纹确认）、Agent Token 生命周期（注册/轮换/撤销）、Metrics 接收/存储/查询/清理、Agent 和 Monitor 双 WebSocket 通道（含 Ticket 握手和实时推送）、CORS 跨域配置、WebSocket 错误契约冻结、MVP-6 告警业务闭环（规则 CRUD、状态机去重、恢复、记录查询、标记已读和 alert.push 推送）、终端会话生命周期（创建/状态转换/超时清理）、终端单 JVM 配额（用户 2、服务器 4、操作用户 5、全局 16、并发幂等）、**MVP-10 Metrics Outbox（V14 同事务写入 + RabbitMQ 发布器 Confirm/Return/指数退避 + ready 50301）**、**MVP-11 Alert 消费侧（V15 消费幂等表 + AUTO 确认 + 3 次有限重试 + DLQ 分类 + 字段级契约校验）**、Flyway V1-V17（V13 告警活跃规则唯一索引 / V14 outbox / V15 消费幂等 / V16 outbox 清理 / V17 心跳微秒精度）、部署资产（`application-prod.yml`、systemd unit、Nginx 反代示例、环境变量模板、`DEPLOYMENT.md`、本机 IPv4 smoke 脚本）。
+当前已完成：Java 后端工程骨架、统一响应、基础错误码、全局异常处理、request_id、`/api/health`、`/api/ready`、认证（注册/登录/登出/当前用户）、管理员审核（待审核列表/通过/拒绝）、服务器 CRUD（含软删除和排序）、SSH 凭据加密和连接测试（含主机指纹确认）、Agent Token 生命周期（注册/轮换/撤销）、Metrics 接收/存储/查询/清理、Agent 和 Monitor 双 WebSocket 通道（含 Ticket 握手和实时推送）、CORS 跨域配置、WebSocket 错误契约冻结、MVP-6 告警业务闭环（规则 CRUD、状态机去重、恢复、记录查询、标记已读和 alert.push 推送）、终端会话生命周期（创建/状态转换/超时清理）、终端单 JVM 配额（用户 2、服务器 4、操作用户 5、全局 16、并发幂等）、**MVP-10 Metrics Outbox（V14 同事务写入 + RabbitMQ 发布器 Confirm/Return/指数退避 + ready 50301）**、**MVP-11 Alert 消费侧（V15 消费幂等表 + AUTO 确认 + 3 次有限重试 + DLQ 分类 + 字段级契约校验）**、**Agent 指标可靠投递（`metrics.ack` 入口确认；`metrics.nack` 永久拒绝分类 invalid_metrics_payload/stale_collected_at/server_not_found；心跳携带投递遥测落库 `servers.delivery_*` 并经 `GET /api/servers/{id}/status` 返回）**、Flyway V1-V19（V13 告警活跃规则唯一索引 / V14 outbox / V15 消费幂等 / V16 outbox 清理 / V17 心跳微秒精度 / V18 告警确认窗口 / V19 投递统计列）、部署资产（`application-prod.yml`、systemd unit、Nginx 反代示例、环境变量模板、`DEPLOYMENT.md`、本机 IPv4 smoke 脚本）。
 
 资源限制语义：
 

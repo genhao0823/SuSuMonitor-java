@@ -2,7 +2,7 @@
 
 > 本目录是 SuSuMonitor 后端 REST API 的权威 OpenAPI 3.0 契约源，供 Apifox 导入、前端类型生成、CI 校验与人工查阅使用。
 >
-> 契约基线：`main @ df42c37`（2026-08-03；含用户管理批量审核、告警确认窗口、Outbox/消费侧与 Agent 指标 ACK）。
+> 契约基线：`main @ 21a2061`（2026-08-05；含用户管理批量审核、告警确认窗口、Outbox/消费侧、Agent 指标 ACK/NACK 分类与投递遥测状态字段）。
 >
 > 校验命令：`cd web-vue-SuMon && npm run openapi:check`（CI 友好，退出 0 即契约与 Java Controller 完全一致）。
 >
@@ -18,7 +18,7 @@
 | `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹 / SSH 测试 / Agent Token / Monitor Ticket / 指标最新值 / 指标历史 | 14 |
 | `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读（ROLE_ADMIN + 已认证） | 6 |
 
-合计 31 个端点，与全部 Java Controller `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping` 声明 1:1 对齐（基线 `main @ df42c37`，2026-08-03）。
+合计 31 个端点，与全部 Java Controller `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping` 声明 1:1 对齐（基线 `main @ 21a2061`，2026-08-05）。
 
 ## 端点索引
 
@@ -142,7 +142,7 @@
 
 REST 之外的 `/ws/agent` 与 `/ws/monitor` 双通道协议见：
 
-- `docs-SuMon/Protocol-SuMon/websocket-protocol.md`（v1.2）
+- `docs-SuMon/Protocol-SuMon/websocket-protocol.md`（v1.3）
 
 OpenAPI 不覆盖 WS 协议层（消息帧、订阅、推送）。
 
