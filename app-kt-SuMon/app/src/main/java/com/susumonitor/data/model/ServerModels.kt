@@ -43,6 +43,8 @@ data class ServerQuery(
     val page: Int = 1,
     val pageSize: Int = 20,
     val keyword: String? = null,
+    val sortBy: String? = null,
+    val sortOrder: String? = null,
 )
 
 /** Monitor WebSocket 推送的服务器状态转换快照（server.status.update payload）。 */

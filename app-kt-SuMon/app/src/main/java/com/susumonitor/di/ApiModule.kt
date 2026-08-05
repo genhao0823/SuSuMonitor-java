@@ -1,5 +1,6 @@
 package com.susumonitor.di
 
+import com.susumonitor.api.AdminApi
 import com.susumonitor.api.AlertApi
 import com.susumonitor.api.AuthApi
 import com.susumonitor.api.MetricsApi
@@ -38,4 +39,8 @@ object ApiModule {
     @Provides
     @Singleton
     fun provideSystemApi(retrofit: Retrofit): SystemApi = retrofit.create(SystemApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAdminApi(retrofit: Retrofit): AdminApi = retrofit.create(AdminApi::class.java)
 }
