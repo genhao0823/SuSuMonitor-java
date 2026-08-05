@@ -35,7 +35,7 @@ func (s *recordingSender) snapshot() []wsclient.AgentMessage {
 
 func newTestReporter(t *testing.T, sender *recordingSender, options Options) (*Reporter, *metricbuffer.Queue) {
 	t.Helper()
-	queue, err := metricbuffer.Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 3)
+	queue, err := metricbuffer.Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 3, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

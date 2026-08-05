@@ -50,7 +50,7 @@ func main() {
 		logger.Error("terminal initialization failed", "error", err)
 		os.Exit(1)
 	}
-	metricsBuffer, err := metricbuffer.Open(cfg.MetricsBufferPath, cfg.ServerID, cfg.MetricsBufferMaxEntries)
+	metricsBuffer, err := metricbuffer.Open(cfg.MetricsBufferPath, cfg.ServerID, cfg.MetricsBufferMaxEntries, cfg.MetricsBufferMaxBytes)
 	if err != nil {
 		logger.Error("metrics buffer initialization failed", "error", err)
 		os.Exit(1)
@@ -100,7 +100,7 @@ type metricsReporter interface {
 
 // run 在同一可取消生命周期内运行 WebSocket、指标采集和上报。
 func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *wsclient.Client) error {
-	metricsBuffer, err := metricbuffer.Open(cfg.MetricsBufferPath, cfg.ServerID, cfg.MetricsBufferMaxEntries)
+	metricsBuffer, err := metricbuffer.Open(cfg.MetricsBufferPath, cfg.ServerID, cfg.MetricsBufferMaxEntries, cfg.MetricsBufferMaxBytes)
 	if err != nil {
 		return fmt.Errorf("open metrics buffer: %w", err)
 	}

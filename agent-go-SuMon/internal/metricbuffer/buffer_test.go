@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"agent-go-SuMon/internal/wsclient"
@@ -20,7 +21,7 @@ func metricsMessage(id string, serverID int64, collectedAt string) wsclient.Agen
 // survive process restart before any server acknowledgement.
 func TestQueuePersistsFifoAcrossRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	queue, err := Open(path, 42, 3)
+	queue, err := Open(path, 42, 3, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -33,7 +34,7 @@ func TestQueuePersistsFifoAcrossRestart(t *testing.T) {
 		t.Fatalf("enqueue second: %v", err)
 	}
 
-	reopened, err := Open(path, 42, 3)
+	reopened, err := Open(path, 42, 3, 0)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -54,7 +55,7 @@ func TestQueuePersistsFifoAcrossRestart(t *testing.T) {
 // TestQueueRejectsOutOfOrderAcknowledgement verifies only the current FIFO head
 // can be removed, preventing a malformed ACK from losing queued metrics.
 func TestQueueRejectsOutOfOrderAcknowledgement(t *testing.T) {
-	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 2)
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 2, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -74,7 +75,7 @@ func TestQueueRejectsOutOfOrderAcknowledgement(t *testing.T) {
 // TestQueueRejectsNewestOnCapacity preserves the durable FIFO prefix when the
 // configured bound is reached.
 func TestQueueRejectsNewestOnCapacity(t *testing.T) {
-	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 1)
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 1, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -99,7 +100,7 @@ func rejection(reason string) wsclient.MetricsNack {
 // TestQueueRejectHeadMovesToDeadLetter verifies a correlated metrics.nack
 // durably moves the FIFO head into the local dead-letter and advances the queue.
 func TestQueueRejectHeadMovesToDeadLetter(t *testing.T) {
-	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 3)
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 3, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -127,7 +128,7 @@ func TestQueueRejectHeadMovesToDeadLetter(t *testing.T) {
 // TestQueueRejectHeadRejectsOutOfOrder verifies only the current FIFO head can
 // be dead-lettered, preventing an unrelated NACK from losing queued metrics.
 func TestQueueRejectHeadRejectsOutOfOrder(t *testing.T) {
-	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 3)
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 3, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -162,7 +163,7 @@ func TestQueueMigratesV1Snapshot(t *testing.T) {
 		t.Fatalf("write v1 snapshot: %v", err)
 	}
 
-	queue, err := Open(path, 42, 3)
+	queue, err := Open(path, 42, 3, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -189,7 +190,7 @@ func TestQueueMigratesV1Snapshot(t *testing.T) {
 // TestQueueDeadLetterCapsAtCapacity verifies the shared capacity bound evicts
 // the oldest dead-letter entry instead of the newest queue entry.
 func TestQueueDeadLetterCapsAtCapacity(t *testing.T) {
-	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 2)
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 2, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -219,7 +220,7 @@ func TestQueueDeadLetterCapsAtCapacity(t *testing.T) {
 // process restart, keeping permanent-rejection evidence locally durable.
 func TestQueueDeadLetterPersistsAcrossRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	queue, err := Open(path, 42, 3)
+	queue, err := Open(path, 42, 3, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -230,7 +231,7 @@ func TestQueueDeadLetterPersistsAcrossRestart(t *testing.T) {
 		t.Fatalf("RejectHead() = rejected %v, error %v", rejected, err)
 	}
 
-	reopened, err := Open(path, 42, 3)
+	reopened, err := Open(path, 42, 3, 0)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -249,7 +250,7 @@ func TestQueueDeadLetterPersistsAcrossRestart(t *testing.T) {
 // TestQueueStats verifies the delivery telemetry snapshot reports pending,
 // oldest sample, drop, and dead-letter measurements.
 func TestQueueStats(t *testing.T) {
-	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 1)
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 1, 0)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -273,4 +274,113 @@ func TestQueueStats(t *testing.T) {
 	if stats.PendingCount != 0 || stats.DeadLetterCount != 1 || stats.DeadLetterBytes <= 0 {
 		t.Fatalf("post-rejection stats = %+v, want empty queue with one dead-letter", stats)
 	}
+}
+
+// TestQueueRejectsOnByteCap verifies a configured byte limit rejects the newest
+// frame, keeps the durable prefix, and counts the drop.
+func TestQueueRejectsOnByteCap(t *testing.T) {
+	first := largeMetricsMessage("11111111-1111-4111-8111-111111111111", 42, "2026-08-03T00:00:00Z")
+	second := largeMetricsMessage("22222222-2222-4222-8222-222222222222", 42, "2026-08-03T00:00:05Z")
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 10, frameSize(first))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := queue.Enqueue(first); err != nil {
+		t.Fatalf("enqueue first: %v", err)
+	}
+	// 上限恰好容纳第一条；第二条必然超出。
+	if err := queue.Enqueue(second); err == nil {
+		t.Fatal("enqueue second succeeded despite byte limit")
+	}
+	head, ok := queue.Head()
+	if !ok || head.MessageID != first.MessageID {
+		t.Fatalf("head = %+v, want retained first entry", head)
+	}
+	if stats := queue.Stats(); stats.DropCount != 1 {
+		t.Fatalf("drop count = %d, want 1", stats.DropCount)
+	}
+}
+
+// TestBytesTrackedAfterAcknowledge verifies currentBytes shrinks when the FIFO
+// head is acknowledged.
+func TestBytesTrackedAfterAcknowledge(t *testing.T) {
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 10, 0)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	first := metricsMessage("11111111-1111-4111-8111-111111111111", 42, "2026-08-03T00:00:00Z")
+	second := metricsMessage("22222222-2222-4222-8222-222222222222", 42, "2026-08-03T00:00:05Z")
+	_ = queue.Enqueue(first)
+	_ = queue.Enqueue(second)
+	before := queue.Stats().PendingBytes
+	if _, err := queue.Acknowledge(first.MessageID); err != nil {
+		t.Fatalf("acknowledge first: %v", err)
+	}
+	after := queue.Stats().PendingBytes
+	if after >= before {
+		t.Fatalf("pending bytes after ack = %d, want less than %d", after, before)
+	}
+}
+
+// TestBytesTrackedAfterRejectHead verifies currentBytes shrinks when the FIFO
+// head is dead-lettered, and the remaining frame still respects the byte limit.
+func TestBytesTrackedAfterRejectHead(t *testing.T) {
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 10, 0)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	first := metricsMessage("11111111-1111-4111-8111-111111111111", 42, "2026-08-03T00:00:00Z")
+	second := metricsMessage("22222222-2222-4222-8222-222222222222", 42, "2026-08-03T00:00:05Z")
+	_ = queue.Enqueue(first)
+	_ = queue.Enqueue(second)
+	before := queue.Stats().PendingBytes
+	if _, rejected, _, err := queue.RejectHead(first.MessageID, rejection("server_not_found")); err != nil || !rejected {
+		t.Fatalf("RejectHead() = rejected %v, error %v", rejected, err)
+	}
+	after := queue.Stats().PendingBytes
+	if after >= before {
+		t.Fatalf("pending bytes after rejection = %d, want less than %d", after, before)
+	}
+}
+
+// TestByteCapAndCountCapIndependent verifies the byte and count limits can each
+// reject a frame on their own.
+func TestByteCapAndCountCapIndependent(t *testing.T) {
+	countQueue, err := Open(filepath.Join(t.TempDir(), "count.json"), 42, 1, 1_000_000)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	first := metricsMessage("11111111-1111-4111-8111-111111111111", 42, "2026-08-03T00:00:00Z")
+	second := metricsMessage("22222222-2222-4222-8222-222222222222", 42, "2026-08-03T00:00:05Z")
+	if err := countQueue.Enqueue(first); err != nil {
+		t.Fatalf("enqueue first: %v", err)
+	}
+	if err := countQueue.Enqueue(second); err == nil {
+		t.Fatal("count cap did not reject the second frame")
+	}
+
+	large := largeMetricsMessage("33333333-3333-4333-8333-333333333333", 42, "2026-08-03T00:00:10Z")
+	byteQueue, err := Open(filepath.Join(t.TempDir(), "bytes.json"), 42, 10, frameSize(large))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := byteQueue.Enqueue(large); err != nil {
+		t.Fatalf("enqueue first: %v", err)
+	}
+	if err := byteQueue.Enqueue(first); err == nil {
+		t.Fatal("byte cap did not reject the second frame")
+	}
+}
+
+// largeMetricsMessage 构造带超长未知 payload 字段的帧，使单帧序列化字节数远大于
+// 最低字节上限(1024)，便于确定性验证字节上限拒绝（校验只解析 MetricsPayload
+// 已知字段，未知字段被忽略）。
+func largeMetricsMessage(id string, serverID int64, collectedAt string) wsclient.AgentMessage {
+	return wsclient.NewMessageWithID("metrics.report", id, struct {
+		ServerID    int64  `json:"server_id"`
+		CollectedAt string `json:"collected_at"`
+		Filler      string `json:"x_filler_ignored_by_metrics_payload"`
+	}{
+		ServerID: serverID, CollectedAt: collectedAt, Filler: strings.Repeat("x", 2000),
+	})
 }

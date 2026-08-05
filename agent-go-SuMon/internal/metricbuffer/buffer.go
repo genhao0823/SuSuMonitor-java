@@ -43,13 +43,15 @@ type Stats struct {
 // required because the server rejects per-server collected_at values that are
 // not strictly increasing.
 type Queue struct {
-	mu         sync.Mutex
-	path       string
-	serverID   int64
-	capacity   int
-	entries    []wsclient.AgentMessage
-	deadLetter []DeadLetterEntry
-	drops      uint64
+	mu           sync.Mutex
+	path         string
+	serverID     int64
+	capacity     int
+	maxBytes     int // 0 = 不限制
+	entries      []wsclient.AgentMessage
+	deadLetter   []DeadLetterEntry
+	drops        uint64
+	currentBytes int // 已入队帧的序列化字节合计，启动时初始化，增量维护
 }
 
 type snapshot struct {
@@ -62,7 +64,7 @@ type snapshot struct {
 // Open loads the durable queue or creates an empty in-memory queue when no
 // snapshot exists. Invalid snapshots fail startup rather than discarding data
 // whose delivery state is unknown.
-func Open(path string, serverID int64, capacity int) (*Queue, error) {
+func Open(path string, serverID int64, capacity, maxBytes int) (*Queue, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return nil, fmt.Errorf("metrics buffer path must be a clean absolute path")
 	}
@@ -72,8 +74,11 @@ func Open(path string, serverID int64, capacity int) (*Queue, error) {
 	if capacity < 1 {
 		return nil, fmt.Errorf("metrics buffer capacity must be positive")
 	}
+	if maxBytes != 0 && maxBytes < 1024 {
+		return nil, fmt.Errorf("metrics buffer max bytes must be 0 (unlimited) or >= 1024")
+	}
 
-	queue := &Queue{path: path, serverID: serverID, capacity: capacity}
+	queue := &Queue{path: path, serverID: serverID, capacity: capacity, maxBytes: maxBytes}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return queue, nil
@@ -110,6 +115,7 @@ func Open(path string, serverID int64, capacity int) (*Queue, error) {
 	}
 	queue.entries = stored.Entries
 	queue.deadLetter = stored.DeadLetter
+	queue.currentBytes = framesBytes(stored.Entries)
 	// v1 快照没有死信字段：原地升级为 v2 并持久化一次，不丢弃任何待确认数据。
 	if stored.Version < snapshotVersion {
 		if err := queue.persist(queue.entries, queue.deadLetter); err != nil {
@@ -131,11 +137,19 @@ func (q *Queue) Enqueue(message wsclient.AgentMessage) error {
 		q.drops++
 		return fmt.Errorf("metrics buffer is full (%d entries); newest metric was not queued", q.capacity)
 	}
+	if q.maxBytes > 0 {
+		newFrameBytes := frameSize(message)
+		if q.currentBytes+newFrameBytes > q.maxBytes {
+			q.drops++
+			return fmt.Errorf("metrics buffer exceeds byte limit (%d bytes); newest metric was not queued", q.maxBytes)
+		}
+	}
 	entries := append(append([]wsclient.AgentMessage(nil), q.entries...), message)
 	if err := q.persist(entries, q.deadLetter); err != nil {
 		return err
 	}
 	q.entries = entries
+	q.currentBytes += frameSize(message)
 	return nil
 }
 
@@ -157,11 +171,16 @@ func (q *Queue) Acknowledge(messageID string) (bool, error) {
 	if len(q.entries) == 0 || q.entries[0].MessageID != messageID {
 		return false, nil
 	}
+	removed := q.entries[0]
 	entries := append([]wsclient.AgentMessage(nil), q.entries[1:]...)
 	if err := q.persist(entries, q.deadLetter); err != nil {
 		return false, err
 	}
 	q.entries = entries
+	q.currentBytes -= frameSize(removed)
+	if q.currentBytes < 0 {
+		q.currentBytes = 0
+	}
 	return true, nil
 }
 
@@ -197,6 +216,10 @@ func (q *Queue) RejectHead(messageID string, nack wsclient.MetricsNack) (DeadLet
 	}
 	q.entries = entries
 	q.deadLetter = deadLetter
+	q.currentBytes -= frameSize(entry.Frame)
+	if q.currentBytes < 0 {
+		q.currentBytes = 0
+	}
 	return entry, true, evicted, nil
 }
 
@@ -206,7 +229,7 @@ func (q *Queue) Stats() Stats {
 	defer q.mu.Unlock()
 	return Stats{
 		PendingCount:      len(q.entries),
-		PendingBytes:      framesBytes(q.entries),
+		PendingBytes:      q.currentBytes,
 		OldestCollectedAt: oldestCollectedAt(q.entries),
 		DropCount:         q.drops,
 		DeadLetterCount:   len(q.deadLetter),
@@ -299,12 +322,18 @@ func isUUID(value string) bool {
 func framesBytes(entries []wsclient.AgentMessage) int {
 	total := 0
 	for _, message := range entries {
-		data, err := json.Marshal(message)
-		if err == nil {
-			total += len(data)
-		}
+		total += frameSize(message)
 	}
 	return total
+}
+
+// frameSize 返回单帧序列化后的字节数，用于字节上限检查与增量统计。
+func frameSize(msg wsclient.AgentMessage) int {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return 0
+	}
+	return len(data)
 }
 
 // oldestCollectedAt 返回队首帧的 collected_at；无法解析时返回空字符串。

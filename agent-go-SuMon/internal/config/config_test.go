@@ -60,6 +60,25 @@ func TestLoadUsesTerminalOutputRateDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadUsesByteCapDefaultAndValidValue(t *testing.T) {
+	setValidEnvironment(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MetricsBufferMaxBytes != 0 {
+		t.Fatalf("default metrics buffer max bytes = %d, want 0 (unlimited)", cfg.MetricsBufferMaxBytes)
+	}
+	t.Setenv("SUSUMONITOR_METRICS_BUFFER_MAX_BYTES", "262144")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() with byte cap error = %v", err)
+	}
+	if cfg.MetricsBufferMaxBytes != 262144 {
+		t.Fatalf("metrics buffer max bytes = %d, want 262144", cfg.MetricsBufferMaxBytes)
+	}
+}
+
 func TestLoadRejectsInvalidInteger(t *testing.T) {
 	setValidEnvironment(t)
 	t.Setenv("SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS", "not-a-number")
@@ -86,6 +105,7 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"metrics retry initial zero", "SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS", "0"},
 		{"metrics retry max below initial", "SUSUMONITOR_METRICS_RETRY_MAX_SECONDS", "1"},
 		{"metrics replay interval too large", "SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS", "60001"},
+		{"metrics buffer bytes below minimum", "SUSUMONITOR_METRICS_BUFFER_MAX_BYTES", "1023"},
 		{"metrics retry jitter invalid", "SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED", "sometimes"},
 		{"terminal sessions too large", "SUSUMONITOR_TERMINAL_MAX_SESSIONS", "5"},
 		{"terminal input too large", "SUSUMONITOR_TERMINAL_MAX_INPUT_BYTES", "16385"},

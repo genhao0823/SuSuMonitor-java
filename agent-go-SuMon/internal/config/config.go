@@ -31,6 +31,8 @@ type Config struct {
 	MetricsBufferPath string
 	// MetricsBufferMaxEntries 是未确认指标的最大条数，默认 720。
 	MetricsBufferMaxEntries int
+	// MetricsBufferMaxBytes 是未确认指标的最大总字节数；0 表示不限制。
+	MetricsBufferMaxBytes int
 	// MetricsAckTimeoutSeconds 是一次指标写入后等待服务端确认的最长时间。
 	MetricsAckTimeoutSeconds int
 	// MetricsRetryInitialSeconds 是确认超时后的首次重传等待时间。
@@ -99,6 +101,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.MetricsBufferMaxEntries, err = getenvIntDefault("SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES", 720); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsBufferMaxBytes, err = getenvIntDefault("SUSUMONITOR_METRICS_BUFFER_MAX_BYTES", 0); err != nil {
 		return nil, err
 	}
 	if cfg.MetricsAckTimeoutSeconds, err = getenvIntDefault("SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS", 15); err != nil {
@@ -185,6 +190,9 @@ func (c *Config) validate() error {
 	}
 	if c.MetricsBufferMaxEntries < 1 || c.MetricsBufferMaxEntries > 100000 {
 		return fmt.Errorf("metrics buffer max entries must be between 1 and 100000")
+	}
+	if c.MetricsBufferMaxBytes != 0 && c.MetricsBufferMaxBytes < 1024 {
+		return fmt.Errorf("SUSUMONITOR_METRICS_BUFFER_MAX_BYTES must be 0 (unlimited) or >= 1024")
 	}
 	if c.MetricsAckTimeoutSeconds < 1 || c.MetricsAckTimeoutSeconds > 300 {
 		return fmt.Errorf("metrics acknowledgement timeout must be between 1 and 300 seconds")
