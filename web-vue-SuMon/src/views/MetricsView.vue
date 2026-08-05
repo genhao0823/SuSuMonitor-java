@@ -65,11 +65,15 @@
           <MetricsLineChart
             :data="metrics.history"
             :metrics="['cpu_percent', 'memory_percent', 'disk_percent']"
+            :rules="alertRules"
+            :server-id="serverId"
             title="CPU / 内存 / 磁盘使用率"
           />
           <MetricsLineChart
             :data="metrics.history"
             :metrics="['net_rx', 'net_tx']"
+            :rules="alertRules"
+            :server-id="serverId"
             title="网络 I/O（字节 / 采集周期）"
             height="240px"
           />
@@ -129,7 +133,8 @@ import MetricsLineChart from '@/components/MetricsLineChart.vue'
 import { useMetricsStore } from '@/stores/metrics'
 import { MonitorWebSocket } from '@/services/websocket'
 import { getServerStatus } from '@/api/server'
-import type { AgentStatusKind, ServerStatusPushPayload } from '@/types/api'
+import { listAlertRules } from '@/api/alert'
+import type { AgentStatusKind, AlertRule, ServerStatusPushPayload } from '@/types/api'
 import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
@@ -137,6 +142,8 @@ const metrics = useMetricsStore()
 const serverId = Number(route.params.serverId)
 const agentStatus = ref<AgentStatusKind>('offline')
 const activeTab = ref<'chart' | 'table'>('chart')
+/** 当前服务器的活跃告警规则（含全局规则），用于在图表上画阈值线。 */
+const alertRules = ref<AlertRule[]>([])
 let latestHeartbeatAt: string | null = null
 let socket: MonitorWebSocket | null = null
 
@@ -212,10 +219,21 @@ async function loadServerStatus(): Promise<void> {
   }
 }
 
+/** 拉取活跃告警规则（含全局规则）用于图表阈值线；失败不阻断图表。 */
+async function loadAlertRules(): Promise<void> {
+  try {
+    const response = await listAlertRules()
+    alertRules.value = response.data.filter((rule) => rule.enabled)
+  } catch {
+    // 阈值线为增强展示，加载失败时图表仍可用。
+  }
+}
+
 onMounted(() => {
   timeRangeModel.value = [...metrics.timeRange]
   void metrics.load(serverId, timeRangeModel.value[0], timeRangeModel.value[1])
   void loadServerStatus()
+  void loadAlertRules()
   socket = new MonitorWebSocket(metrics.applyRealtime, metrics.setConnected, undefined, undefined, undefined,
     applyServerStatus)
   socket.connect(serverId)

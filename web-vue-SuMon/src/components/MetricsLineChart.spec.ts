@@ -88,6 +88,43 @@ describe('MetricsLineChart', () => {
     expect(setOptionMock.mock.calls.length).toBeGreaterThan(callsBefore)
   })
 
+  it('匹配的规则在对应 metric 系列上画阈值线，不匹配的忽略', () => {
+    const rules = [
+      { id: 1, server_id: null, metric: 'cpu', threshold_value: 80, level: 'warning', enabled: true },
+      { id: 2, server_id: 7, metric: 'memory', threshold_value: 85, level: 'critical', enabled: true },
+      { id: 3, server_id: 999, metric: 'cpu', threshold_value: 10, level: 'warning', enabled: true },
+      { id: 4, server_id: null, metric: 'disk', threshold_value: 90, level: 'warning', enabled: false }
+    ] as unknown as Array<{ id: number; server_id: number | null; metric: string; threshold_value: number; level: string; enabled: boolean }>
+    mount(MetricsLineChart, {
+      props: {
+        data: [sample()],
+        metrics: ['cpu_percent', 'memory_percent'],
+        rules: rules as never,
+        serverId: 7
+      }
+    })
+    const option = setOptionMock.mock.calls[0][0]
+    const cpuSeries = option.series.find((s: { name: string }) => s.name === 'CPU %')
+    const memorySeries = option.series.find((s: { name: string }) => s.name === '内存 %')
+    // cpu: 全局规则(80)命中; serverId 999 的规则不匹配当前服务器; disk 规则 metric 不匹配。
+    expect(cpuSeries.markLine.data).toHaveLength(1)
+    expect(cpuSeries.markLine.data[0].yAxis).toBe(80)
+    // memory: serverId=7 的 critical 规则命中。
+    expect(memorySeries.markLine.data).toHaveLength(1)
+    expect(memorySeries.markLine.data[0].yAxis).toBe(85)
+  })
+
+  it('无规则时不生成 markLine', () => {
+    mount(MetricsLineChart, {
+      props: {
+        data: [sample()],
+        metrics: ['cpu_percent']
+      }
+    })
+    const option = setOptionMock.mock.calls[0][0]
+    expect(option.series[0].markLine).toBeUndefined()
+  })
+
   it('卸载时销毁图表实例', () => {
     const wrapper = mount(MetricsLineChart, {
       props: {
