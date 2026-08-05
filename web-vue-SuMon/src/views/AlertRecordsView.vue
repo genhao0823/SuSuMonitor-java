@@ -160,6 +160,12 @@
               {{ channelLabel(row.notify_channels) }}
             </span>
             <span
+              v-else-if="hasRuleChannels(row.rule_id)"
+              class="alert-records-view__failed"
+            >
+              发送失败
+            </span>
+            <span
               v-else
               class="alert-records-view__not-failed"
             >
@@ -211,6 +217,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import { listServers } from '@/api/server'
+import { listAlertRules } from '@/api/alert'
 import { useAlertsStore } from '@/stores/alerts'
 import { MonitorWebSocket } from '@/services/websocket'
 import { formatDateTime } from '@/utils/format'
@@ -226,6 +233,8 @@ const page = ref(1)
 const pageSizeOptions: number[] = [10, 20, 50, 100]
 const pageSize = ref<number>(pageSizeOptions[0])
 const markingReadId = ref<number | null>(null)
+/** 规则 ID → 已配置的通知渠道；用于区分"规则未配渠道"与"配了但发送失败"。 */
+const ruleChannelsById = ref<Record<number, string[]>>({})
 
 /** 实时连接 WS(按需创建);切换筛选或离页时必须 disconnect。 */
 let socket: MonitorWebSocket | null = null
@@ -277,6 +286,30 @@ function channelLabel(channels: string): string {
       return channel
     })
     .join(' / ')
+}
+
+/** 加载规则 → 通知渠道映射，供"发送失败"判定（失败不阻断列表）。 */
+async function loadRuleChannels(): Promise<void> {
+  try {
+    const response = await listAlertRules()
+    const map: Record<number, string[]> = {}
+    for (const rule of response.data) {
+      const channels: string[] = []
+      if (rule.notify_email) channels.push('email')
+      if (rule.notify_dingtalk) channels.push('dingtalk')
+      if (rule.notify_webhook) channels.push('webhook')
+      if (channels.length > 0) map[rule.id] = channels
+    }
+    ruleChannelsById.value = map
+  } catch {
+    // 通知状态为增强展示，加载失败时统一按"未发送"展示。
+  }
+}
+
+/** 规则是否配置了至少一个通知渠道（记录未送达时据此区分"发送失败"）。 */
+function hasRuleChannels(ruleId: number | null): boolean {
+  if (ruleId === null) return false
+  return (ruleChannelsById.value[ruleId]?.length ?? 0) > 0
 }
 
 /**
@@ -381,6 +414,7 @@ function onPushBannerRefresh(): void {
 onMounted(async () => {
   await loadServerOptions()
   await reload()
+  void loadRuleChannels()
   // 仅当默认有 serverFilter(默认 null 时)才建立 WS;默认 null 不订阅。
   resyncWebSocket()
 })
@@ -458,6 +492,11 @@ onBeforeUnmount(() => {
 
 .alert-records-view__not-failed {
   color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.alert-records-view__failed {
+  color: var(--el-color-danger);
   font-size: 12px;
 }
 </style>
