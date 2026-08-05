@@ -67,7 +67,26 @@ WS 四种帧 parseFrame→parseByType 分发（含未知类型忽略）、AuthRe
 
 ## 六、遗留
 
-- **E2 云端联调未执行**：本机无模拟器系统镜像/AVD、未连接设备；需安装 `system-images` 建 AVD 或接真机后验证：登录→列表→实时刷新→告警通知→已读→退出
+- **approved 用户全链路未验证**：云端 admin 凭据未在仓库留痕（安全惯例），无法审核新注册账号；仪表盘数据、WS 实时推送（`metrics.update`/`alert.push`）、告警通知需 approved 账号登录后手测
 - 通知点击跳转告警 Tab 未实现（MVP 仅唤起 App）
 - 服务器详情历史曲线未做（本版仅最新值）
 - 前后台切换与多实例 WS 保活未做对抗处理
+
+## 七、模拟器联调记录（E2）
+
+**环境**：Android 36 系统镜像 + Pixel 6 AVD（headless）；App 连云端 `82.156.245.102`
+
+| 用例 | 结果 | 说明 |
+|---|---|---|
+| 登录页/注册页渲染 | PASS | 用户名/密码/确认密码/登录/注册 元素齐全 |
+| 注册新账号 | PASS | `app_test_0805` 创建成功，云端确认 `role=user, reviewStatus=pending` |
+| 用户名冲突（409） | PASS | 重复注册显示冲突提示（修复前为 "HTTP 409 "） |
+| pending 用户登录（403） | PASS | 显示"账号未通过审核，暂无法登录"（修复前为 "HTTP 403 "） |
+| 云端连通 | PASS | health OK，ping 通，REST 全链路工作 |
+
+**联调发现并修复**：
+1. **错误提示原始化**：Retrofit 抛 `HttpException` 未被转换为 `ApiException`，UI 直接显示 "HTTP 403 "。修复：5 个 ViewModel 的 catch 统一 `ApiException.from(e)` 转换 + LoginViewModel 按业务码映射友好文案
+2. **业务错误体未解析**：`ApiException.from` 原仅返回 "HTTP $code"。修复：解析非 2xx 响应体 `{code,message}`，新增 `ApiExceptionTest`（4 用例）
+3. **adb 输入特殊字符**：`input text` 不支持 `@`（测试密码 `Test@123456` 输入异常导致确认密码不匹配，注册静默失败）。联调改用纯字母数字密码规避；代码侧确认密码不一致时应显式提示（后续迭代）
+
+**新增测试**：`ApiExceptionTest` 4 用例 → 单测总数 **23**，全绿

@@ -2,6 +2,7 @@ package com.susumonitor.data
 
 import kotlinx.serialization.SerializationException
 import retrofit2.HttpException
+import retrofit2.Response
 import java.io.IOException
 
 /**
@@ -21,17 +22,30 @@ sealed class ApiException(message: String) : Exception(message) {
     companion object {
         /**
          * 将 Retrofit 抛出的异常映射为 [ApiException]。
-         * 优先级：HTTP 业务体 code → HTTP 状态码 → IO → 解析。
+         * 非 2xx 响应尽量解析响应体中的 `{code,message}` 业务字段，
+         * 解析失败则退回 HTTP 状态码文案。
          */
         fun from(t: Throwable): ApiException = when (t) {
-            is HttpException -> {
-                // 非 2xx：尝试读取 body 中的 {code,message}
-                val code = t.code()
-                Business(code, "HTTP $code")
-            }
+            is HttpException -> fromHttp(t.response())
             is IOException -> Network(t.message ?: "网络连接失败，请检查网络后重试")
             is SerializationException -> Parse(t.message ?: "响应解析失败")
             else -> Business(0, t.message ?: "未知错误")
+        }
+
+        private fun fromHttp(response: Response<*>?): ApiException {
+            if (response == null) {
+                return Business(0, "HTTP 请求失败")
+            }
+            // 尝试解析错误体 {code,message}
+            response.errorBody()?.string()?.let { raw ->
+                runCatching {
+                    val parsed = AppJson.decodeFromString<com.susumonitor.data.model.ApiResponse<Unit>>(raw)
+                    if (parsed.code != 0) {
+                        return Business(parsed.code, parsed.message)
+                    }
+                }
+            }
+            return Business(0, "HTTP ${response.code()}")
         }
     }
 }

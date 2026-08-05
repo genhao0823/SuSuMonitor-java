@@ -2,6 +2,7 @@ package com.susumonitor.ui.alerts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.susumonitor.data.ApiException
 import com.susumonitor.data.model.AlertPushPayload
 import com.susumonitor.data.model.AlertRecord
 import com.susumonitor.data.model.AlertRecordQuery
@@ -98,7 +99,7 @@ class AlertListViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = e.message ?: "加载失败",
+                    errorMessage = ApiException.from(e).message,
                 )
             }
         }

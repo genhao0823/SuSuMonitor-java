@@ -30,7 +30,7 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 ```bash
 # 前置：JDK 17+、Android SDK（local.properties 指向 sdk.dir）
 ./gradlew :app:assembleDebug
-./gradlew :app:testDebugUnitTest   # 18 个单元测试
+./gradlew :app:testDebugUnitTest   # 23 个单元测试
 ```
 
 Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
@@ -43,6 +43,11 @@ Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 
 > 明文 HTTP/WS 仅在演示环境可用（network_security_config 仅放行 `82.156.245.102`）；
 > 生产切 HTTPS 后需同时收紧网络安全配置。
+
+## 云端联调状态（2026-08-05）
+
+- ✅ 注册 / pending 登录 403 / 用户名冲突 409 / 错误友好提示（模拟器 + 云端）
+- ⏳ 仪表盘数据 / WS 实时推送 / 告警通知：需 approved 账号（云端 admin 凭据未在仓库留痕）
 
 ## 目录结构
 

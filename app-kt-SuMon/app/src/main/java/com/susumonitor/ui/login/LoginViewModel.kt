@@ -62,15 +62,17 @@ class LoginViewModel @Inject constructor(
         _uiState.value = LoginUiState()
     }
 
-    private fun friendlyMessage(e: Exception): String = when (e) {
-        is ApiException.Business -> when (e.code) {
-            ErrorCodes.INVALID_USERNAME_OR_PASSWORD -> "用户名或密码错误"
-            ErrorCodes.FORBIDDEN -> "账号未通过审核，暂无法登录"
-            ErrorCodes.RESOURCE_CONFLICT -> "用户名已存在"
-            else -> e.message
+    private fun friendlyMessage(e: Exception): String {
+        val apiException = ApiException.from(e)
+        return when (apiException) {
+            is ApiException.Business -> when (apiException.code) {
+                ErrorCodes.INVALID_USERNAME_OR_PASSWORD -> "用户名或密码错误"
+                ErrorCodes.FORBIDDEN -> "账号未通过审核，暂无法登录"
+                ErrorCodes.RESOURCE_CONFLICT -> "用户名已存在"
+                else -> apiException.message
+            }
+            is ApiException.Network -> "网络连接失败，请检查网络后重试"
+            is ApiException.Parse -> "服务响应异常，请稍后重试"
         }
-        is ApiException.Network -> "网络连接失败，请检查网络后重试"
-        is ApiException.Parse -> "服务响应异常，请稍后重试"
-        else -> e.message ?: "操作失败"
     }
 }

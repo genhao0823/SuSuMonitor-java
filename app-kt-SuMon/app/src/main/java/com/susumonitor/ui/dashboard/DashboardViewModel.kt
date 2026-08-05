@@ -3,6 +3,7 @@ package com.susumonitor.ui.dashboard
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.susumonitor.data.ApiException
 import com.susumonitor.data.model.Metrics
 import com.susumonitor.data.model.Server
 import com.susumonitor.data.model.ServerQuery
@@ -60,7 +61,7 @@ class DashboardViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = e.message ?: "加载失败",
+                    errorMessage = ApiException.from(e).message,
                 )
             }
         }
