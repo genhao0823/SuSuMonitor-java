@@ -10,17 +10,27 @@ export const useMetricsStore = defineStore('metrics', () => {
   const loading = ref(false)
   const connected = ref(false)
   const error = ref<string | null>(null)
+  /** 当前历史查询时间窗口，默认最近 24 小时；图表与表格共用。 */
+  const timeRange = ref<[Date, Date]>([new Date(Date.now() - 24 * 3600_000), new Date()])
 
-  async function load(serverId: number, startTime: string, endTime: string): Promise<void> {
+  /** 加载最新值与指定时间窗口的历史；不传时间窗口时沿用上一次窗口。 */
+  async function load(serverId: number, start?: Date, end?: Date): Promise<void> {
+    if (start) {
+      timeRange.value = [start, end ?? new Date()]
+    }
+    const [startTime, endTime] = timeRange.value
     loading.value = true
     error.value = null
     try {
       const [latestResponse, historyResponse] = await Promise.all([
         getLatestMetrics(serverId),
-        getMetricsHistory(serverId, startTime, endTime)
+        getMetricsHistory(serverId, startTime.toISOString(), endTime.toISOString(), 1, 500)
       ])
       latest.value = latestResponse.data
+      // 按采集时间升序，保证 ECharts 时间轴顺序稳定。
       history.value = historyResponse.data.items
+        .slice()
+        .sort((a, b) => new Date(a.collected_at).getTime() - new Date(b.collected_at).getTime())
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : '指标加载失败'
     } finally {
@@ -41,7 +51,8 @@ export const useMetricsStore = defineStore('metrics', () => {
     history.value = []
     connected.value = false
     error.value = null
+    timeRange.value = [new Date(Date.now() - 24 * 3600_000), new Date()]
   }
 
-  return { latest, history, loading, connected, error, load, applyRealtime, setConnected, reset }
+  return { latest, history, loading, connected, error, timeRange, load, applyRealtime, setConnected, reset }
 })

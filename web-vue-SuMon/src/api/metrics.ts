@@ -13,7 +13,7 @@ export function getMetricsHistory(
   startTime: string,
   endTime: string,
   page = 1,
-  pageSize = 100
+  pageSize = 500
 ): Promise<ApiResponse<PageResult<MetricsHistory>>> {
   return apiClient.get<ApiResponse<PageResult<MetricsHistory>>>(`/servers/${serverId}/metrics`, {
     params: { start_time: startTime, end_time: endTime, page, page_size: pageSize }

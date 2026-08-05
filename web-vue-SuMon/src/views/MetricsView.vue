@@ -43,41 +43,80 @@
       class="history-card"
     >
       <template #header>
-        <span>历史采样（{{ metrics.history.length }} 条）</span>
+        <div class="history-card__header">
+          <span>历史采样（{{ metrics.history.length }} 条）</span>
+          <el-date-picker
+            v-model="timeRangeModel"
+            type="datetimerange"
+            :shortcuts="timeShortcuts"
+            range-separator="至"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+            size="small"
+            @change="onTimeRangeChange"
+          />
+        </div>
       </template>
-      <el-table
-        :data="metrics.history"
-        stripe
-      >
-        <el-table-column
-          label="采集时间"
-          min-width="190"
+      <el-tabs v-model="activeTab">
+        <el-tab-pane
+          label="📈 趋势图"
+          name="chart"
         >
-          <template #default="{ row }">
-            {{ formatDateTime(row.collected_at) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="cpu_percent"
-          label="CPU %"
-        />
-        <el-table-column
-          prop="memory_percent"
-          label="内存 %"
-        />
-        <el-table-column
-          prop="disk_percent"
-          label="磁盘 %"
-        />
-        <el-table-column
-          prop="load_avg"
-          label="Load"
-        />
-      </el-table>
-      <el-empty
-        v-if="metrics.history.length === 0 && !metrics.loading"
-        description="暂无历史指标"
-      />
+          <MetricsLineChart
+            :data="metrics.history"
+            :metrics="['cpu_percent', 'memory_percent', 'disk_percent']"
+            title="CPU / 内存 / 磁盘使用率"
+          />
+          <MetricsLineChart
+            :data="metrics.history"
+            :metrics="['net_rx', 'net_tx']"
+            title="网络 I/O（字节 / 采集周期）"
+            height="240px"
+          />
+          <el-empty
+            v-if="metrics.history.length === 0 && !metrics.loading"
+            description="当前时间范围暂无历史指标"
+          />
+        </el-tab-pane>
+        <el-tab-pane
+          label="📋 数据表"
+          name="table"
+        >
+          <el-table
+            :data="metrics.history"
+            stripe
+          >
+            <el-table-column
+              label="采集时间"
+              min-width="190"
+            >
+              <template #default="{ row }">
+                {{ formatDateTime(row.collected_at) }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="cpu_percent"
+              label="CPU %"
+            />
+            <el-table-column
+              prop="memory_percent"
+              label="内存 %"
+            />
+            <el-table-column
+              prop="disk_percent"
+              label="磁盘 %"
+            />
+            <el-table-column
+              prop="load_avg"
+              label="Load"
+            />
+          </el-table>
+          <el-empty
+            v-if="metrics.history.length === 0 && !metrics.loading"
+            description="暂无历史指标"
+          />
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
   </div>
 </template>
@@ -86,6 +125,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
+import MetricsLineChart from '@/components/MetricsLineChart.vue'
 import { useMetricsStore } from '@/stores/metrics'
 import { MonitorWebSocket } from '@/services/websocket'
 import { getServerStatus } from '@/api/server'
@@ -96,8 +136,48 @@ const route = useRoute()
 const metrics = useMetricsStore()
 const serverId = Number(route.params.serverId)
 const agentStatus = ref<AgentStatusKind>('offline')
+const activeTab = ref<'chart' | 'table'>('chart')
 let latestHeartbeatAt: string | null = null
 let socket: MonitorWebSocket | null = null
+
+/** 时间选择器本地状态，与 store.timeRange 同步；选择变化时重新加载历史。 */
+const timeRangeModel = ref<[Date, Date]>([...metrics.timeRange])
+
+const timeShortcuts = [
+  {
+    text: '最近 1 小时',
+    value: () => {
+      const end = new Date()
+      return [new Date(end.getTime() - 3600_000), end] as [Date, Date]
+    }
+  },
+  {
+    text: '最近 6 小时',
+    value: () => {
+      const end = new Date()
+      return [new Date(end.getTime() - 6 * 3600_000), end] as [Date, Date]
+    }
+  },
+  {
+    text: '最近 24 小时',
+    value: () => {
+      const end = new Date()
+      return [new Date(end.getTime() - 24 * 3600_000), end] as [Date, Date]
+    }
+  },
+  {
+    text: '最近 7 天',
+    value: () => {
+      const end = new Date()
+      return [new Date(end.getTime() - 7 * 24 * 3600_000), end] as [Date, Date]
+    }
+  }
+]
+
+function onTimeRangeChange(range: [Date, Date] | null): void {
+  if (!range) return
+  void metrics.load(serverId, range[0], range[1])
+}
 
 const cards = computed(() => [
   { label: 'CPU', value: format(metrics.latest?.cpu_percent, '%') },
@@ -133,9 +213,8 @@ async function loadServerStatus(): Promise<void> {
 }
 
 onMounted(() => {
-  const end = new Date()
-  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
-  void metrics.load(serverId, start.toISOString(), end.toISOString())
+  timeRangeModel.value = [...metrics.timeRange]
+  void metrics.load(serverId, timeRangeModel.value[0], timeRangeModel.value[1])
   void loadServerStatus()
   socket = new MonitorWebSocket(metrics.applyRealtime, metrics.setConnected, undefined, undefined, undefined,
     applyServerStatus)
@@ -155,4 +234,11 @@ onBeforeUnmount(() => {
 .metric-label { color: var(--el-text-color-secondary); font-size: 13px; margin-bottom: 8px; }
 .metric-cards strong { font-size: 20px; }
 .history-card { margin-top: 16px; }
+.history-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 </style>
