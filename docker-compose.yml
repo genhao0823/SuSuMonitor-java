@@ -1,0 +1,100 @@
+# SuSuMonitor 容器编排：MySQL + RabbitMQ + Server + Web，Agent 为可选 profile。
+# 敏感值全部从环境变量/ .env 注入，不硬编码（遵循 docker-standards）。
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${DB_NAME:-susumonitor}
+      MYSQL_USER: ${DB_USER:-susumonitor}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-susumonitor}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-susumonitor}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: ./server-java-SuMon
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-susumonitor}
+      DB_USER: ${DB_USER:-susumonitor}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: 18080
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      AES_GCM_KEY: ${AES_GCM_KEY:?set AES_GCM_KEY in .env}
+      APP_ENV: prod
+      SPRING_PROFILES_ACTIVE: prod
+      OUTBOX_ENABLED: ${OUTBOX_ENABLED:-true}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-susumonitor}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-susumonitor}
+      ALERT_NOTIFICATION_ENABLED: ${ALERT_NOTIFICATION_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      ALERT_MAIL_FROM: ${ALERT_MAIL_FROM:-noreply@susumonitor.local}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    expose:
+      - "18080"
+
+  web:
+    build: ./web-vue-SuMon
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      - server
+
+  # 目标主机上的 Agent 建议直接用 systemd 部署；此 profile 供容器化试点/测试。
+  agent:
+    build: ./agent-go-SuMon
+    profiles: ["agent"]
+    restart: unless-stopped
+    environment:
+      SUSUMONITOR_BACKEND_URL: ${SUSUMONITOR_BACKEND_URL:-ws://server:18080}
+      SUSUMONITOR_SERVER_ID: ${SUSUMONITOR_SERVER_ID:?set SUSUMONITOR_SERVER_ID in .env}
+      SUSUMONITOR_AGENT_TOKEN: ${SUSUMONITOR_AGENT_TOKEN:?set SUSUMONITOR_AGENT_TOKEN in .env}
+      SUSUMONITOR_METRICS_BUFFER_PATH: /var/lib/susumonitor/metrics-buffer.json
+      SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES: 720
+      SUSUMONITOR_METRICS_BUFFER_MAX_BYTES: 0
+      SUSUMONITOR_TERMINAL_ENABLED: "false"
+    volumes:
+      - agent-data:/var/lib/susumonitor
+    depends_on:
+      - server
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  agent-data:
