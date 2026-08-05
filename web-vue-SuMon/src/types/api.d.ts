@@ -266,6 +266,12 @@ export interface AlertRule {
   level: AlertLevel | string
   /** 连续越界确认次数: 1=立即触发,>1=连续N次越界触发(逃逸窗口)。 */
   confirm_count: number
+  /** 通知邮件地址,多个用英文逗号分隔;为空不发送。 */
+  notify_email: string | null
+  /** 钉钉机器人 Webhook URL;为空不发送。 */
+  notify_dingtalk: string | null
+  /** 自定义 Webhook URL;为空不发送。 */
+  notify_webhook: string | null
   enabled: boolean
   created_by: number | null
   created_at: string
@@ -330,6 +336,12 @@ export interface CreateAlertRuleRequest {
   level: AlertLevel
   /** 连续越界确认次数(可选,默认1=立即触发)。 */
   confirm_count?: number
+  /** 通知邮件地址,多个用英文逗号分隔(可选)。 */
+  notify_email?: string | null
+  /** 钉钉机器人 Webhook URL(可选)。 */
+  notify_dingtalk?: string | null
+  /** 自定义 Webhook URL(可选)。 */
+  notify_webhook?: string | null
 }
 
 /**
@@ -342,6 +354,12 @@ export interface UpdateAlertRuleRequest {
   enabled: boolean
   /** 连续越界确认次数(可选项,不传保持原值)。 */
   confirm_count?: number
+  /** 通知邮件地址(传入则更新,不传保持原值)。 */
+  notify_email?: string | null
+  /** 钉钉机器人 Webhook URL(传入则更新,不传保持原值)。 */
+  notify_dingtalk?: string | null
+  /** 自定义 Webhook URL(传入则更新,不传保持原值)。 */
+  notify_webhook?: string | null
 }
 
 /**

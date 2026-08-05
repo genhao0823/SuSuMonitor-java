@@ -143,6 +143,47 @@
       >
         <el-switch v-model="form.enabled" />
       </el-form-item>
+
+      <el-collapse class="alert-rule-dialog__notification">
+        <el-collapse-item title="🔔 通知设置（可选）">
+          <el-form-item
+            label="邮件通知"
+            prop="notify_email"
+          >
+            <el-input
+              v-model="form.notify_email"
+              placeholder="多个邮箱用英文逗号分隔，留空不发送"
+              clearable
+              class="alert-rule-dialog__full"
+            />
+          </el-form-item>
+          <el-form-item
+            label="钉钉机器人"
+            prop="notify_dingtalk"
+          >
+            <el-input
+              v-model="form.notify_dingtalk"
+              placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
+              clearable
+              class="alert-rule-dialog__full"
+            />
+          </el-form-item>
+          <el-form-item
+            label="自定义 Webhook"
+            prop="notify_webhook"
+          >
+            <el-input
+              v-model="form.notify_webhook"
+              placeholder="告警触发时 POST JSON（告警记录对象）"
+              clearable
+              class="alert-rule-dialog__full"
+            />
+          </el-form-item>
+          <span class="alert-rule-dialog__notification-tip">
+            邮件需后端配置 SMTP 且开启通知总开关；钉钉/Webhook 直接 POST，无需总开关。
+          </span>
+        </el-collapse-item>
+      </el-collapse>
     </el-form>
 
     <template #footer>
@@ -226,7 +267,10 @@ const form = reactive({
   threshold_value: 80,
   level: 'warning' as AlertLevel,
   confirm_count: 1,
-  enabled: true
+  enabled: true,
+  notify_email: '',
+  notify_dingtalk: '',
+  notify_webhook: ''
 })
 const serverIdInput = ref<number | null>(null)
 
@@ -244,6 +288,9 @@ watch(
       form.level = (r.level as AlertLevel) ?? 'warning'
       form.confirm_count = r.confirm_count ?? 1
       form.enabled = r.enabled
+      form.notify_email = r.notify_email ?? ''
+      form.notify_dingtalk = r.notify_dingtalk ?? ''
+      form.notify_webhook = r.notify_webhook ?? ''
     }
   },
   { immediate: true }
@@ -257,6 +304,9 @@ function resetForm(): void {
   form.level = 'warning'
   form.confirm_count = 1
   form.enabled = true
+  form.notify_email = ''
+  form.notify_dingtalk = ''
+  form.notify_webhook = ''
 }
 
 const rules: FormRules = {
@@ -312,7 +362,10 @@ async function handleSubmit(): Promise<void> {
         threshold_value: form.threshold_value,
         level: form.level,
         enabled: form.enabled,
-        confirm_count: form.confirm_count
+        confirm_count: form.confirm_count,
+        notify_email: form.notify_email || null,
+        notify_dingtalk: form.notify_dingtalk || null,
+        notify_webhook: form.notify_webhook || null
       })
       ElMessage.success('规则已更新')
     } else {
@@ -322,7 +375,10 @@ async function handleSubmit(): Promise<void> {
         operator: form.operator,
         threshold_value: form.threshold_value,
         level: form.level,
-        confirm_count: form.confirm_count
+        confirm_count: form.confirm_count,
+        notify_email: form.notify_email || null,
+        notify_dingtalk: form.notify_dingtalk || null,
+        notify_webhook: form.notify_webhook || null
       })
       ElMessage.success('规则已创建')
     }
@@ -374,6 +430,22 @@ function onClose(): void {
   font-size: 12px;
   color: var(--el-text-color-secondary);
   margin-left: 8px;
+}
+
+.alert-rule-dialog__notification {
+  margin-top: 4px;
+  border: none;
+}
+
+.alert-rule-dialog__notification :deep(.el-collapse-item__header) {
+  font-weight: 600;
+  color: #2a1626;
+}
+
+.alert-rule-dialog__notification-tip {
+  display: block;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .alert-rule-dialog__submit {

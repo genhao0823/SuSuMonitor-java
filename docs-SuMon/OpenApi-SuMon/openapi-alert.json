@@ -587,6 +587,24 @@
             "minimum": 1,
             "default": 1,
             "description": "连续越界确认次数(可选,默认1=立即触发)"
+          },
+          "notify_email": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "通知邮件地址，多个用英文逗号分隔（可选）"
+          },
+          "notify_dingtalk": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "钉钉机器人 Webhook URL（可选）"
+          },
+          "notify_webhook": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "自定义 Webhook URL，POST JSON（可选）"
           }
         }
       },
@@ -616,6 +634,24 @@
             "type": "integer",
             "minimum": 1,
             "description": "连续越界确认次数(可选项,不传保持原值)"
+          },
+          "notify_email": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "通知邮件地址（传入则更新，不传保持原值）"
+          },
+          "notify_dingtalk": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "钉钉机器人 Webhook URL（传入则更新，不传保持原值）"
+          },
+          "notify_webhook": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "自定义 Webhook URL（传入则更新，不传保持原值）"
           }
         }
       },
@@ -656,6 +692,24 @@
             "type": "integer",
             "minimum": 1,
             "description": "连续越界确认次数: 1=立即触发, >1=连续N次越界触发"
+          },
+          "notify_email": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "通知邮件地址，多个用英文逗号分隔"
+          },
+          "notify_dingtalk": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "钉钉机器人 Webhook URL"
+          },
+          "notify_webhook": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "description": "自定义 Webhook URL，POST JSON"
           },
           "enabled": {
             "type": "boolean"
