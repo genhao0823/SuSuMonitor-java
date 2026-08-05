@@ -99,6 +99,8 @@ sudo install -m 0600 -o root -g root server.env /etc/susumonitor/server.env
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP 服务器（邮件告警通道；不配置则邮件通道自动跳过，钉钉/Webhook 不受影响） |
 | `ALERT_MAIL_FROM` | 告警邮件发件人，默认 `noreply@susumonitor.local` |
 
+> **通知重试（2026-08-05）**：每个渠道在 `alert_notifications` 表记一行，首次失败按 2^attempts 秒退避（上限 60s）重试，最多 5 次；达上限标记 `failed` 并在告警记录页显示"发送失败"。失败原因截断 500 字符留痕。
+
 ### 3.5 Nginx 合并
 
 按 `deploy/nginx-susumonitor.conf.example` 合并到宝塔站点 server 块：
