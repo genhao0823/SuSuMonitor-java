@@ -37,6 +37,10 @@ public class AlertRecordVo {
     private OffsetDateTime readAt;
     @JsonProperty("triggered_at")
     private OffsetDateTime triggeredAt;
+    @JsonProperty("notified_at")
+    private OffsetDateTime notifiedAt;
+    @JsonProperty("notify_channels")
+    private String notifyChannels;
     @JsonProperty("created_at")
     private OffsetDateTime createdAt;
 

@@ -793,6 +793,17 @@
             "type": "string",
             "format": "date-time"
           },
+          "notified_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "外部通知发送完成时间；null=未成功发送"
+          },
+          "notify_channels": {
+            "type": "string",
+            "nullable": true,
+            "description": "成功送达的渠道，逗号分隔(email/dingtalk/webhook)；null=未成功发送"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"

@@ -14,11 +14,13 @@
         <result column="read_by" property="readBy"/>
         <result column="read_at" property="readAt"/>
         <result column="triggered_at" property="triggeredAt"/>
+        <result column="notified_at" property="notifiedAt"/>
+        <result column="notify_channels" property="notifyChannels"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
     <sql id="RecordColumns">id, rule_id, server_id, metric, current_value, threshold_value, level, status,
-        message, read_by, read_at, triggered_at, created_at, updated_at</sql>
+        message, read_by, read_at, triggered_at, notified_at, notify_channels, created_at, updated_at</sql>
     <insert id="insertRecord" useGeneratedKeys="true" keyProperty="record.id">
         INSERT INTO alert_records (rule_id, server_id, metric, current_value, threshold_value, level, status, message, triggered_at)
         VALUES (#{record.ruleId}, #{record.serverId}, #{record.metric}, #{record.currentValue},
