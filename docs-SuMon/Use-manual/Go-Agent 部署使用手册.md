@@ -135,6 +135,7 @@ SUSUMONITOR_TERMINAL_MAX_LIFETIME_SECONDS=28800
 # --- 指标可靠投递(默认值即生产推荐,可省略) ---
 SUSUMONITOR_METRICS_BUFFER_PATH=/var/lib/susumonitor/metrics-buffer.json
 SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES=720
+# SUSUMONITOR_METRICS_BUFFER_MAX_BYTES=0     # 字节上限，0 = 不限制（默认），最小 1024
 SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS=15
 SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS=2
 SUSUMONITOR_METRICS_RETRY_MAX_SECONDS=60
@@ -157,6 +158,7 @@ SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS=2500
 | `SUSUMONITOR_TERMINAL_SHELL` | PTY 启动 shell，须干净绝对路径，默认 `/bin/bash` |
 | `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标 FIFO 快照文件，必须是 clean absolute path（含本地死信，v2 格式，v1 自动迁移），默认 `/var/lib/susumonitor/metrics-buffer.json` |
 | `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` | 待确认指标与死信共用的条数上限，默认 720（约 1 小时 5 秒采集；死信超限丢最旧） |
+| `SUSUMONITOR_METRICS_BUFFER_MAX_BYTES` | 待确认队列字节上限，默认 `0`（不限制）；非 0 时必须 ≥ 1024。超限拒绝最新采样并计 drop，与条数上限独立生效 |
 | `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` | 写入后等待 `metrics.ack` 的最长时间，默认 15；超时保留队首并按退避重传原 UUID |
 | `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` / `_MAX_SECONDS` | ACK 超时重传的指数退避初始 / 上限，默认 2 / 60；max ≥ initial |
 | `SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED` | 重传是否使用 equal jitter，默认 `true`（实际等待为退避值的 1/2 至 1 倍） |
