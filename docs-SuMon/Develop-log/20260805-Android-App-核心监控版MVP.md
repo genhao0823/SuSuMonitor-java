@@ -102,3 +102,15 @@ WS 四种帧 parseFrame→parseByType 分发（含未知类型忽略）、AuthRe
 2. `LoginScreen.kt`：根 Column 增加 `Modifier.imePadding()`
 
 **验证**：模拟器实测——点击用户名框后 `dumpsys input_method` 显示 `mInputShown=true` / `mIsInputViewShown=true`，输入连接绑定 Compose 输入框；`adb input text` 输入 `keyboard_test` 成功显示。软键盘弹出与输入均正常。
+
+### 8.2 根因确认：AVD `hw.keyboard=yes` 导致 GBoard 工具栏模式（2026-08-06）
+
+**用户复报**：点击用户名框只弹出 GBoard 工具栏（麦克风/删除/回车/emoji/工具栏一列按钮），不显示字母键盘；而密码框正常弹出完整键盘。
+
+**根因**：GBoard 检测到硬件键盘可用（AVD `config.ini` 中 `hw.keyboard=yes`）时，对**普通文本框**（`KeyboardType.Text`）只显示工具栏（假定用户用电脑键盘）；对**密码框**（`KeyboardType.Password`）因安全要求强制显示完整键盘——所以表现为"密码框弹、用户名框不弹"。本机默认 AVD `Medium_Phone` 配置为 `hw.keyboard=yes`。
+
+**修复**（环境层，非代码）：
+1. 备份并修改 `C:\Users\genhaosan\.android\avd\Medium_Phone.avd\config.ini`：`hw.keyboard=yes` → `no`（原配置备份为 `config.ini.bak`）
+2. 代码层已前置处理（commit `cbd15bc`）：重构登录布局消除 `verticalScroll`+`Arrangement.Center` 反模式、用户名框显式 `KeyboardType.Text`
+
+**验证**：`hw.keyboard=no` 的 AVD（Medium_Phone 修改后）实测——点击用户名框 `mRequestedShowExplicitly=true` / `mInputShown=true`，输入 `verify` 成功。**完整键盘正常弹出**。
