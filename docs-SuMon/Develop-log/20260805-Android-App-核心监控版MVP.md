@@ -90,3 +90,15 @@ WS 四种帧 parseFrame→parseByType 分发（含未知类型忽略）、AuthRe
 3. **adb 输入特殊字符**：`input text` 不支持 `@`（测试密码 `Test@123456` 输入异常导致确认密码不匹配，注册静默失败）。联调改用纯字母数字密码规避；代码侧确认密码不一致时应显式提示（后续迭代）
 
 **新增测试**：`ApiExceptionTest` 4 用例 → 单测总数 **23**，全绿
+
+## 八、登录页软键盘不弹出（2026-08-06 修复）
+
+**现象**：点击登录页用户名/密码输入框，软键盘不弹出。
+
+**根因**：MainActivity 使用 `enableEdgeToEdge()`（targetSdk 36 强制 edge-to-edge），但 Manifest 未配置 `windowSoftInputMode`，默认 `adjustUnspecified` 在 edge-to-edge 下不调整窗口——输入框被键盘遮挡区域、焦点丢失，表现为"点了不弹"；LoginScreen 根 Column 也缺 `imePadding()`，键盘弹出时内容不避让。
+
+**修复**（commit `160d54c`）：
+1. `AndroidManifest.xml`：MainActivity 增加 `android:windowSoftInputMode="adjustResize"`
+2. `LoginScreen.kt`：根 Column 增加 `Modifier.imePadding()`
+
+**验证**：模拟器实测——点击用户名框后 `dumpsys input_method` 显示 `mInputShown=true` / `mIsInputViewShown=true`，输入连接绑定 Compose 输入框；`adb input text` 输入 `keyboard_test` 成功显示。软键盘弹出与输入均正常。
