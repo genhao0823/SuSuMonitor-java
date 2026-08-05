@@ -3,18 +3,23 @@
 SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端后端
 `http://82.156.245.102`（nginx 80 反代 `/api/` 与 `/ws/monitor`）。
 
-## 功能（MVP 核心监控版）
+## 功能（阶段一：Web 端完整移植）
 
 | 模块 | 说明 |
 |---|---|
-| 认证 | 登录 / 注册 / 退出登录；JWT 72h 持久化（DataStore） |
-| 仪表盘 | 服务器状态卡片列表 + 实时指标（WS 推送实时刷新） |
-| 服务器 | 列表（分页）+ 详情（CPU/内存/磁盘/网络/温度/负载 + 状态） |
-| 告警 | 记录分页 + 状态筛选（全部/未读/已读/已恢复）+ 标记已读 |
-| 实时推送 | 前台 Service 常驻 + OkHttp WebSocket 订阅 `/ws/monitor` |
-| 通知 | 告警到达时 IMPORTANCE_HIGH 系统通知，点击唤起 App |
+| 认证 | 登录 / 注册 / 退出登录；JWT 持久化（DataStore）；401 会话失效自动回登录 |
+| 仪表盘 | 健康/就绪探针、服务器在线/离线/未知分布、未读告警计数、admin 待审核入口、服务器卡片实时指标 |
+| 服务器列表 | 搜索防抖、分页、SSH 测试、删除（admin） |
+| 服务器表单 | 新建/编辑（SSH 密码/私钥凭据，编辑空凭据保留原值） |
+| 服务器详情 | 投递遥测、SSH 测试、主机指纹确认、Agent Token 生成/轮换/吊销 |
+| 实时监控 | 指标卡 + 自绘 Canvas 折线图（CPU/内存/磁盘 + 网络 I/O）+ 时间范围 + 阈值线 |
+| 告警记录 | 分页、状态筛选、标记已读、通知渠道展示、WS 推送横幅 |
+| 告警规则 | admin CRUD + 启停 switch |
+| 用户审核 | admin 列表/搜索/单条/批量通过拒绝 |
+| 实时推送 | 前台 Service 常驻 + WS 订阅 + 告警系统通知（Android 13+ 权限请求） |
+| 设置 | 用户信息、通知开关、后端地址、关于 |
 
-**不在本版**：服务器 CRUD、SSH 终端、告警规则管理、用户审核（后续迭代）。
+**阶段二（待做）**：SSH 终端（Termux terminal-view 库，已确认方案）。
 
 ## 技术栈
 
@@ -30,7 +35,7 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 ```bash
 # 前置：JDK 17+、Android SDK（local.properties 指向 sdk.dir）
 ./gradlew :app:assembleDebug
-./gradlew :app:testDebugUnitTest   # 23 个单元测试
+./gradlew :app:testDebugUnitTest   # 33 个单元测试
 ```
 
 Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
