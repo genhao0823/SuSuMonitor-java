@@ -106,6 +106,80 @@ func TestMetricsAckUsesDedicatedHandler(t *testing.T) {
 	}
 }
 
+func TestMetricsNackUsesDedicatedHandler(t *testing.T) {
+	client := newTestClient("ws://127.0.0.1:1", 42, 100*time.Millisecond)
+	rejected := make(chan struct {
+		id   string
+		nack MetricsNack
+	}, 1)
+	forwarded := make(chan AgentMessage, 1)
+	client.SetMetricsNackHandler(func(messageID string, nack MetricsNack) {
+		rejected <- struct {
+			id   string
+			nack MetricsNack
+		}{messageID, nack}
+	})
+	client.SetMessageHandler(func(_ context.Context, message AgentMessage) { forwarded <- message })
+
+	client.handleMessage(context.Background(), AgentMessage{
+		Type:      "metrics.nack",
+		MessageID: "nack-1",
+		Payload:   json.RawMessage(`{"server_id":42,"code":40002,"reason":"stale_collected_at","message":"stale"}`),
+	})
+
+	select {
+	case result := <-rejected:
+		if result.id != "nack-1" {
+			t.Fatalf("nack message ID = %q, want nack-1", result.id)
+		}
+		if result.nack.ServerID != 42 || result.nack.Code != 40002 || result.nack.Reason != "stale_collected_at" {
+			t.Fatalf("nack payload = %+v, want correlated rejection", result.nack)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("metrics rejection handler was not called")
+	}
+	select {
+	case message := <-forwarded:
+		t.Fatalf("metrics rejection was forwarded to generic handler: %+v", message)
+	default:
+	}
+}
+
+func TestMetricsNackWithoutMessageIDIgnored(t *testing.T) {
+	client := newTestClient("ws://127.0.0.1:1", 42, 100*time.Millisecond)
+	rejected := make(chan string, 1)
+	client.SetMetricsNackHandler(func(messageID string, _ MetricsNack) { rejected <- messageID })
+
+	client.handleMessage(context.Background(), AgentMessage{
+		Type:    "metrics.nack",
+		Payload: json.RawMessage(`{"server_id":42,"reason":"server_not_found"}`),
+	})
+
+	select {
+	case messageID := <-rejected:
+		t.Fatalf("metrics rejection without message ID reached handler: %q", messageID)
+	case <-time.After(testTimeout):
+	}
+}
+
+func TestMetricsNackMalformedPayloadIgnored(t *testing.T) {
+	client := newTestClient("ws://127.0.0.1:1", 42, 100*time.Millisecond)
+	rejected := make(chan string, 1)
+	client.SetMetricsNackHandler(func(messageID string, _ MetricsNack) { rejected <- messageID })
+
+	client.handleMessage(context.Background(), AgentMessage{
+		Type:      "metrics.nack",
+		MessageID: "nack-1",
+		Payload:   json.RawMessage(`{"code":`),
+	})
+
+	select {
+	case messageID := <-rejected:
+		t.Fatalf("malformed metrics rejection reached handler: %q", messageID)
+	case <-time.After(testTimeout):
+	}
+}
+
 func TestAuthenticatedHandlerCanSendMessage(t *testing.T) {
 	server := newTestServer(t, func(ctx context.Context, conn *websocket.Conn) {
 		var authenticate AgentMessage

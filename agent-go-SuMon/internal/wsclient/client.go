@@ -44,6 +44,7 @@ type Client struct {
 	authenticated        bool
 	messageHandler       func(context.Context, AgentMessage)
 	metricsAckHandler    func(string)
+	metricsNackHandler   func(string, MetricsNack)
 	authenticatedHandler func()
 	disconnectHandler    func()
 }
@@ -61,6 +62,14 @@ func (c *Client) SetMessageHandler(handler func(context.Context, AgentMessage)) 
 // registered before Run starts.
 func (c *Client) SetMetricsAckHandler(handler func(string)) {
 	c.metricsAckHandler = handler
+}
+
+// SetMetricsNackHandler sets the handler for a server metrics.nack frame.
+//
+// The callback receives the correlated metrics.report message ID and the
+// permanent rejection payload, and must be registered before Run starts.
+func (c *Client) SetMetricsNackHandler(handler func(string, MetricsNack)) {
+	c.metricsNackHandler = handler
 }
 
 // SetAuthenticatedHandler sets a callback invoked after an authenticated
@@ -365,7 +374,8 @@ func (c *Client) sendHeartbeat(ctx context.Context, conn *websocket.Conn) error 
 	return nil
 }
 
-// heartbeat.ack → Debug 日志；metrics.ack → 专用确认处理器；default → 交给业务处理器。
+// heartbeat.ack → Debug 日志；metrics.ack → 专用确认处理器；metrics.nack →
+// 专用拒绝处理器；default → 交给业务处理器。
 // 顶层 error 帧由 runLoops 的接收 goroutine 先行拦截，不进入这里。
 func (c *Client) handleMessage(ctx context.Context, msg AgentMessage) {
 	switch msg.Type {
@@ -381,6 +391,21 @@ func (c *Client) handleMessage(ctx context.Context, msg AgentMessage) {
 			return
 		}
 		c.logger.Debug("metrics acknowledgement received", "message_id", msg.MessageID)
+	case "metrics.nack":
+		if msg.MessageID == "" {
+			c.logger.Warn("ignored metrics rejection without message ID")
+			return
+		}
+		var nack MetricsNack
+		if err := json.Unmarshal(msg.Payload, &nack); err != nil {
+			c.logger.Warn("ignored malformed metrics rejection", "message_id", msg.MessageID, "error", err)
+			return
+		}
+		if c.metricsNackHandler != nil {
+			c.metricsNackHandler(msg.MessageID, nack)
+			return
+		}
+		c.logger.Debug("metrics rejection received", "message_id", msg.MessageID, "reason", nack.Reason)
 	default:
 		if c.messageHandler != nil {
 			c.messageHandler(ctx, msg)

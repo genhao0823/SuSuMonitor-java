@@ -213,3 +213,54 @@ func TestReporterJitterDelay(t *testing.T) {
 		}
 	}
 }
+
+// TestReporterDeadLettersPermanentlyRejectedHead verifies a correlated
+// metrics.nack moves the FIFO head to the dead-letter and advances delivery.
+func TestReporterDeadLettersPermanentlyRejectedHead(t *testing.T) {
+	sender := &recordingSender{}
+	reporter, queue := newTestReporter(t, sender, retryOptions())
+	if err := reporter.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("first Report() error = %v", err)
+	}
+	firstID := waitForMessages(t, sender, 1)[0].MessageID
+	if err := reporter.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("second Report() error = %v", err)
+	}
+
+	reporter.HandleMetricsNack(firstID, wsclient.MetricsNack{
+		ServerID: 42, Code: 40002, Reason: "stale_collected_at", Message: "stale"})
+	messages := waitForMessages(t, sender, 2)
+	if messages[1].MessageID == firstID {
+		t.Fatal("second queued metric did not advance after rejection")
+	}
+	if queue.Len() != 1 {
+		t.Fatalf("queued messages after rejection = %d, want 1", queue.Len())
+	}
+	stats := queue.Stats()
+	if stats.DeadLetterCount != 1 || stats.DeadLetterBytes <= 0 {
+		t.Fatalf("dead-letter stats = %+v, want one durable record", stats)
+	}
+}
+
+// TestReporterIgnoresOutOfOrderRejection verifies an unrelated metrics.nack
+// cannot remove the FIFO head and trigger delivery of the next frame.
+func TestReporterIgnoresOutOfOrderRejection(t *testing.T) {
+	sender := &recordingSender{}
+	reporter, queue := newTestReporter(t, sender, retryOptions())
+	if err := reporter.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("Report() error = %v", err)
+	}
+	firstID := waitForMessages(t, sender, 1)[0].MessageID
+
+	reporter.HandleMetricsNack("unknown-message-id", wsclient.MetricsNack{ServerID: 42, Reason: "server_not_found"})
+	if queue.Len() != 1 {
+		t.Fatalf("queued messages after unknown rejection = %d, want 1", queue.Len())
+	}
+	head, ok := queue.Head()
+	if !ok || head.MessageID != firstID {
+		t.Fatalf("head after unknown rejection = %+v, want original first entry", head)
+	}
+	if stats := queue.Stats(); stats.DeadLetterCount != 0 {
+		t.Fatalf("dead-letter count = %d, want 0", stats.DeadLetterCount)
+	}
+}

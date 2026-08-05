@@ -211,6 +211,43 @@ func (r *Reporter) HandleMetricsAck(messageID string) {
 		"minimum_interval", r.options.ReplayMinInterval)
 }
 
+// HandleMetricsNack durably moves the FIFO head to the local dead-letter when
+// the server permanently rejects it, then advances delivery like an
+// acknowledgement. Generic error frames never reach here; only correlated
+// metrics.nack frames for permanently invalid metrics are consumed, so a
+// rejected head is never retried.
+func (r *Reporter) HandleMetricsNack(messageID string, nack wsclient.MetricsNack) {
+	entry, rejected, evicted, err := r.queue.RejectHead(messageID, nack)
+	if err != nil {
+		r.logger.Error("persist metrics rejection failed", "message_id", messageID, "error", err)
+		return
+	}
+	if !rejected {
+		r.logger.Warn("ignored unknown or out-of-order metrics rejection", "message_id", messageID)
+		return
+	}
+	next, backlog := r.queue.Head()
+	r.mu.Lock()
+	r.clearDeliveryLocked()
+	if backlog {
+		r.messageID = next.MessageID
+		r.scheduleRetryLocked(next.MessageID, r.generation, r.options.ReplayMinInterval)
+	}
+	r.mu.Unlock()
+	r.logger.Warn("metrics permanently rejected; moved to local dead-letter",
+		"message_id", messageID, "reason", nack.Reason, "code", nack.Code, "detail", nack.Message,
+		"rejected_at", entry.RejectedAt)
+	if evicted {
+		r.logger.Warn("dead-letter capacity reached; oldest dead-letter entry evicted",
+			"message_id", messageID)
+	}
+	if !backlog {
+		return
+	}
+	r.logger.Debug("queued metrics replay scheduled after rejection", "message_id", next.MessageID,
+		"minimum_interval", r.options.ReplayMinInterval)
+}
+
 // HandleAuthenticated resets a previous connection's delivery state and replays
 // the unchanged durable FIFO head after the authenticated connection is usable.
 func (r *Reporter) HandleAuthenticated() {

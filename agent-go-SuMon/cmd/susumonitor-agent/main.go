@@ -58,6 +58,7 @@ func main() {
 	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, newReporterOptions(cfg))
 	client.SetMessageHandler(terminalAgent.handle)
 	client.SetMetricsAckHandler(metricsReporter.HandleMetricsAck)
+	client.SetMetricsNackHandler(metricsReporter.HandleMetricsNack)
 	client.SetAuthenticatedHandler(metricsReporter.HandleAuthenticated)
 	client.SetDisconnectHandler(func() {
 		metricsReporter.HandleDisconnect()

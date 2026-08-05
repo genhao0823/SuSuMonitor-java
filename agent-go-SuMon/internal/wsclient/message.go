@@ -30,6 +30,18 @@ type AuthPayload struct {
 // HeartbeatPayload 是 heartbeat 消息的 payload，为空对象。
 type HeartbeatPayload struct{}
 
+// MetricsNack 是服务端对永久无效 metrics.report 的拒绝载荷。
+//
+// 服务端仅对可关联且永久无效的指标返回 metrics.nack（reason 为
+// invalid_metrics_payload / stale_collected_at / server_not_found），
+// Agent 收到后将队首移入本地 dead-letter 而不重试。
+type MetricsNack struct {
+	ServerID int64  `json:"server_id"`
+	Code     int    `json:"code"`
+	Reason   string `json:"reason"`
+	Message  string `json:"message"`
+}
+
 // MetricsPayload 是 metrics.report 消息的指标载荷，与后端固定宽表一一对应。
 //
 // 指针类型字段表示可空；Windows 上 temperature 和 load_avg 通常为 nil。
