@@ -1,6 +1,12 @@
 package com.susumonitor.ui.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Rule
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -9,22 +15,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.susumonitor.ui.admin.AdminUsersScreen
 import com.susumonitor.ui.alerts.AlertListScreen
+import com.susumonitor.ui.alerts.AlertRulesScreen
 import com.susumonitor.ui.dashboard.DashboardScreen
 import com.susumonitor.ui.servers.ServerDetailScreen
+import com.susumonitor.ui.servers.ServerFormScreen
 import com.susumonitor.ui.servers.ServerListScreen
+import com.susumonitor.ui.servers.ServerMetricsScreen
 
 /** 底部导航目的地。 */
 enum class BottomTab(val route: String, val label: String, val icon: ImageVector) {
@@ -35,10 +41,13 @@ enum class BottomTab(val route: String, val label: String, val icon: ImageVector
 }
 
 /**
- * 主导航：底部 Tab（仪表盘/服务器/告警/设置）+ 详情页（serverDetail）。
+ * 主导航：底部 Tab + 全功能路由。
+ * - 底部 Tab：仪表盘 / 服务器 / 告警 / 设置
+ * - 详情/表单/监控/规则/审核为堆栈页（无底部栏）
  */
 @Composable
 fun AppNavHost(
+    isAdmin: Boolean,
     onLogout: () -> Unit,
 ) {
     val navController = rememberNavController()
@@ -47,8 +56,16 @@ fun AppNavHost(
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentDestination = navBackStackEntry?.destination
-            // 详情页不显示底部栏
-            val showBottomBar = currentDestination?.route != "serverDetail"
+            val stackRoutes = setOf(
+                "serverDetail/{serverId}",
+                "serverForm/{serverId}",
+                "serverMetrics/{serverId}",
+                "alertRules",
+                "adminUsers",
+            )
+            val showBottomBar = stackRoutes.none { route ->
+                currentDestination?.hierarchy?.any { it.route == route } == true
+            }
             if (showBottomBar) {
                 NavigationBar {
                     BottomTab.entries.forEach { tab ->
@@ -87,9 +104,12 @@ fun AppNavHost(
         ) {
             composable(BottomTab.DASHBOARD.route) {
                 DashboardScreen(
+                    isAdmin = isAdmin,
                     onServerClick = { serverId ->
                         navController.navigate("serverDetail/$serverId")
                     },
+                    onViewAlerts = { navController.navigate(BottomTab.ALERTS.route) },
+                    onViewAdmin = { navController.navigate("adminUsers") },
                 )
             }
             composable(BottomTab.SERVERS.route) {
@@ -97,10 +117,18 @@ fun AppNavHost(
                     onServerClick = { serverId ->
                         navController.navigate("serverDetail/$serverId")
                     },
+                    onCreateServer = {
+                        navController.navigate("serverForm/0")
+                    },
+                    onEditServer = { serverId ->
+                        navController.navigate("serverForm/$serverId")
+                    },
                 )
             }
             composable(BottomTab.ALERTS.route) {
-                AlertListScreen()
+                AlertListScreen(
+                    onViewRules = { navController.navigate("alertRules") },
+                )
             }
             composable(BottomTab.SETTINGS.route) {
                 SettingsScreen(onLogout = onLogout)
@@ -109,8 +137,36 @@ fun AppNavHost(
                 val serverId = backStackEntry.arguments?.getString("serverId")?.toLongOrNull() ?: 0L
                 ServerDetailScreen(
                     serverId = serverId,
+                    isAdmin = isAdmin,
+                    onBack = { navController.popBackStack() },
+                    onEdit = {
+                        navController.navigate("serverForm/$serverId")
+                    },
+                    onMetrics = {
+                        navController.navigate("serverMetrics/$serverId")
+                    },
+                )
+            }
+            composable("serverForm/{serverId}") { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getString("serverId")?.toLongOrNull() ?: 0L
+                ServerFormScreen(
+                    serverId = serverId,
+                    onBack = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() },
+                )
+            }
+            composable("serverMetrics/{serverId}") { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getString("serverId")?.toLongOrNull() ?: 0L
+                ServerMetricsScreen(
+                    serverId = serverId,
                     onBack = { navController.popBackStack() },
                 )
+            }
+            composable("alertRules") {
+                AlertRulesScreen(onBack = { navController.popBackStack() })
+            }
+            composable("adminUsers") {
+                AdminUsersScreen(onBack = { navController.popBackStack() })
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.susumonitor.api.interceptor
 
+import com.susumonitor.data.SessionStore
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -13,11 +14,12 @@ import javax.inject.Singleton
  * - `X-Request-ID`：可选请求追踪 ID，服务端缺省生成
  * - `X-Correlation-ID`：客户端生成的关联 ID（同请求多次重试保持一致）
  *
- * Token 通过挂起的 [tokenProvider] 获取；拦截器内同步读取以兼容 OkHttp 同步模型。
+ * 同时处理 401 响应：会话失效时清空本地会话（token 清除后 UI 由会话流感知回登录页）。
  */
 @Singleton
 class AuthInterceptor @Inject constructor(
     private val tokenProvider: TokenProvider,
+    private val sessionStore: SessionStore,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -30,7 +32,12 @@ class AuthInterceptor @Inject constructor(
                 }
             }
             .build()
-        return chain.proceed(request)
+        val response = chain.proceed(request)
+        // 401 = 会话失效：清除本地会话（幂等）
+        if (response.code == 401) {
+            runBlocking { sessionStore.clear() }
+        }
+        return response
     }
 }
 

@@ -33,6 +33,8 @@ data class AlertListUiState(
     val page: Int = 1,
     val filter: AlertFilter = AlertFilter.ALL,
     val hasMore: Boolean = false,
+    /** WS 推送到达但未刷新的计数（横幅提示）。 */
+    val pendingPushCount: Int = 0,
 )
 
 /**
@@ -105,35 +107,22 @@ class AlertListViewModel @Inject constructor(
         }
     }
 
-    /** WS 告警推送：加入列表顶部（若当前筛选未排除）。 */
+    /** WS 告警推送：仅累加计数（REST 是真源），由 UI 横幅触发刷新。 */
     private fun collectPushAlerts() {
         viewModelScope.launch {
-            MonitorForegroundService.alertEvents.collect { push: AlertPushPayload ->
+            MonitorForegroundService.alertEvents.collect { _: AlertPushPayload ->
                 val current = _uiState.value
                 val filterAllows = current.filter == AlertFilter.ALL ||
-                    (current.filter == AlertFilter.UNREAD && push.alert.status == AlertStatusValues.UNREAD)
+                    (current.filter == AlertFilter.UNREAD)
                 if (!filterAllows) return@collect
-                // 用推送的简化对象构造展示记录，避免重复（按 id 去重）
-                val record = push.alert.toRecord(push.serverId)
-                val deduped = current.records.filterNot { it.id == record.id }
-                _uiState.value = current.copy(
-                    records = listOf(record) + deduped,
-                    total = current.total + 1,
-                )
+                _uiState.value = current.copy(pendingPushCount = current.pendingPushCount + 1)
             }
         }
     }
-}
 
-private fun com.susumonitor.data.model.AlertPushAlert.toRecord(serverId: Long): AlertRecord = AlertRecord(
-    id = id,
-    ruleId = ruleId,
-    serverId = serverId,
-    metric = metric,
-    currentValue = currentValue,
-    thresholdValue = thresholdValue,
-    level = level,
-    status = status,
-    triggeredAt = triggeredAt,
-    createdAt = triggeredAt,
-)
+    /** 横幅已点击：清零计数并刷新列表。 */
+    fun markPendingPushSeen() {
+        _uiState.value = _uiState.value.copy(pendingPushCount = 0)
+        loadFirstPage()
+    }
+}

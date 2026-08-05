@@ -3,11 +3,16 @@ package com.susumonitor.ui.dashboard
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.susumonitor.data.ApiException
+import com.susumonitor.data.model.HealthStatus
 import com.susumonitor.data.model.Metrics
+import com.susumonitor.data.model.ReadyStatus
 import com.susumonitor.data.model.Server
 import com.susumonitor.data.model.ServerQuery
+import com.susumonitor.data.repository.AdminRepository
+import com.susumonitor.data.repository.AlertRepository
 import com.susumonitor.data.repository.ServerRepository
+import com.susumonitor.data.repository.SystemRepository
+import com.susumonitor.data.model.ReviewStatusValues
 import com.susumonitor.service.MonitorForegroundService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -22,17 +27,32 @@ data class DashboardUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val servers: List<Server> = emptyList(),
-    /** serverId → 最新指标（来自 REST 初次加载 + WS 实时更新）。 */
     val latestMetrics: Map<Long, Metrics> = emptyMap(),
+    // 探针
+    val health: HealthStatus? = null,
+    val healthError: String? = null,
+    val ready: ReadyStatus? = null,
+    val readyError: String? = null,
+    // 分布
+    val onlineCount: Int = 0,
+    val offlineCount: Int = 0,
+    val unknownCount: Int = 0,
+    // 告警概览
+    val unreadAlertCount: Long = 0,
+    // admin
+    val pendingUserCount: Long = 0,
 )
 
 /**
- * 仪表盘 ViewModel：加载服务器列表，维护 WS 实时指标与状态推送。
+ * 仪表盘 ViewModel：服务器卡片 + 探针 + 分布 + 未读告警 + admin 入口 + WS 实时。
  */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val serverRepository: ServerRepository,
+    private val systemRepository: SystemRepository,
+    private val alertRepository: AlertRepository,
+    private val adminRepository: AdminRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -40,6 +60,7 @@ class DashboardViewModel @Inject constructor(
 
     init {
         loadServers()
+        loadOverview()
         collectServiceEvents()
     }
 
@@ -49,20 +70,71 @@ class DashboardViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
                 val page = serverRepository.list(ServerQuery(pageSize = 50))
+                val servers = page.items
+                val online = servers.count { it.status == "online" }
+                val offline = servers.count { it.status == "offline" }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    servers = page.items,
+                    servers = servers,
+                    onlineCount = online,
+                    offlineCount = offline,
+                    unknownCount = servers.size - online - offline,
                 )
-                // 订阅全部服务器到前台服务
-                val serverIds = page.items.map { it.id }
+                val serverIds = servers.map { it.id }
                 if (serverIds.isNotEmpty()) {
                     MonitorForegroundService.start(context, serverIds)
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = ApiException.from(e).message,
+                    errorMessage = com.susumonitor.data.ApiException.from(e).message,
                 )
+            }
+        }
+    }
+
+    /** 加载健康/就绪探针 + 未读告警计数 + admin 待审核计数。 */
+    fun loadOverview() {
+        viewModelScope.launch {
+            runCatching { systemRepository.health() }
+                .onSuccess { health ->
+                    _uiState.value = _uiState.value.copy(health = health)
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(healthError = e.message)
+                }
+        }
+        viewModelScope.launch {
+            runCatching { systemRepository.ready() }
+                .onSuccess { ready ->
+                    _uiState.value = _uiState.value.copy(ready = ready)
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(readyError = e.message)
+                }
+        }
+        viewModelScope.launch {
+            runCatching {
+                alertRepository.listRecords(
+                    com.susumonitor.data.model.AlertRecordQuery(
+                        status = com.susumonitor.data.model.AlertStatusValues.UNREAD,
+                        pageSize = 1,
+                    ),
+                ).total
+            }.onSuccess { count ->
+                _uiState.value = _uiState.value.copy(unreadAlertCount = count)
+            }
+        }
+        viewModelScope.launch {
+            runCatching {
+                adminRepository.listUsers(
+                    com.susumonitor.data.model.AdminUserQuery(
+                        status = ReviewStatusValues.PENDING,
+                        pageSize = 1,
+                    ),
+                ).total
+            }.onSuccess { count ->
+                _uiState.value = _uiState.value.copy(pendingUserCount = count)
             }
         }
     }

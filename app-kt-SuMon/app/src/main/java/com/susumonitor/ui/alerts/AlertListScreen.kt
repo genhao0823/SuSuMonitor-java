@@ -1,6 +1,7 @@
 package com.susumonitor.ui.alerts
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,20 +45,45 @@ import com.susumonitor.util.TimeFormatter
 import com.susumonitor.util.ValueFormatter
 
 /**
- * 告警列表页：状态筛选 Tabs + 分页列表 + 标记已读 + WS 增量提示。
+ * 告警列表页：状态筛选 Tabs + 分页列表 + 标记已读 + WS 推送横幅 + 规则入口。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlertListScreen(
+    onViewRules: () -> Unit = {},
     viewModel: AlertListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("告警记录") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("告警记录") },
+                actions = {
+                    androidx.compose.material3.TextButton(onClick = onViewRules) { Text("规则") }
+                },
+            )
+        },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            // WS 推送横幅
+            if (uiState.pendingPushCount > 0) {
+                androidx.compose.material3.Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "有 ${uiState.pendingPushCount} 条新告警到达，点此刷新",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.markPendingPushSeen() }
+                            .padding(12.dp),
+                    )
+                }
+            }
             TabRow(selectedTabIndex = selectedTab) {
                 AlertFilter.entries.forEachIndexed { index, filter ->
                     Tab(
@@ -142,6 +168,13 @@ private fun AlertRecordCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                record.notifyChannels?.takeIf { it.isNotBlank() }?.let { channels ->
+                    Text(
+                        text = "通知送达：${channels.split(",").joinToString("/") { channelLabel(it) }}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -150,6 +183,13 @@ private fun AlertRecordCard(
 private fun levelLabel(level: String): String = when (level) {
     "critical" -> "严重"
     else -> "警告"
+}
+
+private fun channelLabel(channel: String): String = when (channel.trim()) {
+    "email" -> "邮件"
+    "dingtalk" -> "钉钉"
+    "webhook" -> "Webhook"
+    else -> channel.trim()
 }
 
 private fun serverLabel(record: AlertRecord): String = "服务器 #${record.serverId}"
