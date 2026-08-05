@@ -25,6 +25,10 @@ public interface AlertRecordMapper {
     /** 更新记录状态为已恢复。 */
     int updateStatusToResolved(@Param("id") Long id, @Param("resolvedAt") LocalDateTime resolvedAt);
 
+    /** 记录外部通知发送完成时间与已发送渠道；未发送过通知时首次写入。 */
+    int updateNotifiedInfo(@Param("id") Long id, @Param("notifiedAt") LocalDateTime notifiedAt,
+            @Param("notifyChannels") String notifyChannels);
+
     /** 分页查询告警记录，支持按服务器和状态筛选。 */
     List<AlertRecordEntity> selectRecords(@Param("serverId") Long serverId,
             @Param("status") String status, @Param("offset") long offset, @Param("pageSize") int pageSize);

@@ -49,6 +49,8 @@ class AlertRecordStateMapperMybatisTests {
                         read_by BIGINT,
                         read_at TIMESTAMP,
                         triggered_at TIMESTAMP NOT NULL,
+                        notified_at TIMESTAMP,
+                        notify_channels VARCHAR(100),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )

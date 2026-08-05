@@ -28,6 +28,12 @@ public class AlertRuleVo {
     private String level;
     @JsonProperty("confirm_count")
     private Integer confirmCount;
+    @JsonProperty("notify_email")
+    private String notifyEmail;
+    @JsonProperty("notify_dingtalk")
+    private String notifyDingtalk;
+    @JsonProperty("notify_webhook")
+    private String notifyWebhook;
     private Boolean enabled;
     @JsonProperty("created_by")
     private Long createdBy;

@@ -15,6 +15,14 @@ spring:
       pool-name: SuSuMonitorHikariPool
       maximum-pool-size: 10
       minimum-idle: 2
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -44,6 +52,9 @@ susumonitor:
   jwt:
     secret: ${JWT_SECRET:}
     expire-hours: ${JWT_EXPIRE_HOURS:72}
+  alert:
+    notification-enabled: ${ALERT_NOTIFICATION_ENABLED:false}
+    mail-from: ${ALERT_MAIL_FROM:noreply@susumonitor.local}
   security:
     aes-gcm-key: ${AES_GCM_KEY:}
   agent:

@@ -26,10 +26,13 @@ public interface AlertRuleMapper {
     /** 查询指定服务器匹配的已启用规则，含通用规则（server_id IS NULL）。 */
     List<AlertRuleEntity> selectEnabledRulesForServer(@Param("serverId") Long serverId);
 
-    /** 更新规则阈值、等级、启用状态和确认次数（confirmCount 为 null 时保持原值）。 */
+    /** 更新规则阈值、等级、启用状态和确认次数（可空参数保持原值），并覆盖通知配置。 */
     int updateRule(@Param("id") Long id, @Param("thresholdValue") java.math.BigDecimal thresholdValue,
             @Param("level") String level, @Param("enabled") Boolean enabled,
-            @Param("confirmCount") Integer confirmCount);
+            @Param("confirmCount") Integer confirmCount,
+            @Param("notifyEmail") String notifyEmail,
+            @Param("notifyDingtalk") String notifyDingtalk,
+            @Param("notifyWebhook") String notifyWebhook);
 
     /** 软删除规则，标记 deleted=1 并记录删除时间。 */
     int softDeleteRule(@Param("id") Long id, @Param("deletedAt") LocalDateTime deletedAt);

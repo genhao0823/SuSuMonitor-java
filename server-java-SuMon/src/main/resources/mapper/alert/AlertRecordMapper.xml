@@ -38,6 +38,12 @@
         SET status = 'resolved'
         WHERE id = #{id} AND status != 'resolved'
     </update>
+    <update id="updateNotifiedInfo">
+        UPDATE alert_records
+        SET notified_at = #{notifiedAt},
+            notify_channels = #{notifyChannels}
+        WHERE id = #{id}
+    </update>
     <select id="selectRecords" resultMap="AlertRecordResultMap">
         SELECT <include refid="RecordColumns"/> FROM alert_records
         <where>

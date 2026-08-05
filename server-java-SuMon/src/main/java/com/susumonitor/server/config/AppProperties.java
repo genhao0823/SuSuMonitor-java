@@ -51,6 +51,10 @@ public class AppProperties {
     @Valid
     private final Cors cors = new Cors();
 
+    /** 告警外部通知（邮件/钉钉/Webhook）开关与发件人配置。 */
+    @Valid
+    private final Alert alert = new Alert();
+
     public Jwt getJwt() {
         return jwt;
     }
@@ -81,6 +85,10 @@ public class AppProperties {
 
     public Cors getCors() {
         return cors;
+    }
+
+    public Alert getAlert() {
+        return alert;
     }
 
     public static class Jwt {
@@ -724,6 +732,31 @@ public class AppProperties {
 
         public void setMaxAgeSeconds(long maxAgeSeconds) {
             this.maxAgeSeconds = maxAgeSeconds;
+        }
+    }
+
+    public static class Alert {
+
+        /** 外部通知总开关；关闭时不发送任何渠道（默认关闭，兼容旧部署）。 */
+        private boolean notificationEnabled = false;
+
+        /** 邮件发件人地址，仅在启用邮件通知时使用。 */
+        private String mailFrom = "noreply@susumonitor.local";
+
+        public boolean isNotificationEnabled() {
+            return notificationEnabled;
+        }
+
+        public void setNotificationEnabled(boolean notificationEnabled) {
+            this.notificationEnabled = notificationEnabled;
+        }
+
+        public String getMailFrom() {
+            return mailFrom;
+        }
+
+        public void setMailFrom(String mailFrom) {
+            this.mailFrom = mailFrom;
         }
     }
 }

@@ -36,6 +36,15 @@ public class AlertRuleEntity {
     // 连续越界确认次数: 1=首次越界即触发（默认/向后兼容）, >1=连续越界 N 次触发（逃逸窗口）。
     @TableField("confirm_count")
     private Integer confirmCount;
+    // 通知邮件地址，多个用英文逗号分隔；为空则不发送邮件。
+    @TableField("notify_email")
+    private String notifyEmail;
+    // 钉钉机器人 Webhook URL；为空则不发送钉钉。
+    @TableField("notify_dingtalk")
+    private String notifyDingtalk;
+    // 自定义 Webhook URL（POST JSON，body 为告警记录对象）；为空则不发送。
+    @TableField("notify_webhook")
+    private String notifyWebhook;
     // 是否启用: 0 否, 1 是。
     private Boolean enabled;
     // 软删除标记: 0 未删除, 1 已删除。

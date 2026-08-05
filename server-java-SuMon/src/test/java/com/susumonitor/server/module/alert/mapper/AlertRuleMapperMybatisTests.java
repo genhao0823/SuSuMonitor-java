@@ -44,6 +44,9 @@ class AlertRuleMapperMybatisTests {
                         threshold_value DECIMAL(12, 2) NOT NULL,
                         level VARCHAR(20) NOT NULL,
                         confirm_count INT NOT NULL DEFAULT 1,
+                        notify_email VARCHAR(500),
+                        notify_dingtalk VARCHAR(500),
+                        notify_webhook VARCHAR(500),
                         enabled BOOLEAN NOT NULL,
                         deleted BOOLEAN NOT NULL DEFAULT FALSE,
                         deleted_at TIMESTAMP NULL,
@@ -84,7 +87,7 @@ class AlertRuleMapperMybatisTests {
 
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             AlertRuleMapper mapper = session.getMapper(AlertRuleMapper.class);
-            assertEquals(1, mapper.updateRule(rule.getId(), new BigDecimal("90"), "critical", false, null));
+            assertEquals(1, mapper.updateRule(rule.getId(), new BigDecimal("90"), "critical", false, null, null, null, null));
             AlertRuleEntity updatedRule = mapper.selectActiveRuleById(rule.getId());
             assertEquals(new BigDecimal("90.00"), updatedRule.getThresholdValue());
             assertEquals("critical", updatedRule.getLevel());
