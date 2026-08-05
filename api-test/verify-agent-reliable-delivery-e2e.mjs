@@ -103,6 +103,30 @@ class AckFixture {
     this.acknowledge(latest.message.message_id)
   }
 
+  nack(messageId, reason) {
+    const report = this.reports.findLast((item) => item.message.message_id === messageId)
+    assert(report, `No report is available to reject for ${messageId}.`)
+    for (const socket of this.sockets) {
+      if (socket.readyState === socket.OPEN) {
+        socket.send(JSON.stringify({ type: 'metrics.nack', message_id: messageId, timestamp: new Date().toISOString(),
+          payload: { server_id: report.message.payload.server_id, code: 40002, reason, message: `rejected: ${reason}` } }))
+      }
+    }
+  }
+
+  sendError(messageId, code, message) {
+    for (const socket of this.sockets) {
+      if (socket.readyState === socket.OPEN) {
+        socket.send(JSON.stringify({ type: 'error', message_id: messageId, timestamp: new Date().toISOString(),
+          payload: { code, message } }))
+      }
+    }
+  }
+
+  latestReportFor(serverId) {
+    return this.reports.findLast((item) => item.message.payload.server_id === serverId)?.message ?? null
+  }
+
   async close() {
     for (const socket of this.sockets) socket.close()
     await new Promise((resolve) => this.server.close(resolve))
@@ -140,6 +164,15 @@ function startAgent({ url, serverId, token, spool, capacity = 10, replayInterval
 async function spoolEntries(spool) {
   try {
     return JSON.parse(await readFile(spool, 'utf8')).entries ?? []
+  } catch (error) {
+    if (error.code === 'ENOENT') return []
+    throw error
+  }
+}
+
+async function spoolDeadLetter(spool) {
+  try {
+    return JSON.parse(await readFile(spool, 'utf8')).dead_letter ?? []
   } catch (error) {
     if (error.code === 'ENOENT') return []
     throw error
@@ -194,7 +227,15 @@ async function runJavaIngressScenario() {
     assert(ascending.every((item, index) => index === 0 || item.collected_at > ascending[index - 1].collected_at), 'Real Java metrics history is not strictly increasing.')
     await waitUntil(async () => (await spoolEntries(spool)).length === 0, 'Real Java ACK did not clear Agent spool.')
     assert(!agent.events.some((event) => event.code === 42902 || event.msg === 'metrics acknowledgement timed out; retaining and retrying queued frame'), 'Real Java ingress emitted unexpected rate limit or ACK timeout.')
-    return 6
+    // 软删除服务器:Agent 后续上报必须收到 correlated server_not_found NACK 并进入本地死信。
+    const deleted = await api(`/api/servers/${serverId}`, { method: 'DELETE', token })
+    assert(deleted.status === 200, `Isolated server deletion failed with ${deleted.status}.`)
+    await waitUntil(async () => {
+      const deadLetter = await spoolDeadLetter(spool)
+      return deadLetter.some((entry) => entry.reason === 'server_not_found')
+          && (await spoolEntries(spool)).length === 0
+    }, 'Server deletion did not NACK the Agent head into the dead-letter.', 20_000)
+    return 7
   } finally {
     await stopAgent(agent?.agent)
     await rm(javaWorkspace, { recursive: true, force: true })
@@ -207,6 +248,9 @@ const fixtureUrl = await fixture.start()
 let firstAgent
 let restartAgent
 let capacityAgent
+let nackAgent
+let nackRestartAgent
+let errorAgent
 try {
   const firstSpool = path.join(workspace, 'first.json')
   firstAgent = startAgent({ url: fixtureUrl, serverId: 9001, token: 'fixture-token', spool: firstSpool })
@@ -253,8 +297,44 @@ try {
   for (const id of delivered) if (id === expected[cursor]) cursor++
   assert(cursor === expected.length, 'Retained capacity FIFO prefix was not delivered in order.')
 
+  // metrics.nack 死信场景:被永久拒绝的队首必须移入本地死信并跨重启持久化。
+  fixture.dropAck = true
+  const nackSpool = path.join(workspace, 'nack.json')
+  nackAgent = startAgent({ url: fixtureUrl, serverId: 9003, token: 'fixture-token-3', spool: nackSpool, capacity: 1, replayInterval: 1000 })
+  await waitUntil(() => fixture.latestReportFor(9003) !== null, 'Agent did not send a report for the NACK scenario.')
+  const nackTarget = fixture.latestReportFor(9003)
+  fixture.nack(nackTarget.message_id, 'stale_collected_at')
+  await waitUntil(async () => {
+    const deadLetter = await spoolDeadLetter(nackSpool)
+    return deadLetter.some((entry) => entry.frame.message_id === nackTarget.message_id)
+  }, 'Rejected head was not recorded in the local dead-letter.', 10_000)
+  const nackDeadLetter = await spoolDeadLetter(nackSpool)
+  assert(nackDeadLetter.some((entry) => entry.frame.message_id === nackTarget.message_id
+    && entry.reason === 'stale_collected_at' && entry.code === 40002), 'Dead-letter entry lacks the correlated rejection evidence.')
+  assert(nackAgent.events.some((event) => event.msg === 'metrics permanently rejected; moved to local dead-letter'), 'Agent did not log the dead-letter disposition.')
+  await stopAgent(nackAgent.agent)
+  nackAgent = null
+  nackRestartAgent = startAgent({ url: fixtureUrl, serverId: 9003, token: 'fixture-token-3', spool: nackSpool, capacity: 1, replayInterval: 1000 })
+  const persistedDeadLetter = await spoolDeadLetter(nackSpool)
+  assert(persistedDeadLetter.some((entry) => entry.frame.message_id === nackTarget.message_id), 'Dead-letter was lost after Agent restart.')
+
+  // 泛化 error 帧场景:不得移除队首;随后真实 ACK 正常投递该帧。
+  fixture.dropAck = true
+  const errorSpool = path.join(workspace, 'error.json')
+  errorAgent = startAgent({ url: fixtureUrl, serverId: 9004, token: 'fixture-token-4', spool: errorSpool, capacity: 1, replayInterval: 1000 })
+  await waitUntil(() => fixture.latestReportFor(9004) !== null, 'Agent did not send a report for the error scenario.')
+  const errorTarget = fixture.latestReportFor(9004)
+  fixture.sendError(errorTarget.message_id, 50000, 'server internal failure')
+  await sleep(300)
+  const retainedAfterError = await spoolEntries(errorSpool)
+  assert(retainedAfterError.some((entry) => entry.message_id === errorTarget.message_id), 'Generic error frame removed the queue head.')
+  assert(errorAgent.events.some((event) => event.msg === 'server error'), 'Agent did not log the generic server error.')
+  fixture.dropAck = false
+  fixture.acknowledge(errorTarget.message_id)
+  await waitUntil(async () => !(await spoolEntries(errorSpool)).some((entry) => entry.message_id === errorTarget.message_id), 'Acknowledged head was not removed from the spool after the error frame.')
+
   const javaServerChecks = await runJavaIngressScenario()
-  console.log(JSON.stringify({ status: 'PASS', checks: 13 + javaServerChecks, fixture_checks: 13,
+  console.log(JSON.stringify({ status: 'PASS', checks: 15 + javaServerChecks, fixture_checks: 15,
     java_server_checks: javaServerChecks, artifacts_cleaned: true }))
 } catch (error) {
   console.error(JSON.stringify({ status: 'FAIL', error: error.message, workspace }))
@@ -263,6 +343,9 @@ try {
   await stopAgent(firstAgent?.agent)
   await stopAgent(restartAgent?.agent)
   await stopAgent(capacityAgent?.agent)
+  await stopAgent(nackAgent?.agent)
+  await stopAgent(nackRestartAgent?.agent)
+  await stopAgent(errorAgent?.agent)
   await fixture.close()
   if (process.exitCode !== 1) await rm(workspace, { recursive: true, force: true })
 }
