@@ -20,7 +20,9 @@
   "paths": {
     "/api/health": {
       "get": {
-        "tags": ["system"],
+        "tags": [
+          "system"
+        ],
         "summary": "Health check",
         "description": "Checks whether the backend application is alive. This endpoint does not depend on the database.",
         "operationId": "getHealth",
@@ -65,9 +67,11 @@
     },
     "/api/ready": {
       "get": {
-        "tags": ["system"],
+        "tags": [
+          "system"
+        ],
         "summary": "Readiness check",
-        "description": "Checks whether the backend application and database connection are ready.",
+        "description": "Checks whether the backend application and database connection are ready. When the Outbox/RabbitMQ integration is enabled, it also requires the Broker health check to pass. A Broker failure leaves the process alive but returns readiness code 50301 and HTTP 503.",
         "operationId": "getReady",
         "parameters": [
           {
@@ -76,7 +80,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Application and database are ready",
+            "description": "Application, database, and enabled RabbitMQ integration are ready",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
@@ -137,6 +141,29 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "RabbitMQ is enabled but unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": 50301,
+                  "message": "rabbitmq unavailable",
+                  "data": null
+                }
+              }
+            }
           }
         }
       }
@@ -180,7 +207,11 @@
     "schemas": {
       "HealthResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
           "code": {
             "type": "integer",
@@ -198,7 +229,11 @@
       },
       "ReadyResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
           "code": {
             "type": "integer",
@@ -216,7 +251,11 @@
       },
       "ErrorResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
           "code": {
             "type": "integer",
@@ -235,7 +274,11 @@
       },
       "HealthStatus": {
         "type": "object",
-        "required": ["status", "application", "timestamp"],
+        "required": [
+          "status",
+          "application",
+          "timestamp"
+        ],
         "properties": {
           "status": {
             "type": "string",
@@ -254,7 +297,11 @@
       },
       "ReadyStatus": {
         "type": "object",
-        "required": ["status", "database", "timestamp"],
+        "required": [
+          "status",
+          "database",
+          "timestamp"
+        ],
         "properties": {
           "status": {
             "type": "string",

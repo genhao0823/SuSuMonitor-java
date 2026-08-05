@@ -1,14 +1,12 @@
 # Message Contracts v1
 
-**版本**：v1  
-**状态**：MVP-9 设计冻结草案，尚未接入 RabbitMQ 运行时  
+**版本**：v1
+**状态**：已实施；`metrics.reported.v1` 已由 MVP-10/MVP-11 的 Outbox 与 Alert 消费侧使用
 **时间标准**：UTC ISO-8601，例如 `2026-07-28T12:00:00Z`
 
 ## 一、适用范围
 
-本文定义 Metrics 与 Alert 后续异步边界使用的版本化事件契约。它不修改现有 REST、Agent WebSocket、Monitor WebSocket 契约，也不代表当前 Java 单体已经具备可靠消息发布能力。
-
-当前 MVP-6 仍使用本地 Spring 事务事件；MVP-10 才实现 Metrics Transactional Outbox，MVP-11 才实现 Alert 消费和幂等记录。
+本文定义 Metrics 与 Alert 异步边界使用的版本化事件契约。它不修改现有 REST、Agent WebSocket、Monitor WebSocket 契约。当前 Java 单体已通过 Metrics Transactional Outbox 可靠发布 `metrics.reported.v1`，并由 Alert 消费者执行幂等消费、有限重试与 DLQ 分类。
 
 ## 二、统一事件信封
 
@@ -28,10 +26,10 @@
 | 字段 | 必填 | 规则 |
 |---|---:|---|
 | `event_id` | 是 | UUID；同一事件重试、补发必须保持不变；消费幂等主键。 |
-| `event_type` | 是 | 逻辑事件名，不因路由实现变化；当前为 `metrics.reported` 或 `alert.triggered`。 |
+| `event_type` | 是 | 逻辑事件名，不因路由实现变化；当前已实现 `metrics.reported`；`alert.triggered` 仅为预留契约。 |
 | `schema_version` | 是 | 当前为整数 `1`；不支持的版本不可按旧版本猜测解析。 |
 | `occurred_at` | 是 | UTC ISO-8601；表示事件产生时间，不使用本地时区。 |
-| `producer` | 是 | 生产模块标识；当前为 `metrics-service` 或 `alert-service`。 |
+| `producer` | 是 | 生产模块标识；当前已实现 `metrics-service`；`alert-service` 仅对应预留事件。 |
 | `trace_id` | 否 | 链路关联标识，不得携带凭据。 |
 | `correlation_id` | 否 | 业务关联标识，不得携带凭据。 |
 | `payload` | 是 | 独立消息对象；不直接复用 HTTP VO、Entity 或数据库行。 |
@@ -77,9 +75,9 @@
 - `temperature` 和 `load_avg` 允许 `null`，表示采集平台不提供该值。
 - 指标字段应保持与已冻结的 `metrics.report` 数据语义一致。
 
-## 四、`alert.triggered.v1`
+## 四、`alert.triggered.v1`（预留，尚未实现 Broker 发布）
 
-该事件表示 Alert 已生成一条新的告警记录。持续越界不重复生成该事件；恢复语义需由后续明确的事件类型或查询状态表达，不能复用本事件伪装成恢复事件。
+该事件预留给未来 Alert 生成新告警记录后的 Broker 出站通知。当前告警通知通过 `alert.push` Monitor WebSocket 帧发送，不会发布本节事件。持续越界不重复生成该事件；恢复语义需由后续明确的事件类型或查询状态表达，不能复用本事件伪装成恢复事件。
 
 ```json
 {
@@ -119,9 +117,9 @@
 - JSON 无法解析时不得用默认值猜测业务含义。
 - 同一 `event_id` 的重试和补发必须保持 payload 语义不变。
 
-## 六、未实现边界
+## 六、当前实现边界
 
-本文是契约冻结文档。当前代码尚未提供 RabbitMQ 发布、消费、JSON Schema 运行校验、Outbox 或 `message_consume_records`。这些能力分别属于 MVP-10/MVP-11，不能以本文档替代运行时验证。
+已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布及其消费者仍未实现，不能把本节示例作为当前可订阅的运行时事件。
 
 ---
 

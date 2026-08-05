@@ -1,23 +1,23 @@
 # RabbitMQ Topology v1
 
-**版本**：v1  
-**状态**：MVP-9 设计冻结草案，尚未声明或运行真实 RabbitMQ 拓扑  
-**适用范围**：后续 MVP-10/MVP-11 的 Metrics → Alert 异步边界
+**版本**：v1
+**状态**：已实施并完成真实验收；MVP-9 的命名冻结由 MVP-10/MVP-11 落地
+**适用范围**：当前 Metrics → Alert 异步边界
 
 ## 一、拓扑目标
 
-RabbitMQ 用于解耦 Metrics 与 Alert，不替代 Agent/Monitor WebSocket、MySQL 查询、心跳或 SSH 交互。当前 MVP-6 仍为单 JVM 本地事务事件链路；本文冻结命名和故障语义，不代表 RabbitMQ 已接入。
+RabbitMQ 用于解耦 Metrics 与 Alert，不替代 Agent/Monitor WebSocket、MySQL 查询、心跳或 SSH 交互。Metrics 通过 Transactional Outbox 发布 `metrics.reported.v1`，Alert 消费者以幂等记录、有限重试和 DLQ 处理该事件；Monitor 广播仍使用本地事务后事件。
 
 ## 二、命名冻结
 
 | 类型 | 名称 | 说明 |
 |---|---|---|
-| Topic Exchange | `susumonitor.events` | 业务事件交换器；后续由 Metrics/Alert 发布。 |
+| Topic Exchange | `susumonitor.events` | 业务事件交换器；当前由 Metrics Outbox 发布。 |
 | Dead-letter Exchange | `susumonitor.dlx` | 重试耗尽或不可重试消息的死信交换器。 |
 | Queue | `susumonitor.alert.metrics` | Alert 消费 `metrics.reported.v1` 的业务队列。 |
 | Dead-letter Queue | `susumonitor.alert.metrics.dlq` | Alert 指标事件死信队列，不自动回投业务队列。 |
 | Routing Key | `metrics.reported.v1` | Metrics 已落库指标事件。 |
-| Routing Key | `alert.triggered.v1` | Alert 新告警事件，后续消费者可按需绑定。 |
+| Routing Key | `alert.triggered.v1` | **预留，尚未实现 Broker 发布**；当前告警通知使用 `alert.push` Monitor WebSocket 帧。 |
 
 Exchange、业务队列和 DLQ 均要求 durable、non-auto-delete；队列名称不包含实例 ID，不创建临时消费者队列。
 
@@ -34,11 +34,6 @@ susumonitor.events
        binding key: metrics.reported.v1
        consumer: alert-service
 
-alert-service
-    -> susumonitor.events
-       routing key: alert.triggered.v1
-       message: alert.triggered.v1
-
 susumonitor.alert.metrics
     -> retry exhausted / non-retryable error
        dead-letter-exchange: susumonitor.dlx
@@ -48,7 +43,7 @@ susumonitor.dlx
        dead-letter routing key: metrics.reported.v1
 ```
 
-`alert.triggered.v1` 的发布方向在 MVP-11 冻结实现细节；MVP-9 只保留版本化事件和交换器命名，不能把现有 `AlertPushPublisher` 误称为该消息发布器。
+`alert.triggered.v1` 只保留为未来版本化事件命名，当前没有 Alert Broker 发布器；不能把现有 `AlertPushPublisher`（Monitor WebSocket 推送）误称为该消息发布器。
 
 ## 四、至少一次投递
 
@@ -56,7 +51,7 @@ susumonitor.dlx
 - 同一事件的重试必须保持 `event_id` 不变和 payload 语义不变。
 - 消费者仅在业务事务成功，或已确认该 `event_id` 已幂等完成后 ACK。
 - 业务成功但 ACK 丢失时允许重新投递；重复投递不得产生第二次业务效果。
-- Alert 消费幂等记录未来由 Alert 自有的 `message_consume_records` 管理，不依赖内存 Set、delivery tag 或共享 Metrics 表。
+- Alert 消费幂等记录由 Alert 自有的 `message_consume_records` 管理，不依赖内存 Set、delivery tag 或共享 Metrics 表。
 - 业务处理和消费记录必须在同一数据库事务内完成，或具备等价的原子语义。
 
 ## 五、错误分类与重试
@@ -82,17 +77,17 @@ susumonitor.dlx
 
 不可重试错误直接进入死信流程；可重试错误达到冻结的最大次数后进入 `susumonitor.dlx`。DLQ 消息应保留原始事件标识并附带受控的失败分类/摘要，不写入密码、Token 或密钥。
 
-最大重试次数、退避间隔、retry queue 具体实现和失败头字段在 MVP-10/MVP-11 落地时按本文语义实现并补充真实验证；MVP-9 不提前选择基础设施代码方案。
+消费侧采用容器级有限重试：默认最多 3 次、初始 1 秒、倍数 2、上限 10 秒；不可重试数据立即 reject，重试耗尽后路由到 DLQ。未引入独立 retry queue。
 
 ## 六、故障和就绪语义
 
-后续引入 RabbitMQ 后采用“存活但未就绪”：`/api/health` 只表示 Java 进程存活；`/api/ready` 同时检查 MySQL 和 RabbitMQ。Broker 不可用时应用不退出，Metrics 仍应通过同事务 Outbox 保留待发事件；Broker 恢复后由发布器补发。
+当前已采用“存活但未就绪”：`/api/health` 只表示 Java 进程存活；`/api/ready` 同时检查 MySQL 和 RabbitMQ。Broker 不可用时应用不退出，Metrics 仍应通过同事务 Outbox 保留待发事件；Broker 恢复后由发布器补发。
 
-这段行为属于 MVP-10 实现和运行时测试范围。当前 `/api/ready` 仅检查现有依赖，MVP-9 不修改它，也不宣称 RabbitMQ 就绪检查已完成。
+该行为已在 MVP-10 实现并完成运行时测试：`/api/health` 仍仅表示进程存活；RabbitMQ 启用且不可达时 `/api/ready` 返回 `50301` / HTTP 503。
 
 ## 七、验证边界
 
-MVP-9 只完成文档评审、命名冻结和未来测试设计，不执行真实 Broker 连接。以下属于 MVP-10/MVP-11：
+以下能力已由 MVP-10/MVP-11 实现并完成对应真实 Broker 验收：
 
 - Exchange/Queue/DLX/DLQ 自动声明。
 - Publisher Confirm/Return。
@@ -114,7 +109,7 @@ MVP-9 只完成文档评审、命名冻结和未来测试设计，不执行真�
 | Broker 中断、恢复和 Outbox 补发 | 真实验收 PASS：停机期间指标照常落库 + outbox 保留 pending；恢复后自动补发，队列消息数与停机前上报数一致 |
 | 时间口径 | 写入 UTC（应用时钟），轮询比较 `UTC_TIMESTAMP()`（修复会话时区偏差，见 Develop-log §三） |
 
-仍属 MVP-11：`susumonitor.alert.metrics` 消费者、ACK/重复消费、重试耗尽进 DLQ、DLQ 查询与受控重放。MVP-10 期间队列消息堆积为预期行为，不视为丢失。
+MVP-11 已完成 `susumonitor.alert.metrics` 消费者、幂等消费、重试耗尽进 DLQ 与受控重放；当前仍属后续边界的是多消费者并发消费。
 
 ## 九、实现确认（2026-07-31，MVP-11 消费侧落地）
 
