@@ -18,8 +18,9 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 | 用户审核 | admin 列表/搜索/单条/批量通过拒绝 |
 | 实时推送 | 前台 Service 常驻 + WS 订阅 + 告警系统通知（Android 13+ 权限请求） |
 | 设置 | 用户信息、通知开关、后端地址、关于 |
+| SSH 终端 | Termux terminal-view 渲染 PTY（approved 用户，仅入口在服务器详情） |
 
-**阶段二（待做）**：SSH 终端（Termux terminal-view 库，已确认方案）。
+**阶段二已含**：SSH 终端（Termux terminal-view 库，经 JitPack）。
 
 ## 技术栈
 
@@ -35,7 +36,7 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 ```bash
 # 前置：JDK 17+、Android SDK（local.properties 指向 sdk.dir）
 ./gradlew :app:assembleDebug
-./gradlew :app:testDebugUnitTest   # 33 个单元测试
+./gradlew :app:testDebugUnitTest   # 38 个单元测试
 ```
 
 Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
