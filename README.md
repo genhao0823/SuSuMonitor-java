@@ -13,11 +13,11 @@
 |---|---|
 | GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-jvav-> |
 | 本次 tag | [`v0.5.0-cloud`](https://github.com/genhao0823/SuSuMonitor-jvav-/releases/tag/v0.5.0-cloud) |
-| 当前基线 | `main` HEAD(`21a2061`，M4 文档收口) |
+| 当前基线 | `main` HEAD(`51c0ed3`，ECharts 监控页图表收口) |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
-| 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）已实现；既有本机与真实 Broker 验收通过 |
+| 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook）/监控页 ECharts 图表+时间选择器/Agent 队列字节上限 已实现；既有本机与真实 Broker 验收通过 |
 | 首次上云端部署 | 腾讯云 OpenCloudOS 公网明文 HTTP 已跑通(2026-07-31,前端 5173 + 后端 18080 + Agent 8089 + RabbitMQ 5672,端到端联调 PASS),详见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md` |
-| 已知遗留 | HTTPS/WSS 待域名与证书就绪后切 TLS；真实 Agent+Server 断网/重启/ACK 联合 E2E 的 Java 侧场景待 DB 管理员凭据运行（fixture 15 项已 PASS）；队列字节上限、多实例并发验证、`Dockerfile/docker-compose` 仍属后续阶段 |
+| 已知遗留 | HTTPS/WSS 待域名与证书就绪后切 TLS；真实 Agent+Server 断网/重启/ACK 联合 E2E 的 Java 侧场景待 DB 管理员凭据运行（fixture 15 项已 PASS）；多实例并发验证、`Dockerfile/docker-compose` 仍属后续阶段 |
 
 > 本节反映 2026-08-05 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录。
 
