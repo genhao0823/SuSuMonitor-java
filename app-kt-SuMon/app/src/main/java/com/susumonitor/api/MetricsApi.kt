@@ -16,13 +16,13 @@ interface MetricsApi {
     @GET("servers/{id}/metrics/latest")
     suspend fun getLatest(@Path("id") serverId: Long): ApiResponse<Metrics>
 
-    /** 历史指标分页查询（时间范围 UTC ISO-8601）。 */
+    /** 历史指标分页查询（时间范围 UTC ISO-8601；page_size 上限 100 对齐后端）。 */
     @GET("servers/{id}/metrics")
     suspend fun getHistory(
         @Path("id") serverId: Long,
         @Query("start_time") startTime: String,
         @Query("end_time") endTime: String,
         @Query("page") page: Int = 1,
-        @Query("page_size") pageSize: Int = 500,
+        @Query("page_size") pageSize: Int = 100,
     ): ApiResponse<PageResult<Metrics>>
 }

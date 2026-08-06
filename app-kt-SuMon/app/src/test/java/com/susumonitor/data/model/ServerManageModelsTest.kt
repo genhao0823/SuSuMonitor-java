@@ -81,8 +81,8 @@ class ServerManageModelsTest {
               "id": 2,
               "username": "bob",
               "role": "user",
-              "review_status": "pending",
-              "created_at": "2026-08-05T10:00:00Z"
+              "reviewStatus": "pending",
+              "createdAt": "2026-08-05T10:00:00Z"
             }
         """.trimIndent()
 

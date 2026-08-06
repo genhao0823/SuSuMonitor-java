@@ -10,14 +10,14 @@ object ReviewStatusValues {
     const val REJECTED = "rejected"
 }
 
-/** 管理员视角的用户条目，与 OpenAPI `AdminUserVo` 对齐。 */
+/** 管理员视角的用户条目，与 OpenAPI `AdminUserVo` 对齐（admin 模块为 camelCase，云端实测）。 */
 @Serializable
 data class AdminUserVo(
     val id: Long,
     val username: String,
     val role: String,
-    @SerialName("review_status") val reviewStatus: String,
-    @SerialName("created_at") val createdAt: String,
+    @SerialName("reviewStatus") val reviewStatus: String,
+    @SerialName("createdAt") val createdAt: String,
 )
 
 /** 批量审核请求体，与 OpenAPI `BatchReviewRequest` 对齐。 */
