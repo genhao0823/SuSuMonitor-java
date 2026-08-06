@@ -53,8 +53,10 @@ Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 ## 云端联调状态（2026-08-06）
 
 - ✅ 注册 / pending 登录 403 / 用户名冲突 409 / 错误友好提示（模拟器 + 云端）
-- ✅ 登录（smoke 账号）→ 仪表盘 → 服务器详情 → SSH 终端：`ls` / `whoami` / `hostname` PTY 输出回显正常，退格删除/回车/返回关闭均正确
+- ✅ 阶段一全流程（smoke 管理员账号）：服务器 CRUD、SSH 测试（指纹未确认 40901 业务预期）、主机指纹格式校验、告警规则 CRUD、用户审核（单条/批量通过拒绝）、实时监控历史图表（1h/6h/24h/7d）
+- ✅ 阶段二 SSH 终端：`ls` / `whoami` / `hostname` PTY 输出回显正常，退格/回车/返回关闭正确
 - ✅ 终端复用 /ws/monitor 通道（open→opened→input/output→close→closed），断线不自动重连
+- ✅ 联调修复 3 个契约/容错 bug：AdminUserVo camelCase、metrics page_size 上限 100、详情页 metrics 404 容错
 
 ## 目录结构
 

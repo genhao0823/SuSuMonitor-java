@@ -42,21 +42,31 @@
 ## 五、验证
 
 ```bash
-./gradlew :app:testDebugUnitTest   # 33 tests / 0 failures
-./gradlew :app:assembleDebug       # app-debug.apk ~18.6MB
+./gradlew :app:testDebugUnitTest   # 45 tests / 0 failures
+./gradlew :app:assembleDebug       # app-debug.apk
 ```
 
 新增测试：`ServerManageModelsTest`（7 DTO 序列化）、`AdminRepositoryTest`（3 列表/批量审核）。
+
+## 五·五、云端联调结果（2026-08-06，模拟器 + smoke 管理员账号）
+
+**全流程 PASS**：登录 → 仪表盘探针（后端/就绪）→ 服务器列表搜索过滤 → 服务器新建/编辑/删除（POST/PUT/DELETE 200 + curl 复核）→ SSH 测试（40901 主机指纹未确认，业务预期）→ 主机指纹确认对话框 + `SHA256:` 格式校验 → 告警规则创建/编辑/删除（POST/PUT/DELETE 200）→ 用户审核（待审核/已通过/已拒绝 Tab、搜索、单条通过/拒绝、批量通过）→ 实时监控历史图表（1h/6h/24h/7d 时间范围切换）。
+
+**联调发现并修复 3 个契约/容错 bug**：
+1. `AdminUserVo` 误用 snake_case（`review_status`/`created_at`），后端与 OpenAPI 实为 camelCase（`reviewStatus`/`createdAt`）→ 已通过列表解析失败。修复 `AdminModels.kt` + 测试。
+2. `MetricsApi.getHistory` 默认 `page_size=500`，后端 `@Max(100)` → 历史图表 400。改 100。
+3. 详情页 `metrics/latest` 对无 Agent 数据返回 40400，因裸 `HttpException` 未被 `ApiException` 判断命中而整页失败。修复：`ApiException.from()` 归一化后对 40400 静默，指标区显示"暂无指标数据"。
 
 ## 六、提交
 
 - `feat(android): extend data layer for full web parity`（数据层 + DTO 测试）
 - `feat(android): phase-1 full web parity - management UI and infrastructure`（UI + 基础设施）
+- `fix(android): align admin user VO camelCase and metrics page_size`（云端联调契约修复）
+- `fix(android): tolerate 404 on latest metrics in server detail`（详情页容错）
 
 ## 七、遗留
 
-- **云端联调未执行**：阶段一验收需 admin 权限（建服务器/审核/规则），云端 admin 凭据未留痕；待提供已审核 admin 账号后手测
-- **阶段二（SSH 终端）**未开始：Termux 库坐标已确认（`com.termux:terminal-view:0.118.0`），待阶段一验收后实施
+- **阶段二（SSH 终端）**已完成并云端联调 PASS（见 `20260806-Android-App-阶段二-SSH终端.md`）
 - 服务器列表排序 UI（sortBy/sortOrder 已支持但未加下拉选择器）
 - 通知开关目前仅内存态，未持久化
 - 通知点击深链到告警 Tab 仍为扩展点（MVP 仅唤起 App）
