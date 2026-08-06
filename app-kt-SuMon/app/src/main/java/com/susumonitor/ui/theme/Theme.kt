@@ -27,7 +27,8 @@ private val LightColorScheme = lightColorScheme(
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = SusuPurpleLight,
+    // 暗色下 primary 直接用白色：按钮/链接/图标文字统一为高对比白
+    primary = androidx.compose.ui.graphics.Color.White,
     onPrimary = SusuPurpleDark,
     primaryContainer = SusuPurpleDark,
     onPrimaryContainer = SusuPurpleLight,
@@ -37,9 +38,9 @@ private val DarkColorScheme = darkColorScheme(
     secondaryContainer = SusuPurpleDark,
     onSecondaryContainer = SusuPinkLight,
     background = SusuDarkBg,
-    onBackground = SusuPurpleLight,
+    onBackground = androidx.compose.ui.graphics.Color.White,
     surface = SusuDarkBg,
-    onSurface = SusuPurpleLight,
+    onSurface = androidx.compose.ui.graphics.Color.White,
     surfaceVariant = SusuPurpleDark,
     onSurfaceVariant = SusuPinkLight,
     outline = SusuPurpleLight,
