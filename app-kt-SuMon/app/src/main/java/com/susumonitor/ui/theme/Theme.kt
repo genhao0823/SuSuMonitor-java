@@ -19,6 +19,11 @@ private val LightColorScheme = lightColorScheme(
     onBackground = SusuPurpleDark,
     surface = SusuCream,
     onSurface = SusuPurpleDark,
+    surfaceVariant = SusuPinkLight,
+    onSurfaceVariant = SusuPurpleDark,
+    outline = SusuPurple,
+    error = StatusCritical,
+    onError = androidx.compose.ui.graphics.Color.White,
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -28,8 +33,18 @@ private val DarkColorScheme = darkColorScheme(
     onPrimaryContainer = SusuPurpleLight,
     secondary = SusuPinkLight,
     onSecondary = SusuPurpleDark,
-    secondaryContainer = SusuPink,
-    onSecondaryContainer = SusuPurpleDark,
+    // 暗色语义：容器深色底 + 亮色文字（此前 secondaryContainer 误用亮粉，暗色下反色）
+    secondaryContainer = SusuPurpleDark,
+    onSecondaryContainer = SusuPinkLight,
+    background = SusuDarkBg,
+    onBackground = SusuPurpleLight,
+    surface = SusuDarkBg,
+    onSurface = SusuPurpleLight,
+    surfaceVariant = SusuPurpleDark,
+    onSurfaceVariant = SusuPinkLight,
+    outline = SusuPurpleLight,
+    error = SusuCriticalLight,
+    onError = SusuPurpleDark,
 )
 
 /**

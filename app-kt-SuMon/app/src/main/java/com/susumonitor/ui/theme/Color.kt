@@ -10,6 +10,10 @@ val SusuPink = Color(0xFFF4B8C8)
 val SusuPinkLight = Color(0xFFFBE3EB)
 val SusuCream = Color(0xFFFFF8F0)
 
+// 暗色模式专用
+val SusuDarkBg = Color(0xFF1A1626)
+val SusuCriticalLight = Color(0xFFFFB4AB)
+
 // 语义色
 val StatusOnline = Color(0xFF4CAF7D)
 val StatusOffline = Color(0xFF9E9E9E)
