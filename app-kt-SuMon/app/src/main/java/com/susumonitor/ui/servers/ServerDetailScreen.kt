@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,31 +90,39 @@ fun ServerDetailScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // 动作栏
+                // 动作栏：暗色模式下显式用白色文字（主题 primary 在部分设备渲染偏暗）
+                val isDark = isSystemInDarkTheme()
+                val btnColors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = if (isDark) androidx.compose.ui.graphics.Color.White
+                                   else MaterialTheme.colorScheme.primary,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onMetrics, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onMetrics, modifier = Modifier.weight(1f), colors = btnColors) {
                         Text("实时监控")
                     }
                     if (isApproved) {
-                        OutlinedButton(onClick = onTerminal, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = onTerminal, modifier = Modifier.weight(1f), colors = btnColors) {
                             Text("终端")
                         }
                     }
                     if (isAdmin) {
-                        OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f), colors = btnColors) {
                             Text("编辑")
                         }
-                        OutlinedButton(onClick = { showHostKeyDialog = true }, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = { showHostKeyDialog = true }, modifier = Modifier.weight(1f), colors = btnColors) {
                             Text("主机指纹")
                         }
-                        OutlinedButton(onClick = { showTokenDialog = true }, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = { showTokenDialog = true }, modifier = Modifier.weight(1f), colors = btnColors) {
                             Text("Agent 令牌")
                         }
                         OutlinedButton(
                             onClick = { showDeleteDialog = true },
                             modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
                         ) {
-                            Text("删除", color = MaterialTheme.colorScheme.error)
+                            Text("删除")
                         }
                     }
                 }
