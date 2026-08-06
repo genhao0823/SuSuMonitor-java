@@ -19,10 +19,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.susumonitor.ui.admin.AdminUsersScreen
 import com.susumonitor.ui.alerts.AlertListScreen
 import com.susumonitor.ui.alerts.AlertRulesScreen
@@ -136,8 +138,11 @@ fun AppNavHost(
             composable(BottomTab.SETTINGS.route) {
                 SettingsScreen(onLogout = onLogout)
             }
-            composable("serverDetail/{serverId}") { backStackEntry ->
-                val serverId = backStackEntry.arguments?.getString("serverId")?.toLongOrNull() ?: 0L
+            composable(
+                route = "serverDetail/{serverId}",
+                arguments = listOf(navArgument("serverId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getLong("serverId") ?: 0L
                 ServerDetailScreen(
                     serverId = serverId,
                     isAdmin = isAdmin,
@@ -154,23 +159,32 @@ fun AppNavHost(
                     },
                 )
             }
-            composable("serverTerminal/{serverId}") { backStackEntry ->
-                val serverId = backStackEntry.arguments?.getString("serverId")?.toLongOrNull() ?: 0L
+            composable(
+                route = "serverTerminal/{serverId}",
+                arguments = listOf(navArgument("serverId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getLong("serverId") ?: 0L
                 TerminalScreen(
                     serverId = serverId,
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable("serverForm/{serverId}") { backStackEntry ->
-                val serverId = backStackEntry.arguments?.getString("serverId")?.toLongOrNull() ?: 0L
+            composable(
+                route = "serverForm/{serverId}",
+                arguments = listOf(navArgument("serverId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getLong("serverId") ?: 0L
                 ServerFormScreen(
                     serverId = serverId,
                     onBack = { navController.popBackStack() },
                     onSaved = { navController.popBackStack() },
                 )
             }
-            composable("serverMetrics/{serverId}") { backStackEntry ->
-                val serverId = backStackEntry.arguments?.getString("serverId")?.toLongOrNull() ?: 0L
+            composable(
+                route = "serverMetrics/{serverId}",
+                arguments = listOf(navArgument("serverId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getLong("serverId") ?: 0L
                 ServerMetricsScreen(
                     serverId = serverId,
                     onBack = { navController.popBackStack() },

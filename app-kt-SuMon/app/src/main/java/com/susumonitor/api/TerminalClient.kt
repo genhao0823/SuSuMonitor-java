@@ -1,6 +1,7 @@
 package com.susumonitor.api
 
 import android.util.Base64
+import android.util.Log
 import com.susumonitor.data.WsMessage
 import com.susumonitor.data.model.TerminalClosedPayload
 import com.susumonitor.data.model.TerminalDataPayload
@@ -47,6 +48,10 @@ class TerminalClient @Inject constructor(
     private val wsClient: WsClient,
 ) {
 
+    private companion object {
+        private const val TAG = "TerminalClient"
+    }
+
     @Volatile
     var state: TerminalSessionState = TerminalSessionState()
         private set
@@ -90,6 +95,7 @@ class TerminalClient @Inject constructor(
             put("rows", rows.coerceIn(1, 100))
         }
         val sent = wsClient.sendTerminalFrame(WsFrameType.TERMINAL_OPEN, payload)
+        Log.d(TAG, "open server=$serverId sent=$sent phase=${state.phase}")
         if (sent) {
             updateState(TerminalSessionState(phase = TerminalPhase.AWAITING_OPEN))
         }

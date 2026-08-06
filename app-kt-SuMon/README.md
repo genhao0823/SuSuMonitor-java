@@ -18,9 +18,9 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 | 用户审核 | admin 列表/搜索/单条/批量通过拒绝 |
 | 实时推送 | 前台 Service 常驻 + WS 订阅 + 告警系统通知（Android 13+ 权限请求） |
 | 设置 | 用户信息、通知开关、后端地址、关于 |
-| SSH 终端 | Termux terminal-view 渲染 PTY（approved 用户，仅入口在服务器详情） |
+| SSH 终端 | 自绘 Canvas 终端（SimpleTerminalView，等宽行缓冲 + ANSI 剥离）复用 /ws/monitor 通道收发 PTY（approved 用户，仅入口在服务器详情） |
 
-**阶段二已含**：SSH 终端（Termux terminal-view 库，经 JitPack）。
+**阶段二已含**：SSH 终端（自绘简化终端，复用 /ws/monitor WebSocket 通道，无需本地 PTY）。
 
 ## 技术栈
 
@@ -36,7 +36,7 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 ```bash
 # 前置：JDK 17+、Android SDK（local.properties 指向 sdk.dir）
 ./gradlew :app:assembleDebug
-./gradlew :app:testDebugUnitTest   # 38 个单元测试
+./gradlew :app:testDebugUnitTest   # 45 个单元测试
 ```
 
 Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
@@ -50,10 +50,11 @@ Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 > 明文 HTTP/WS 仅在演示环境可用（network_security_config 仅放行 `82.156.245.102`）；
 > 生产切 HTTPS 后需同时收紧网络安全配置。
 
-## 云端联调状态（2026-08-05）
+## 云端联调状态（2026-08-06）
 
 - ✅ 注册 / pending 登录 403 / 用户名冲突 409 / 错误友好提示（模拟器 + 云端）
-- ⏳ 仪表盘数据 / WS 实时推送 / 告警通知：需 approved 账号（云端 admin 凭据未在仓库留痕）
+- ✅ 登录（smoke 账号）→ 仪表盘 → 服务器详情 → SSH 终端：`ls` / `whoami` / `hostname` PTY 输出回显正常，退格删除/回车/返回关闭均正确
+- ✅ 终端复用 /ws/monitor 通道（open→opened→input/output→close→closed），断线不自动重连
 
 ## 目录结构
 

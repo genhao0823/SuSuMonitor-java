@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.susumonitor.api.TerminalClient
 import com.susumonitor.api.TerminalPhase
 import com.susumonitor.api.TerminalSessionState
+import com.susumonitor.api.WsClient
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,7 @@ data class TerminalUiState(
 class TerminalViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val terminalClient: TerminalClient,
+    private val wsClient: WsClient,
 ) : ViewModel() {
 
     val serverId: Long = savedStateHandle.get<Long>("serverId") ?: 0L
@@ -48,11 +50,27 @@ class TerminalViewModel @Inject constructor(
     /** 打开终端（首次 cols/rows 由 UI 提供）。 */
     fun open(cols: Int, rows: Int) {
         if (serverId <= 0) return
-        val sent = terminalClient.open(serverId, cols, rows)
-        if (!sent && terminalClient.state.phase != TerminalPhase.AWAITING_OPEN) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "WebSocket 未连接，请先回到仪表盘建立连接",
-            )
+        viewModelScope.launch {
+            // 确保 WS 已连接并订阅（终端依赖 /ws/monitor 通道）
+            wsClient.ensureConnected(serverId)
+            // 等待连接建立（最多 8 秒，每 300ms 重试 open）
+            repeat(27) { attempt ->
+                if (terminalClient.state.phase == TerminalPhase.AWAITING_OPEN ||
+                    terminalClient.state.phase == TerminalPhase.OPEN
+                ) {
+                    return@launch
+                }
+                val sent = terminalClient.open(serverId, cols, rows)
+                if (sent && terminalClient.state.phase == TerminalPhase.AWAITING_OPEN) {
+                    return@launch
+                }
+                kotlinx.coroutines.delay(300)
+                if (attempt == 26) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "无法连接监控通道，请检查网络或稍后重试",
+                    )
+                }
+            }
         }
     }
 

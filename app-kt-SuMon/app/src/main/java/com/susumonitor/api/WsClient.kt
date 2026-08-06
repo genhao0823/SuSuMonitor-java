@@ -97,6 +97,23 @@ class WsClient @Inject constructor(
         serverIds.forEach { subscribe(it) }
     }
 
+    /**
+     * 确保已连接并订阅指定服务器（终端页用）。
+     * 已连接则订阅并返回 true；未连接则启动连接（异步），返回 false 由调用方重试。
+     */
+    fun ensureConnected(serverId: Long): Boolean {
+        if (_connectionState.value == ConnectionState.CONNECTED) {
+            subscribe(serverId)
+            return true
+        }
+        if (!running) {
+            start(listOf(serverId))
+        } else {
+            subscribe(serverId)
+        }
+        return false
+    }
+
     /** 停止连接并释放资源。 */
     fun stop() {
         running = false

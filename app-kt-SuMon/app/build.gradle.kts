@@ -89,9 +89,6 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
-    // SSH 终端渲染（Termux terminal-view，JitPack 发布，POM 声明 group=com.github.termux.termux-app）
-    implementation("com.github.termux.termux-app:terminal-view:v0.118.0")
-
     // 测试
     testImplementation(libs.junit)
     testImplementation(libs.androidx.junit)
