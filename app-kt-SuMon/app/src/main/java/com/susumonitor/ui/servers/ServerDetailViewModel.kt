@@ -71,7 +71,16 @@ class ServerDetailViewModel @Inject constructor(
             try {
                 val server = serverRepository.get(serverId)
                 val status = serverRepository.status(serverId)
-                val latest = metricsRepository.latest(serverId)
+                // 最新指标可选：新服务器无 Agent 数据时后端返回 404，不应拖垮详情页
+                val latest = runCatching { metricsRepository.latest(serverId) }
+                    .onFailure { e ->
+                        val apiEx = ApiException.from(e)
+                        val notFound = apiEx is ApiException.Business && apiEx.code == ErrorCodes.RESOURCE_NOT_FOUND
+                        if (!notFound) {
+                            _uiState.value = _uiState.value.copy(errorMessage = apiEx.message)
+                        }
+                    }
+                    .getOrNull()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     server = server,
