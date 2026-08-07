@@ -1,5 +1,6 @@
 package com.susumonitor.ui.servers
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -90,39 +91,50 @@ fun ServerDetailScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // 动作栏：暗色模式下显式用白色文字（主题 primary 在部分设备渲染偏暗）
+                // 动作栏：显式设深色背景+白色文字+白色边框，完全独立于主题/系统颜色
                 val isDark = isSystemInDarkTheme()
+                val btnBg = if (isDark) androidx.compose.ui.graphics.Color(0xFF2D2540)
+                            else MaterialTheme.colorScheme.primaryContainer
+                val btnFg = if (isDark) androidx.compose.ui.graphics.Color.White
+                            else MaterialTheme.colorScheme.onPrimaryContainer
+                val btnBorder = BorderStroke(
+                    width = 1.dp,
+                    color = if (isDark) androidx.compose.ui.graphics.Color(0xFFD8C7F0)
+                            else MaterialTheme.colorScheme.primary,
+                )
                 val btnColors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = if (isDark) androidx.compose.ui.graphics.Color.White
-                                   else MaterialTheme.colorScheme.primary,
+                    containerColor = btnBg,
+                    contentColor = btnFg,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onMetrics, modifier = Modifier.weight(1f), colors = btnColors) {
-                        Text("实时监控")
+                    OutlinedButton(onClick = onMetrics, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
+                        Text("实时监控", color = btnFg)
                     }
                     if (isApproved) {
-                        OutlinedButton(onClick = onTerminal, modifier = Modifier.weight(1f), colors = btnColors) {
-                            Text("终端")
+                        OutlinedButton(onClick = onTerminal, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
+                            Text("终端", color = btnFg)
                         }
                     }
                     if (isAdmin) {
-                        OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f), colors = btnColors) {
-                            Text("编辑")
+                        OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
+                            Text("编辑", color = btnFg)
                         }
-                        OutlinedButton(onClick = { showHostKeyDialog = true }, modifier = Modifier.weight(1f), colors = btnColors) {
-                            Text("主机指纹")
+                        OutlinedButton(onClick = { showHostKeyDialog = true }, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
+                            Text("主机指纹", color = btnFg)
                         }
-                        OutlinedButton(onClick = { showTokenDialog = true }, modifier = Modifier.weight(1f), colors = btnColors) {
-                            Text("Agent 令牌")
+                        OutlinedButton(onClick = { showTokenDialog = true }, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
+                            Text("Agent 令牌", color = btnFg)
                         }
                         OutlinedButton(
                             onClick = { showDeleteDialog = true },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = btnBg,
                                 contentColor = MaterialTheme.colorScheme.error,
                             ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
                         ) {
-                            Text("删除")
+                            Text("删除", color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
