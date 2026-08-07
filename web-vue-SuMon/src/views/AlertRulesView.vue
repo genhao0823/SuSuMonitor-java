@@ -321,7 +321,6 @@ onMounted(async () => {
 .alert-rules-view__channel-tag {
   margin-right: 4px;
 }
-</style>
 .alert-rules-view {
   max-width: 1280px;
   margin: 0 auto;
