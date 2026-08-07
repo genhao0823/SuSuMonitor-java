@@ -17,6 +17,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
@@ -50,6 +56,43 @@ fun SimpleTerminalView(
             .background(Color(0xFF1E1E1E))
             .pointerInput(Unit) {
                 detectTapGestures { keyboardController?.show() }
+            }
+            // 物理键盘：Ctrl+字母 → 控制字节；Tab/Esc/方向键 → 转义序列
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val key = event.key
+                when {
+                    event.isCtrlPressed && key.keyCode in Key.A.keyCode..Key.Z.keyCode -> {
+                        // Ctrl+A..Z = 0x01..0x1A
+                        onInput(byteArrayOf((key.keyCode - Key.A.keyCode + 1).toByte()))
+                        true
+                    }
+                    key == Key.Tab -> {
+                        onInput("\t".toByteArray(Charsets.UTF_8))
+                        true
+                    }
+                    key == Key.Escape -> {
+                        onInput(byteArrayOf(0x1b))
+                        true
+                    }
+                    key == Key.DirectionUp -> {
+                        onInput("\u001b[A".toByteArray(Charsets.UTF_8))
+                        true
+                    }
+                    key == Key.DirectionDown -> {
+                        onInput("\u001b[B".toByteArray(Charsets.UTF_8))
+                        true
+                    }
+                    key == Key.DirectionRight -> {
+                        onInput("\u001b[C".toByteArray(Charsets.UTF_8))
+                        true
+                    }
+                    key == Key.DirectionLeft -> {
+                        onInput("\u001b[D".toByteArray(Charsets.UTF_8))
+                        true
+                    }
+                    else -> false
+                }
             },
     ) {
         TerminalLinesCanvas(
