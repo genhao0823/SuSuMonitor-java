@@ -20,6 +20,7 @@ public class TerminalRelayLifecycleService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    /** 注入终端会话服务、内存路由注册表、Agent 连接注册表、输出限流器、JSON 序列化器和时钟。 */
     public TerminalRelayLifecycleService(TerminalSessionService terminalSessionService, TerminalRelayRegistry relayRegistry,
             AgentConnectionRegistry agentRegistry, TerminalOutputRateLimiter outputRateLimiter, ObjectMapper objectMapper,
             Clock clock) {

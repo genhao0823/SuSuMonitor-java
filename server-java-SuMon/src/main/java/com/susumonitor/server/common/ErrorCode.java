@@ -3,7 +3,7 @@ package com.susumonitor.server.common;
 import org.springframework.http.HttpStatus;
 
 /**
- * Project-wide error codes defined by the API contract.
+ * 全项目错误码枚举，由 API 契约统一定义。
  */
 public enum ErrorCode {
 
@@ -41,20 +41,42 @@ public enum ErrorCode {
 
     private final HttpStatus httpStatus;
 
+    /**
+     * 构造错误码枚举项。
+     *
+     * @param code 数字错误码
+     * @param message 默认错误消息
+     * @param httpStatus 对应的 HTTP 状态码
+     */
     ErrorCode(int code, String message, HttpStatus httpStatus) {
         this.code = code;
         this.message = message;
         this.httpStatus = httpStatus;
     }
 
+    /**
+     * 获取数字错误码。
+     *
+     * @return 数字错误码
+     */
     public int getCode() {
         return code;
     }
 
+    /**
+     * 获取默认错误消息。
+     *
+     * @return 默认错误消息
+     */
     public String getMessage() {
         return message;
     }
 
+    /**
+     * 获取对应的 HTTP 状态码。
+     *
+     * @return HTTP 状态码
+     */
     public HttpStatus getHttpStatus() {
         return httpStatus;
     }

@@ -36,6 +36,7 @@ public class NotificationRetryScheduler {
     private final AlertNotificationService notificationService;
     private final Clock clock;
 
+    /** 定时扫描到期 pending 通知并执行重试。 */
     @Scheduled(fixedDelay = 30_000)
     public void retryPendingNotifications() {
         List<AlertNotificationEntity> pending = notificationMapper
@@ -48,6 +49,7 @@ public class NotificationRetryScheduler {
         }
     }
 
+    /** 重试单条通知，规则或记录不可用时直接置 failed。 */
     private void retryOne(AlertNotificationEntity notification) {
         AlertRecordEntity record = recordMapper.selectRecordById(notification.getAlertRecordId());
         if (record == null) {
@@ -64,6 +66,7 @@ public class NotificationRetryScheduler {
         notificationService.retry(notification, rule, toRecordVo(record));
     }
 
+    /** 将 Entity 转换为 VO，时间字段转为 UTC OffsetDateTime。 */
     private AlertRecordVo toRecordVo(AlertRecordEntity entity) {
         AlertRecordVo vo = new AlertRecordVo();
         vo.setId(entity.getId());

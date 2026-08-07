@@ -41,6 +41,7 @@ final class AlertMessageBuilder {
     }
 
     /** 数值转十进制字符串，null 显示为空。 */
+    /** 将 BigDecimal 转换为十进制字符串，去除尾部零，null 时返回空字符串。 */
     private static String plain(java.math.BigDecimal value) {
         if (value == null) {
             return "";

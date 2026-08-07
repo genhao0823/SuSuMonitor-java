@@ -66,6 +66,7 @@ public class AgentHeartbeatServiceImpl implements AgentHeartbeatService {
     }
 
     /** 将 UTC 时刻转换为数据库存储的 LocalDateTime。 */
+    /** 将 UTC OffsetDateTime 转换为数据库使用的 LocalDateTime。 */
     private static LocalDateTime toUtcLocalDateTime(OffsetDateTime value) {
         return value == null ? null : value.atZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
     }

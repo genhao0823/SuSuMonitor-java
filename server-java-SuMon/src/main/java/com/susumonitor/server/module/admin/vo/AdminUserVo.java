@@ -3,7 +3,11 @@ package com.susumonitor.server.module.admin.vo;
 import java.time.OffsetDateTime;
 import lombok.Data;
 
-// 自动生成当前 VO 的 getter、setter、toString、equals 和 hashCode 方法。
+/**
+ * 管理面用户视图对象，供管理员分页查询接口返回。
+ *
+ * <p>仅包含非敏感字段：用户 ID、用户名、角色、审核状态和创建时间。</p>
+ */
 @Data
 public class AdminUserVo {
 

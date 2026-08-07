@@ -54,6 +54,7 @@ public class TerminalOutputRateLimiter {
         private double tokens;
         private Instant refreshedAt;
 
+        /** 创建指定字节速率和容量的令牌桶。 */
         private TokenBucket(int rateBytesPerSecond, int capacity, Instant now) {
             this.rateBytesPerSecond = rateBytesPerSecond;
             this.capacity = capacity;
@@ -61,6 +62,7 @@ public class TerminalOutputRateLimiter {
             this.refreshedAt = now;
         }
 
+        /** 尝试消耗指定字节数的令牌，令牌不足时返回 false。 */
         private synchronized boolean tryConsume(int byteCount, Instant now) {
             long elapsedNanos = Duration.between(refreshedAt, now).toNanos();
             if (elapsedNanos > 0) {

@@ -23,14 +23,17 @@ public final class MonitorWebSocketSession {
         this.user = user;
     }
 
+    /** 返回底层 Spring WebSocket 会话。 */
     public WebSocketSession socketSession() {
         return socketSession;
     }
 
+    /** 返回已认证的 Monitor 用户身份。 */
     public AuthenticatedUser user() {
         return user;
     }
 
+    /** 返回当前 Monitor 已订阅的服务器 ID 集合。 */
     public Set<Long> subscribedServerIds() {
         return subscribedServerIds;
     }

@@ -70,6 +70,7 @@ public class AlertRabbitConfig {
     /**
      * 有限重试拦截器：不可重试数据错误立即 recover，其余按退避重试。
      */
+    /** 构建有限重试拦截器：不可重试数据错误立即 recover，其余按指数退避重试。 */
     private RetryOperationsInterceptor buildRetryAdvice(int maxAttempts, long initialIntervalMillis,
             double multiplier, long maxIntervalMillis, MessageRecoverer recoverer) {
         // 异常分类：AmqpRejectAndDontRequeueException（含 cause 链）不重试，其余有限重试。

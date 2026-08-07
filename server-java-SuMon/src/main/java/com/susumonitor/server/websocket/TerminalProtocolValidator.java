@@ -112,7 +112,7 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 校验所有方向共享的外层字段。 */
+    /** 校验消息外层字段：类型允许、message_id 为 UUID、timestamp 为 UTC ISO-8601、payload 为对象。 */
     private static void validateCommonMessage(TerminalMessage message, Set<String> allowedTypes) {
         if (message == null || !allowedTypes.contains(message.type()) || !isUuid(message.messageId())
                 || !isUtcTimestamp(message.timestamp()) || message.payload() == null || !message.payload().isObject()) {
@@ -120,55 +120,55 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 校验浏览器创建会话的载荷。 */
+    /** 校验浏览器创建会话的载荷，含 server_id 和终端尺寸。 */
     private static void validateOpenPayload(JsonNode payload) {
         validateServerId(payload);
         validateDimensions(payload);
     }
 
-    /** 校验 Java 下发给 Agent 的创建会话载荷。 */
+    /** 校验 Java 下发给 Agent 的创建会话载荷，含 server_id、session_id 和终端尺寸。 */
     private static void validateServerOpenPayload(JsonNode payload) {
         validateServerId(payload);
         validateSessionId(payload);
         validateDimensions(payload);
     }
 
-    /** 校验浏览器终端输入。 */
+    /** 校验浏览器终端输入，含 session_id 和 Base64 数据。 */
     private static void validateInputPayload(JsonNode payload) {
         validateSessionId(payload);
         validateBase64Data(payload);
     }
 
-    /** 校验 Java 下发给 Agent 的终端输入。 */
+    /** 校验 Java 下发给 Agent 的终端输入，在浏览器输入校验基础上追加 server_id。 */
     private static void validateServerInputPayload(JsonNode payload) {
         validateServerId(payload);
         validateInputPayload(payload);
     }
 
-    /** 校验浏览器终端尺寸更新。 */
+    /** 校验浏览器终端尺寸更新，含 session_id 和行列数。 */
     private static void validateResizePayload(JsonNode payload) {
         validateSessionId(payload);
         validateDimensions(payload);
     }
 
-    /** 校验 Java 下发给 Agent 的终端尺寸更新。 */
+    /** 校验 Java 下发给 Agent 的终端尺寸更新，在浏览器尺寸校验基础上追加 server_id。 */
     private static void validateServerResizePayload(JsonNode payload) {
         validateServerId(payload);
         validateResizePayload(payload);
     }
 
-    /** 校验浏览器关闭终端请求。 */
+    /** 校验浏览器关闭终端请求，含 session_id。 */
     private static void validateClosePayload(JsonNode payload) {
         validateSessionId(payload);
     }
 
-    /** 校验 Java 下发给 Agent 的关闭终端请求。 */
+    /** 校验 Java 下发给 Agent 的关闭终端请求，在浏览器关闭校验基础上追加 server_id。 */
     private static void validateServerClosePayload(JsonNode payload) {
         validateServerId(payload);
         validateClosePayload(payload);
     }
 
-    /** 校验 Agent 成功创建终端的响应。 */
+    /** 校验 Agent 成功创建终端的响应，含 server_id、session_id 和 shell 标识。 */
     private static void validateOpenedPayload(JsonNode payload) {
         validateServerId(payload);
         validateSessionId(payload);
@@ -178,14 +178,14 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 校验 Agent 终端输出。 */
+    /** 校验 Agent 终端输出，含 server_id、session_id 和 Base64 数据。 */
     private static void validateOutputPayload(JsonNode payload) {
         validateServerId(payload);
         validateSessionId(payload);
         validateBase64Data(payload);
     }
 
-    /** 校验 Agent 关闭终端的响应。 */
+    /** 校验 Agent 关闭终端的响应，含 server_id、session_id 和关闭原因。 */
     private static void validateClosedPayload(JsonNode payload) {
         validateServerId(payload);
         validateSessionId(payload);
@@ -195,7 +195,7 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 校验 Agent 返回的终端错误。 */
+    /** 校验 Agent 返回的终端错误，含 server_id、可选的 session_id、错误码和错误消息。 */
     private static void validateErrorPayload(JsonNode payload) {
         validateServerId(payload);
         JsonNode sessionId = payload.get(SESSION_ID_FIELD);
@@ -210,7 +210,7 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 校验服务器 ID 是正数。 */
+    /** 校验 payload 中的 server_id 为正数。 */
     private static void validateServerId(JsonNode payload) {
         JsonNode serverId = payload.get(SERVER_ID_FIELD);
         if (serverId == null || !serverId.canConvertToLong() || serverId.longValue() <= 0) {
@@ -218,14 +218,14 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 校验 session_id 使用 UUID。 */
+    /** 校验 payload 中的 session_id 为有效 UUID 格式。 */
     private static void validateSessionId(JsonNode payload) {
         if (!isUuid(textValue(payload, SESSION_ID_FIELD))) {
             throw invalidPayload();
         }
     }
 
-    /** 校验终端行列数在首版资源边界内。 */
+    /** 校验 payload 中的终端行列数在协议限制范围内。 */
     private static void validateDimensions(JsonNode payload) {
         JsonNode columns = payload.get(COLUMNS_FIELD);
         JsonNode rows = payload.get(ROWS_FIELD);
@@ -236,7 +236,7 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 校验 Base64 数据可解码且解码后不超过协议限制。 */
+    /** 校验 payload 中的 Base64 数据可解码且解码后不超过最大字节数限制。 */
     private static void validateBase64Data(JsonNode payload) {
         String data = textValue(payload, DATA_FIELD);
         if (data == null || data.isBlank()) {
@@ -252,13 +252,13 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 获取对象中指定的文本字段。 */
+    /** 安全获取 JSON 对象中指定字段的文本值，非文本或缺失时返回 null。 */
     private static String textValue(JsonNode payload, String fieldName) {
         JsonNode field = payload.get(fieldName);
         return field != null && field.isTextual() ? field.textValue() : null;
     }
 
-    /** 校验 UUID 格式，确保消息和会话标识可安全用于幂等与路由。 */
+    /** 校验字符串是否为有效的 UUID 格式。 */
     private static boolean isUuid(String value) {
         if (value == null || value.isBlank()) {
             return false;
@@ -271,7 +271,7 @@ public final class TerminalProtocolValidator {
         }
     }
 
-    /** 校验终端协议时间统一采用 UTC ISO-8601。 */
+    /** 校验字符串是否为 UTC 偏移的 ISO-8601 时间格式。 */
     private static boolean isUtcTimestamp(String value) {
         if (value == null || value.isBlank()) {
             return false;

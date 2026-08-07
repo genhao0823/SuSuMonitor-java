@@ -24,6 +24,7 @@ public enum AlertMetric {
 
     private final String ruleValue;
 
+    /** 构造枚举值，绑定数据库列存储的字符串。 */
     AlertMetric(String ruleValue) {
         this.ruleValue = ruleValue;
     }

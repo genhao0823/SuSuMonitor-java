@@ -26,13 +26,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-// 将当前类注册为 REST Controller，并将返回值写入 HTTP 响应体。
+/**
+ * 管理员用户审核控制器，提供用户列表分页查询、批量审核和单用户审核接口。
+ *
+ * <p>所有管理接口统一以 /api/admin 为路径前缀，仅允许管理员角色访问。</p>
+ */
 @RestController
-// 为管理员接口统一增加 /api/admin 路径前缀。
 @RequestMapping("/api/admin")
-// 启用方法参数约束，使非正数用户 ID 返回参数错误。
 @Validated
-// 自动生成包含 final 字段的构造方法，用于构造方法依赖注入。
 @RequiredArgsConstructor
 public class AdminUserController {
 
@@ -40,22 +41,32 @@ public class AdminUserController {
 
     private final AdminUserService adminUserService;
 
-    // 将 GET /api/admin/users 映射到当前方法，支持审核状态筛选、分页与用户名搜索。
+    /**
+     * 分页查询普通用户列表（管理面），支持审核状态筛选和用户名模糊搜索。
+     *
+     * @param status   审核状态过滤（pending/approved/rejected），空时不过滤
+     * @param keyword  用户名模糊关键字，空时不过滤
+     * @param page     页码（从 1 起）
+     * @param pageSize 每页大小（1~100）
+     * @return 分页结果
+     */
     @GetMapping("/users")
     public ApiResponse<PageResult<AdminUserVo>> listUsers(
-            // 审核状态筛选，可选：pending/approved/rejected，空时不过滤。
             @RequestParam(value = "status", required = false) String status,
-            // 用户名模糊关键字，可选；空白时不过滤。
             @RequestParam(value = "keyword", required = false) String keyword,
-            // 页码，从 1 起。
             @RequestParam(value = "page", defaultValue = "1") @Min(1) int page,
-            // 每页大小，限制 1~100。
             @RequestParam(value = "page_size", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         validateStatus(status);
         return ApiResponse.success(adminUserService.pageUsers(status, keyword, page, pageSize));
     }
 
-    // 将 PUT /api/admin/users/batch-approve 映射到当前方法，批量审核通过。
+    /**
+     * 批量审核通过指定用户。
+     *
+     * @param request  批量审核请求（包含待审核用户 ID 列表）
+     * @param operator 当前审核管理员
+     * @return 处理统计（成功数 / 失败数 / 失败 ID 列表）
+     */
     @PutMapping("/users/batch-approve")
     public ApiResponse<BatchReviewResult> batchApproveUsers(
             @Valid @RequestBody BatchReviewRequest request,
@@ -64,7 +75,13 @@ public class AdminUserController {
                 request.getUserIds(), "approved", operator.id()));
     }
 
-    // 将 PUT /api/admin/users/batch-reject 映射到当前方法，批量拒绝。
+    /**
+     * 批量拒绝指定用户。
+     *
+     * @param request  批量审核请求（包含待拒绝用户 ID 列表）
+     * @param operator 当前审核管理员
+     * @return 处理统计（成功数 / 失败数 / 失败 ID 列表）
+     */
     @PutMapping("/users/batch-reject")
     public ApiResponse<BatchReviewResult> batchRejectUsers(
             @Valid @RequestBody BatchReviewRequest request,
@@ -73,29 +90,41 @@ public class AdminUserController {
                 request.getUserIds(), "rejected", operator.id()));
     }
 
-    // 将 PUT /api/admin/users/{id}/approve 映射到当前方法。
+    /**
+     * 审核通过指定用户。
+     *
+     * @param userId   目标用户 ID
+     * @param operator 当前审核管理员
+     * @return 审核后的用户公开信息
+     */
     @PutMapping("/users/{id}/approve")
     public ApiResponse<CurrentUserVo> approveUser(
-            // 将路径参数绑定为目标用户 ID。
             @PathVariable("id")
-            // 限制目标用户 ID 必须大于 0。
             @Positive Long userId,
             @AuthenticationPrincipal AuthenticatedUser operator) {
         return ApiResponse.success(adminUserService.approveUser(userId, operator.id()));
     }
 
-    // 将 PUT /api/admin/users/{id}/reject 映射到当前方法。
+    /**
+     * 拒绝指定用户。
+     *
+     * @param userId   目标用户 ID
+     * @param operator 当前审核管理员
+     * @return 审核后的用户公开信息
+     */
     @PutMapping("/users/{id}/reject")
     public ApiResponse<CurrentUserVo> rejectUser(
-            // 将路径参数绑定为目标用户 ID。
             @PathVariable("id")
-            // 限制目标用户 ID 必须大于 0。
             @Positive Long userId,
             @AuthenticationPrincipal AuthenticatedUser operator) {
         return ApiResponse.success(adminUserService.rejectUser(userId, operator.id()));
     }
 
-    // 校验审核状态枚举值，非法值返回参数错误。
+    /**
+     * 校验审核状态枚举值，非法值返回参数错误。
+     *
+     * @param status 审核状态值
+     */
     private void validateStatus(String status) {
         if (status != null && !status.isBlank() && !VALID_STATUSES.contains(status.trim())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);

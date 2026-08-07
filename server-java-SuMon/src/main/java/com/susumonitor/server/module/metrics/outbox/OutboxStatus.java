@@ -14,6 +14,11 @@ public enum OutboxStatus {
 
     private final String ruleValue;
 
+    /**
+     * 构造枚举常量。
+     *
+     * @param ruleValue 数据库列存储的字符串值
+     */
     OutboxStatus(String ruleValue) {
         this.ruleValue = ruleValue;
     }

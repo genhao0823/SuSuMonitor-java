@@ -54,6 +54,11 @@ public class RabbitMqConfig {
         };
     }
 
+    /**
+     * 记录不可路由的 Outbox 消息到日志，仅包含 Exchange 和 Routing Key 信息。
+     *
+     * @param returned 不可路由的返回消息
+     */
     private void logUnroutable(org.springframework.amqp.core.ReturnedMessage returned) {
         org.slf4j.LoggerFactory.getLogger(RabbitMqConfig.class).warn(
                 "outbox message unroutable, exchange={}, routingKey={}",

@@ -44,6 +44,7 @@ public class MonitorServerStatusPublisher {
     }
 
     /** 构造与现有 Monitor 帧一致的状态事件。 */
+    /** 构建 server.status.update WebSocket 消息 JSON 字符串。 */
     private String message(Long serverId, String status, String agentStatus, LocalDateTime lastHeartbeatAt)
             throws IOException {
         var payload = objectMapper.createObjectNode()

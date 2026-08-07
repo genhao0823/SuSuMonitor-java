@@ -38,12 +38,14 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
 
     private final MessageRecoverer delegate;
 
+    /** 构造失败留痕 recoverer，使用默认 RejectAndDontRequeueRecoverer 委托。 */
     public FailedConsumeRecordRecoverer(ConsumeRecordMapper consumeRecordMapper, ObjectMapper objectMapper,
             int maxAttempts) {
         this(consumeRecordMapper, objectMapper, maxAttempts, new RejectAndDontRequeueRecoverer());
     }
 
     /** 包私有：测试注入 mock 委托以断言 reject 委托行为。 */
+    /** 包私有构造：测试注入 mock 委托以断言 reject 行为。 */
     FailedConsumeRecordRecoverer(ConsumeRecordMapper consumeRecordMapper, ObjectMapper objectMapper,
             int maxAttempts, MessageRecoverer delegate) {
         this.consumeRecordMapper = consumeRecordMapper;
@@ -52,6 +54,7 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
         this.delegate = delegate;
     }
 
+    /** 先尽力记录失败留痕，再委托默认 recoverer reject 进 DLQ。 */
     @Override
     public void recover(Message message, Throwable cause) {
         recordFailure(message, cause);
@@ -74,6 +77,7 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
     }
 
     /** 尽力从消息体解析 event_id；解析失败返回 null（非法 JSON 无事件可定位）。 */
+    /** 从消息体解析 event_id，解析失败返回 null。 */
     private String extractEventId(Message message) {
         try {
             MetricsReportedMessage envelope = objectMapper.readValue(
@@ -85,6 +89,7 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
     }
 
     /** 与 AlertRabbitConfig 错误分类一致：cause 链含 AmqpRejectAndDontRequeueException 视为不可重试。 */
+    /** 判断异常链中是否包含不可重试异常。 */
     private boolean isNonRetryable(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
@@ -97,6 +102,7 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
     }
 
     /** 取根因消息摘要：类名 + 消息，截断到 last_error 列长度。 */
+    /** 取根因异常的消息摘要。 */
     private String rootMessage(Throwable cause) {
         Throwable current = cause;
         while (current.getCause() != null) {
@@ -107,6 +113,7 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
         return truncate(message);
     }
 
+    /** 截断字符串到最大错误长度。 */
     private String truncate(String text) {
         if (text == null) {
             return null;

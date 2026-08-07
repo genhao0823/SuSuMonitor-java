@@ -216,6 +216,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /** 处理 Agent 认证首帧，校验 Token 后注册已认证会话并替换旧连接。 */
     private void authenticate(AgentWebSocketSession session, JsonNode payload) throws IOException {
         if (session.authenticated() || payload == null
                 || !payload.hasNonNull("server_id") || !payload.hasNonNull("token")
@@ -255,6 +256,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         });
     }
 
+    /** 向 Agent WebSocket 会话发送指定类型和载荷的消息帧。 */
     private void send(WebSocketSession session, AgentMessageType type, String messageId, JsonNode payload)
             throws IOException {
         if (session.isOpen()) {
@@ -307,6 +309,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         close(session, CloseStatus.POLICY_VIOLATION);
     }
 
+    /** 安全关闭 WebSocket 会话，忽略已关闭或关闭失败异常。 */
     private void close(WebSocketSession session, CloseStatus status) {
         try {
             if (session.isOpen()) {

@@ -186,10 +186,12 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
         }
     }
 
+    /** 构建告警消息文本。 */
     private String buildMessage(String metric, String operator, BigDecimal currentValue, BigDecimal threshold) {
         return metric + " " + operator + " " + threshold + " (current: " + currentValue + ")";
     }
 
+    /** 将 Entity 转换为 VO，时间字段转为 UTC OffsetDateTime。 */
     private AlertRecordVo toVo(AlertRecordEntity entity) {
         AlertRecordVo vo = new AlertRecordVo();
         vo.setId(entity.getId());

@@ -55,38 +55,83 @@ public class AppProperties {
     @Valid
     private final Alert alert = new Alert();
 
+    /**
+     * 获取 JWT 配置。
+     *
+     * @return JWT 配置
+     */
     public Jwt getJwt() {
         return jwt;
     }
 
+    /**
+     * 获取安全配置。
+     *
+     * @return 安全配置
+     */
     public Security getSecurity() {
         return security;
     }
 
+    /**
+     * 获取 Agent 配置。
+     *
+     * @return Agent 配置
+     */
     public Agent getAgent() {
         return agent;
     }
 
+    /**
+     * 获取 SSH 配置。
+     *
+     * @return SSH 配置
+     */
     public Ssh getSsh() {
         return ssh;
     }
 
+    /**
+     * 获取 Metrics 配置。
+     *
+     * @return Metrics 配置
+     */
     public Metrics getMetrics() {
         return metrics;
     }
 
+    /**
+     * 获取终端会话配置。
+     *
+     * @return 终端会话配置
+     */
     public Terminal getTerminal() {
         return terminal;
     }
 
+    /**
+     * 获取 RabbitMQ 配置。
+     *
+     * @return RabbitMQ 配置
+     */
     public Rabbitmq getRabbitmq() {
         return rabbitmq;
     }
 
+    /**
+     * 获取 CORS 配置。
+     *
+     * @return CORS 配置
+     */
     public Cors getCors() {
         return cors;
     }
 
+    /**
+     * 获取告警外部通知配置。
+     *
+     * @return 告警外部通知配置
+     */
     public Alert getAlert() {
         return alert;
     }
@@ -101,18 +146,38 @@ public class AppProperties {
         @Positive(message = "JWT expiration hours must be greater than zero")
         private int expireHours = 72;
 
+        /**
+         * 获取 JWT 签名密钥。
+         *
+         * @return JWT 签名密钥
+         */
         public String getSecret() {
             return secret;
         }
 
+        /**
+         * 设置 JWT 签名密钥。
+         *
+         * @param secret JWT 签名密钥
+         */
         public void setSecret(String secret) {
             this.secret = secret;
         }
 
+        /**
+         * 获取 JWT 有效期（小时）。
+         *
+         * @return JWT 有效期小时数
+         */
         public int getExpireHours() {
             return expireHours;
         }
 
+        /**
+         * 设置 JWT 有效期（小时）。
+         *
+         * @param expireHours JWT 有效期小时数
+         */
         public void setExpireHours(int expireHours) {
             this.expireHours = expireHours;
         }
@@ -124,10 +189,20 @@ public class AppProperties {
         @NotBlank(message = "AES-GCM key must not be blank")
         private String aesGcmKey;
 
+        /**
+         * 获取 AES-256-GCM 加密密钥。
+         *
+         * @return AES-256-GCM 密钥
+         */
         public String getAesGcmKey() {
             return aesGcmKey;
         }
 
+        /**
+         * 设置 AES-256-GCM 加密密钥。
+         *
+         * @param aesGcmKey AES-256-GCM 密钥
+         */
         public void setAesGcmKey(String aesGcmKey) {
             this.aesGcmKey = aesGcmKey;
         }
@@ -180,82 +255,182 @@ public class AppProperties {
         /** 仅信任列表内反向代理转发的客户端 IP，空列表时始终使用 TCP peer IP。 */
         private List<String> trustedProxyCidrs = new ArrayList<>();
 
+        /**
+         * 获取 Agent 注册密钥。
+         *
+         * @return Agent 注册密钥
+         */
         public String getRegisterKey() {
             return registerKey;
         }
 
+        /**
+         * 设置 Agent 注册密钥。
+         *
+         * @param registerKey Agent 注册密钥
+         */
         public void setRegisterKey(String registerKey) {
             this.registerKey = registerKey;
         }
 
+        /**
+         * 获取单 JVM 最大 Agent 连接数。
+         *
+         * @return 最大连接数
+         */
         public int getMaxConnections() {
             return maxConnections;
         }
 
+        /**
+         * 设置单 JVM 最大 Agent 连接数。
+         *
+         * @param maxConnections 最大连接数
+         */
         public void setMaxConnections(int maxConnections) {
             this.maxConnections = maxConnections;
         }
 
+        /**
+         * 获取未认证连接上限。
+         *
+         * @return 未认证连接上限
+         */
         public int getMaxUnauthenticatedConnections() {
             return maxUnauthenticatedConnections;
         }
 
+        /**
+         * 设置未认证连接上限。
+         *
+         * @param maxUnauthenticatedConnections 未认证连接上限
+         */
         public void setMaxUnauthenticatedConnections(int maxUnauthenticatedConnections) {
             this.maxUnauthenticatedConnections = maxUnauthenticatedConnections;
         }
 
+        /**
+         * 获取追踪的客户端 IP 数上限。
+         *
+         * @return 追踪客户端 IP 数上限
+         */
         public int getMaxTrackedClientIps() {
             return maxTrackedClientIps;
         }
 
+        /**
+         * 设置追踪的客户端 IP 数上限。
+         *
+         * @param maxTrackedClientIps 追踪客户端 IP 数上限
+         */
         public void setMaxTrackedClientIps(int maxTrackedClientIps) {
             this.maxTrackedClientIps = maxTrackedClientIps;
         }
 
+        /**
+         * 获取握手频率上限（次/分钟）。
+         *
+         * @return 握手频率上限
+         */
         public int getHandshakeRatePerMinute() {
             return handshakeRatePerMinute;
         }
 
+        /**
+         * 设置握手频率上限（次/分钟）。
+         *
+         * @param handshakeRatePerMinute 握手频率上限
+         */
         public void setHandshakeRatePerMinute(int handshakeRatePerMinute) {
             this.handshakeRatePerMinute = handshakeRatePerMinute;
         }
 
+        /**
+         * 获取心跳频率上限（次/分钟）。
+         *
+         * @return 心跳频率上限
+         */
         public int getHeartbeatRatePerMinute() {
             return heartbeatRatePerMinute;
         }
 
+        /**
+         * 设置心跳频率上限（次/分钟）。
+         *
+         * @param heartbeatRatePerMinute 心跳频率上限
+         */
         public void setHeartbeatRatePerMinute(int heartbeatRatePerMinute) {
             this.heartbeatRatePerMinute = heartbeatRatePerMinute;
         }
 
+        /**
+         * 获取心跳突发令牌数。
+         *
+         * @return 心跳突发令牌数
+         */
         public int getHeartbeatBurst() {
             return heartbeatBurst;
         }
 
+        /**
+         * 设置心跳突发令牌数。
+         *
+         * @param heartbeatBurst 心跳突发令牌数
+         */
         public void setHeartbeatBurst(int heartbeatBurst) {
             this.heartbeatBurst = heartbeatBurst;
         }
 
+        /**
+         * 获取指标上报频率上限（次/分钟）。
+         *
+         * @return 指标上报频率上限
+         */
         public int getMetricsRatePerMinute() {
             return metricsRatePerMinute;
         }
 
+        /**
+         * 设置指标上报频率上限（次/分钟）。
+         *
+         * @param metricsRatePerMinute 指标上报频率上限
+         */
         public void setMetricsRatePerMinute(int metricsRatePerMinute) {
             this.metricsRatePerMinute = metricsRatePerMinute;
         }
 
+        /**
+         * 获取指标突发令牌数。
+         *
+         * @return 指标突发令牌数
+         */
         public int getMetricsBurst() {
             return metricsBurst;
         }
 
+        /**
+         * 设置指标突发令牌数。
+         *
+         * @param metricsBurst 指标突发令牌数
+         */
         public void setMetricsBurst(int metricsBurst) {
             this.metricsBurst = metricsBurst;
         }
 
+        /**
+         * 获取可信反向代理 CIDR 列表。
+         *
+         * @return 可信反向代理 CIDR 列表
+         */
         public List<String> getTrustedProxyCidrs() {
             return trustedProxyCidrs;
         }
 
+        /**
+         * 设置可信反向代理 CIDR 列表。
+         *
+         * @param trustedProxyCidrs 可信反向代理 CIDR 列表
+         */
         public void setTrustedProxyCidrs(List<String> trustedProxyCidrs) {
             this.trustedProxyCidrs = trustedProxyCidrs;
         }
@@ -296,66 +471,146 @@ public class AppProperties {
 
         private int idleTimeoutMinutes = 20;
 
+        /**
+         * 获取 TCP 连接超时（秒）。
+         *
+         * @return TCP 连接超时秒数
+         */
         public int getConnectTimeoutSeconds() {
             return connectTimeoutSeconds;
         }
 
+        /**
+         * 设置 TCP 连接超时（秒）。
+         *
+         * @param connectTimeoutSeconds TCP 连接超时秒数
+         */
         public void setConnectTimeoutSeconds(int connectTimeoutSeconds) {
             this.connectTimeoutSeconds = connectTimeoutSeconds;
         }
 
+        /**
+         * 获取 SSH 握手和认证期间的 socket 读写超时（秒）。
+         *
+         * @return socket 超时秒数
+         */
         public int getSocketTimeoutSeconds() {
             return socketTimeoutSeconds;
         }
 
+        /**
+         * 设置 SSH 握手和认证期间的 socket 读写超时（秒）。
+         *
+         * @param socketTimeoutSeconds socket 超时秒数
+         */
         public void setSocketTimeoutSeconds(int socketTimeoutSeconds) {
             this.socketTimeoutSeconds = socketTimeoutSeconds;
         }
 
+        /**
+         * 获取单次 SSH 请求的整体等待预算（秒）。
+         *
+         * @return 整体超时秒数
+         */
         public int getTotalTimeoutSeconds() {
             return totalTimeoutSeconds;
         }
 
+        /**
+         * 设置单次 SSH 请求的整体等待预算（秒）。
+         *
+         * @param totalTimeoutSeconds 整体超时秒数
+         */
         public void setTotalTimeoutSeconds(int totalTimeoutSeconds) {
             this.totalTimeoutSeconds = totalTimeoutSeconds;
         }
 
+        /**
+         * 获取同时执行的 SSH 握手和认证数量上限。
+         *
+         * @return 最大并发连接数
+         */
         public int getMaxConcurrentConnections() {
             return maxConcurrentConnections;
         }
 
+        /**
+         * 设置同时执行的 SSH 握手和认证数量上限。
+         *
+         * @param maxConcurrentConnections 最大并发连接数
+         */
         public void setMaxConcurrentConnections(int maxConcurrentConnections) {
             this.maxConcurrentConnections = maxConcurrentConnections;
         }
 
+        /**
+         * 获取单次 DNS 解析可返回的地址数量上限。
+         *
+         * @return 最大解析地址数
+         */
         public int getMaxResolvedAddresses() {
             return maxResolvedAddresses;
         }
 
+        /**
+         * 设置单次 DNS 解析可返回的地址数量上限。
+         *
+         * @param maxResolvedAddresses 最大解析地址数
+         */
         public void setMaxResolvedAddresses(int maxResolvedAddresses) {
             this.maxResolvedAddresses = maxResolvedAddresses;
         }
 
+        /**
+         * 获取允许的 SSH 端口列表。
+         *
+         * @return 允许的端口列表
+         */
         public List<Integer> getAllowedPorts() {
             return allowedPorts;
         }
 
+        /**
+         * 设置允许的 SSH 端口列表。
+         *
+         * @param allowedPorts 允许的端口列表
+         */
         public void setAllowedPorts(List<Integer> allowedPorts) {
             this.allowedPorts = allowedPorts;
         }
 
+        /**
+         * 获取允许的 SSH 出站 CIDR 列表。
+         *
+         * @return 允许的 CIDR 列表
+         */
         public List<String> getAllowedCidrs() {
             return allowedCidrs;
         }
 
+        /**
+         * 设置允许的 SSH 出站 CIDR 列表。
+         *
+         * @param allowedCidrs 允许的 CIDR 列表
+         */
         public void setAllowedCidrs(List<String> allowedCidrs) {
             this.allowedCidrs = allowedCidrs;
         }
 
+        /**
+         * 获取 SSH 闲置超时（分钟）。
+         *
+         * @return 闲置超时分钟数
+         */
         public int getIdleTimeoutMinutes() {
             return idleTimeoutMinutes;
         }
 
+        /**
+         * 设置 SSH 闲置超时（分钟）。
+         *
+         * @param idleTimeoutMinutes 闲置超时分钟数
+         */
         public void setIdleTimeoutMinutes(int idleTimeoutMinutes) {
             this.idleTimeoutMinutes = idleTimeoutMinutes;
         }
@@ -381,34 +636,74 @@ public class AppProperties {
         @Max(value = 1000, message = "Metrics cleanup max batches must not exceed 1000")
         private int cleanupMaxBatchesPerRun = 100;
 
+        /**
+         * 获取 Metrics 数据保留天数。
+         *
+         * @return 保留天数
+         */
         public int getRetentionDays() {
             return retentionDays;
         }
 
+        /**
+         * 设置 Metrics 数据保留天数。
+         *
+         * @param retentionDays 保留天数
+         */
         public void setRetentionDays(int retentionDays) {
             this.retentionDays = retentionDays;
         }
 
+        /**
+         * 获取 Metrics 清理任务 Cron 表达式。
+         *
+         * @return Cron 表达式
+         */
         public String getCleanupCron() {
             return cleanupCron;
         }
 
+        /**
+         * 设置 Metrics 清理任务 Cron 表达式。
+         *
+         * @param cleanupCron Cron 表达式
+         */
         public void setCleanupCron(String cleanupCron) {
             this.cleanupCron = cleanupCron;
         }
 
+        /**
+         * 获取单次清理 SQL 删除的最大记录数。
+         *
+         * @return 单批清理上限
+         */
         public int getCleanupBatchSize() {
             return cleanupBatchSize;
         }
 
+        /**
+         * 设置单次清理 SQL 删除的最大记录数。
+         *
+         * @param cleanupBatchSize 单批清理上限
+         */
         public void setCleanupBatchSize(int cleanupBatchSize) {
             this.cleanupBatchSize = cleanupBatchSize;
         }
 
+        /**
+         * 获取单次定时任务允许执行的最大批次数。
+         *
+         * @return 最大批次数
+         */
         public int getCleanupMaxBatchesPerRun() {
             return cleanupMaxBatchesPerRun;
         }
 
+        /**
+         * 设置单次定时任务允许执行的最大批次数。
+         *
+         * @param cleanupMaxBatchesPerRun 最大批次数
+         */
         public void setCleanupMaxBatchesPerRun(int cleanupMaxBatchesPerRun) {
             this.cleanupMaxBatchesPerRun = cleanupMaxBatchesPerRun;
         }
@@ -478,39 +773,209 @@ public class AppProperties {
         @Max(value = 16 * 1024 * 1024, message = "Terminal monitor buffer size must not exceed 16777216 bytes")
         private int monitorBufferSizeBytes = 256 * 1024;
 
+        /**
+         * 获取单用户最大会话数。
+         *
+         * @return 单用户最大会话数
+         */
         public int getMaxSessionsPerUser() { return maxSessionsPerUser; }
+        /**
+         * 设置单用户最大会话数。
+         *
+         * @param value 单用户最大会话数
+         */
         public void setMaxSessionsPerUser(int value) { maxSessionsPerUser = value; }
+        /**
+         * 获取单服务器最大会话数。
+         *
+         * @return 单服务器最大会话数
+         */
         public int getMaxSessionsPerServer() { return maxSessionsPerServer; }
+        /**
+         * 设置单服务器最大会话数。
+         *
+         * @param value 单服务器最大会话数
+         */
         public void setMaxSessionsPerServer(int value) { maxSessionsPerServer = value; }
+        /**
+         * 获取同时操作同一服务器的用户数上限。
+         *
+         * @return 操作用户数上限
+         */
         public int getMaxOperatingUsers() { return maxOperatingUsers; }
+        /**
+         * 设置同时操作同一服务器的用户数上限。
+         *
+         * @param value 操作用户数上限
+         */
         public void setMaxOperatingUsers(int value) { maxOperatingUsers = value; }
+        /**
+         * 获取会话清理 Cron 表达式。
+         *
+         * @return Cron 表达式
+         */
         public String getCleanupCron() { return cleanupCron; }
+        /**
+         * 设置会话清理 Cron 表达式。
+         *
+         * @param value Cron 表达式
+         */
         public void setCleanupCron(String value) { cleanupCron = value; }
+        /**
+         * 获取全局最大会话数。
+         *
+         * @return 全局最大会话数
+         */
         public int getMaxSessions() { return maxSessions; }
+        /**
+         * 设置全局最大会话数。
+         *
+         * @param value 全局最大会话数
+         */
         public void setMaxSessions(int value) { maxSessions = value; }
+        /**
+         * 获取会话闲置超时（分钟）。
+         *
+         * @return 闲置超时分钟数
+         */
         public int getIdleTimeoutMinutes() { return idleTimeoutMinutes; }
+        /**
+         * 设置会话闲置超时（分钟）。
+         *
+         * @param value 闲置超时分钟数
+         */
         public void setIdleTimeoutMinutes(int value) { idleTimeoutMinutes = value; }
+        /**
+         * 获取单会话最大持续时长（小时）。
+         *
+         * @return 最大持续小时数
+         */
         public int getMaxSessionHours() { return maxSessionHours; }
+        /**
+         * 设置单会话最大持续时长（小时）。
+         *
+         * @param value 最大持续小时数
+         */
         public void setMaxSessionHours(int value) { maxSessionHours = value; }
+        /**
+         * 获取打开会话频率上限（次/分钟）。
+         *
+         * @return 打开频率上限
+         */
         public int getOpenRatePerMinute() { return openRatePerMinute; }
+        /**
+         * 设置打开会话频率上限（次/分钟）。
+         *
+         * @param value 打开频率上限
+         */
         public void setOpenRatePerMinute(int value) { openRatePerMinute = value; }
+        /**
+         * 获取打开会话突发令牌数。
+         *
+         * @return 打开突发令牌数
+         */
         public int getOpenBurst() { return openBurst; }
+        /**
+         * 设置打开会话突发令牌数。
+         *
+         * @param value 打开突发令牌数
+         */
         public void setOpenBurst(int value) { openBurst = value; }
+        /**
+         * 获取输入频率上限（次/分钟）。
+         *
+         * @return 输入频率上限
+         */
         public int getInputRatePerMinute() { return inputRatePerMinute; }
+        /**
+         * 设置输入频率上限（次/分钟）。
+         *
+         * @param value 输入频率上限
+         */
         public void setInputRatePerMinute(int value) { inputRatePerMinute = value; }
+        /**
+         * 获取输入突发令牌数。
+         *
+         * @return 输入突发令牌数
+         */
         public int getInputBurst() { return inputBurst; }
+        /**
+         * 设置输入突发令牌数。
+         *
+         * @param value 输入突发令牌数
+         */
         public void setInputBurst(int value) { inputBurst = value; }
+        /**
+         * 获取调整窗口大小频率上限（次/分钟）。
+         *
+         * @return 调整频率上限
+         */
         public int getResizeRatePerMinute() { return resizeRatePerMinute; }
+        /**
+         * 设置调整窗口大小频率上限（次/分钟）。
+         *
+         * @param value 调整频率上限
+         */
         public void setResizeRatePerMinute(int value) { resizeRatePerMinute = value; }
+        /**
+         * 获取调整窗口大小突发令牌数。
+         *
+         * @return 调整突发令牌数
+         */
         public int getResizeBurst() { return resizeBurst; }
+        /**
+         * 设置调整窗口大小突发令牌数。
+         *
+         * @param value 调整突发令牌数
+         */
         public void setResizeBurst(int value) { resizeBurst = value; }
+        /**
+         * 获取关闭会话频率上限（次/分钟）。
+         *
+         * @return 关闭频率上限
+         */
         public int getCloseRatePerMinute() { return closeRatePerMinute; }
+        /**
+         * 设置关闭会话频率上限（次/分钟）。
+         *
+         * @param value 关闭频率上限
+         */
         public void setCloseRatePerMinute(int value) { closeRatePerMinute = value; }
+        /**
+         * 获取关闭会话突发令牌数。
+         *
+         * @return 关闭突发令牌数
+         */
         public int getCloseBurst() { return closeBurst; }
+        /**
+         * 设置关闭会话突发令牌数。
+         *
+         * @param value 关闭突发令牌数
+         */
         public void setCloseBurst(int value) { closeBurst = value; }
+        /**
+         * 获取输出速率上限（字节/秒）。
+         *
+         * @return 输出速率上限
+         */
         public int getOutputRateBytesPerSecond() { return outputRateBytesPerSecond; }
+        /**
+         * 设置输出速率上限（字节/秒）。
+         *
+         * @param value 输出速率上限
+         */
         public void setOutputRateBytesPerSecond(int value) { outputRateBytesPerSecond = value; }
+        /**
+         * 获取输出突发容量上限（字节）。
+         *
+         * @return 输出突发容量上限
+         */
         public int getOutputBurstBytes() { return outputBurstBytes; }
+        /**
+         * 设置输出突发容量上限（字节）。
+         *
+         * @param value 输出突发容量上限
+         */
         public void setOutputBurstBytes(int value) { outputBurstBytes = value; }
         /** 返回浏览器 Monitor 会话的发送超时限制。 */
         public int getMonitorSendTimeLimitMillis() { return monitorSendTimeLimitMillis; }
@@ -583,98 +1048,218 @@ public class AppProperties {
         @Max(value = 1000, message = "Outbox cleanup max batches must not exceed 1000")
         private int outboxCleanupMaxBatchesPerRun = 100;
 
+        /**
+         * 返回是否启用 Outbox 发布与 RabbitMQ 就绪检查。
+         *
+         * @return 是否启用
+         */
         public boolean isEnabled() {
             return enabled;
         }
 
+        /**
+         * 设置是否启用 Outbox 发布与 RabbitMQ 就绪检查。
+         *
+         * @param enabled 是否启用
+         */
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
         }
 
+        /**
+         * 获取 Topic Exchange 名称。
+         *
+         * @return Exchange 名称
+         */
         public String getExchange() {
             return exchange;
         }
 
+        /**
+         * 设置 Topic Exchange 名称。
+         *
+         * @param exchange Exchange 名称
+         */
         public void setExchange(String exchange) {
             this.exchange = exchange;
         }
 
+        /**
+         * 获取 Routing Key。
+         *
+         * @return Routing Key
+         */
         public String getRoutingKey() {
             return routingKey;
         }
 
+        /**
+         * 设置 Routing Key。
+         *
+         * @param routingKey Routing Key
+         */
         public void setRoutingKey(String routingKey) {
             this.routingKey = routingKey;
         }
 
+        /**
+         * 获取发布器轮询间隔（毫秒）。
+         *
+         * @return 轮询间隔毫秒数
+         */
         public long getPollIntervalMs() {
             return pollIntervalMs;
         }
 
+        /**
+         * 设置发布器轮询间隔（毫秒）。
+         *
+         * @param pollIntervalMs 轮询间隔毫秒数
+         */
         public void setPollIntervalMs(long pollIntervalMs) {
             this.pollIntervalMs = pollIntervalMs;
         }
 
+        /**
+         * 获取单轮最多选取的待发布行数。
+         *
+         * @return 单批大小
+         */
         public int getBatchSize() {
             return batchSize;
         }
 
+        /**
+         * 设置单轮最多选取的待发布行数。
+         *
+         * @param batchSize 单批大小
+         */
         public void setBatchSize(int batchSize) {
             this.batchSize = batchSize;
         }
 
+        /**
+         * 获取等待 Broker Confirm 的超时（毫秒）。
+         *
+         * @return 超时毫秒数
+         */
         public long getPublishTimeoutMs() {
             return publishTimeoutMs;
         }
 
+        /**
+         * 设置等待 Broker Confirm 的超时（毫秒）。
+         *
+         * @param publishTimeoutMs 超时毫秒数
+         */
         public void setPublishTimeoutMs(long publishTimeoutMs) {
             this.publishTimeoutMs = publishTimeoutMs;
         }
 
+        /**
+         * 获取指数退避封顶（秒）。
+         *
+         * @return 最大退避秒数
+         */
         public int getMaxBackoffSeconds() {
             return maxBackoffSeconds;
         }
 
+        /**
+         * 设置指数退避封顶（秒）。
+         *
+         * @param maxBackoffSeconds 最大退避秒数
+         */
         public void setMaxBackoffSeconds(int maxBackoffSeconds) {
             this.maxBackoffSeconds = maxBackoffSeconds;
         }
 
+        /**
+         * 返回是否启用已发布 Outbox 记录的保留期清理。
+         *
+         * @return 是否启用清理
+         */
         public boolean isOutboxCleanupEnabled() {
             return outboxCleanupEnabled;
         }
 
+        /**
+         * 设置是否启用已发布 Outbox 记录的保留期清理。
+         *
+         * @param outboxCleanupEnabled 是否启用清理
+         */
         public void setOutboxCleanupEnabled(boolean outboxCleanupEnabled) {
             this.outboxCleanupEnabled = outboxCleanupEnabled;
         }
 
+        /**
+         * 获取已发布 Outbox 记录的保留天数。
+         *
+         * @return 保留天数
+         */
         public int getOutboxRetentionDays() {
             return outboxRetentionDays;
         }
 
+        /**
+         * 设置已发布 Outbox 记录的保留天数。
+         *
+         * @param outboxRetentionDays 保留天数
+         */
         public void setOutboxRetentionDays(int outboxRetentionDays) {
             this.outboxRetentionDays = outboxRetentionDays;
         }
 
+        /**
+         * 获取已发布 Outbox 清理 Cron 表达式。
+         *
+         * @return Cron 表达式
+         */
         public String getOutboxCleanupCron() {
             return outboxCleanupCron;
         }
 
+        /**
+         * 设置已发布 Outbox 清理 Cron 表达式。
+         *
+         * @param outboxCleanupCron Cron 表达式
+         */
         public void setOutboxCleanupCron(String outboxCleanupCron) {
             this.outboxCleanupCron = outboxCleanupCron;
         }
 
+        /**
+         * 获取已发布 Outbox 单批清理上限。
+         *
+         * @return 单批清理上限
+         */
         public int getOutboxCleanupBatchSize() {
             return outboxCleanupBatchSize;
         }
 
+        /**
+         * 设置已发布 Outbox 单批清理上限。
+         *
+         * @param outboxCleanupBatchSize 单批清理上限
+         */
         public void setOutboxCleanupBatchSize(int outboxCleanupBatchSize) {
             this.outboxCleanupBatchSize = outboxCleanupBatchSize;
         }
 
+        /**
+         * 获取单轮已发布 Outbox 清理最多执行的批次数。
+         *
+         * @return 最大批次数
+         */
         public int getOutboxCleanupMaxBatchesPerRun() {
             return outboxCleanupMaxBatchesPerRun;
         }
 
+        /**
+         * 设置单轮已发布 Outbox 清理最多执行的批次数。
+         *
+         * @param outboxCleanupMaxBatchesPerRun 最大批次数
+         */
         public void setOutboxCleanupMaxBatchesPerRun(int outboxCleanupMaxBatchesPerRun) {
             this.outboxCleanupMaxBatchesPerRun = outboxCleanupMaxBatchesPerRun;
         }
@@ -702,34 +1287,74 @@ public class AppProperties {
         @Min(value = 0, message = "CORS max age must not be negative")
         private long maxAgeSeconds = 3600;
 
+        /**
+         * 获取允许的前端 Origin 列表。
+         *
+         * @return 允许的 Origin 列表
+         */
         public List<String> getAllowedOrigins() {
             return allowedOrigins;
         }
 
+        /**
+         * 设置允许的前端 Origin 列表。
+         *
+         * @param allowedOrigins 允许的 Origin 列表
+         */
         public void setAllowedOrigins(List<String> allowedOrigins) {
             this.allowedOrigins = allowedOrigins;
         }
 
+        /**
+         * 获取允许的 HTTP 方法列表。
+         *
+         * @return 允许的 HTTP 方法列表
+         */
         public List<String> getAllowedMethods() {
             return allowedMethods;
         }
 
+        /**
+         * 设置允许的 HTTP 方法列表。
+         *
+         * @param allowedMethods 允许的 HTTP 方法列表
+         */
         public void setAllowedMethods(List<String> allowedMethods) {
             this.allowedMethods = allowedMethods;
         }
 
+        /**
+         * 获取允许的请求头列表。
+         *
+         * @return 允许的请求头列表
+         */
         public List<String> getAllowedHeaders() {
             return allowedHeaders;
         }
 
+        /**
+         * 设置允许的请求头列表。
+         *
+         * @param allowedHeaders 允许的请求头列表
+         */
         public void setAllowedHeaders(List<String> allowedHeaders) {
             this.allowedHeaders = allowedHeaders;
         }
 
+        /**
+         * 获取预检缓存时间（秒）。
+         *
+         * @return 预检缓存秒数
+         */
         public long getMaxAgeSeconds() {
             return maxAgeSeconds;
         }
 
+        /**
+         * 设置预检缓存时间（秒）。
+         *
+         * @param maxAgeSeconds 预检缓存秒数
+         */
         public void setMaxAgeSeconds(long maxAgeSeconds) {
             this.maxAgeSeconds = maxAgeSeconds;
         }
@@ -743,18 +1368,38 @@ public class AppProperties {
         /** 邮件发件人地址，仅在启用邮件通知时使用。 */
         private String mailFrom = "noreply@susumonitor.local";
 
+        /**
+         * 返回外部通知是否启用。
+         *
+         * @return 是否启用通知
+         */
         public boolean isNotificationEnabled() {
             return notificationEnabled;
         }
 
+        /**
+         * 设置外部通知开关。
+         *
+         * @param notificationEnabled 是否启用通知
+         */
         public void setNotificationEnabled(boolean notificationEnabled) {
             this.notificationEnabled = notificationEnabled;
         }
 
+        /**
+         * 获取邮件发件人地址。
+         *
+         * @return 邮件发件人地址
+         */
         public String getMailFrom() {
             return mailFrom;
         }
 
+        /**
+         * 设置邮件发件人地址。
+         *
+         * @param mailFrom 邮件发件人地址
+         */
         public void setMailFrom(String mailFrom) {
             this.mailFrom = mailFrom;
         }

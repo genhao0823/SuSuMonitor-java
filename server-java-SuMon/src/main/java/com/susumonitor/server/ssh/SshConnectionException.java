@@ -28,7 +28,11 @@ public class SshConnectionException extends RuntimeException {
         this.category = category;
     }
 
-    /** 返回稳定失败分类。 */
+    /**
+     * 返回稳定失败分类，供业务层决定 HTTP 状态码和响应文案。
+     *
+     * @return 稳定失败分类
+     */
     public Category getCategory() {
         return category;
     }

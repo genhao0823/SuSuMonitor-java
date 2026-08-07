@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Converts exceptions into the unified API response shape.
+ * 将异常转换为统一的 API 响应格式。
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {

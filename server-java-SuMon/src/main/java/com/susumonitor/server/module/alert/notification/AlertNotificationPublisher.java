@@ -33,6 +33,7 @@ public class AlertNotificationPublisher {
         notificationService.notify(rule, event.record());
     }
 
+    /** 判断规则是否配置了至少一个通知渠道。 */
     private boolean hasAnyChannel(AlertRuleEntity rule) {
         return StringUtils.hasText(rule.getNotifyEmail())
                 || StringUtils.hasText(rule.getNotifyDingtalk())

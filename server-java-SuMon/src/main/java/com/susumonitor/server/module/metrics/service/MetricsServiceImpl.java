@@ -109,6 +109,11 @@ public class MetricsServiceImpl implements MetricsService {
         return result;
     }
 
+    /**
+     * 验证服务器存在且有效，不存在时抛出资源不存在异常。
+     *
+     * @param serverId 服务器 ID
+     */
     private void ensureServerExists(Long serverId) {
         if (serverId == null || serverId <= 0 || !serverService.existsActive(serverId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
@@ -128,6 +133,13 @@ public class MetricsServiceImpl implements MetricsService {
         }
     }
 
+    /**
+     * 校验指标上报载荷的全部字段合法性，非法时抛出永久拒绝异常。
+     *
+     * @param authenticatedServerId 已认证服务器 ID
+     * @param messageId 消息幂等 UUID
+     * @param payload 指标上报载荷
+     */
     private void validatePayload(Long authenticatedServerId, String messageId, MetricsReportPayload payload) {
         if (payload == null || authenticatedServerId == null || !isUuid(messageId)
                 || !authenticatedServerId.equals(payload.getServerId())
@@ -166,18 +178,34 @@ public class MetricsServiceImpl implements MetricsService {
         }
     }
 
+    /**
+     * 校验百分比值在 0-100 范围内。
+     *
+     * @param value 百分比值，允许 null
+     */
     private void validatePercent(BigDecimal value) {
         if (value != null && (value.signum() < 0 || value.compareTo(BigDecimal.valueOf(100)) > 0)) {
             throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
     }
 
+    /**
+     * 校验数值为非负数。
+     *
+     * @param value 数值，允许 null
+     */
     private void validateNonNegative(Number value) {
         if (value != null && value.doubleValue() < 0) {
             throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
     }
 
+    /**
+     * 将上报载荷转换为指标实体。
+     *
+     * @param payload 指标上报载荷
+     * @return 指标实体
+     */
     private MetricsEntity toEntity(MetricsReportPayload payload) {
         MetricsEntity entity = new MetricsEntity();
         entity.setServerId(payload.getServerId());
@@ -196,6 +224,12 @@ public class MetricsServiceImpl implements MetricsService {
         return entity;
     }
 
+    /**
+     * 将指标实体转换为最新指标视图对象。
+     *
+     * @param entity 指标实体
+     * @return 最新指标视图对象
+     */
     private MetricsLatestVo toLatestVo(MetricsEntity entity) {
         MetricsLatestVo result = new MetricsLatestVo();
         result.setServerId(entity.getServerId());
@@ -214,6 +248,12 @@ public class MetricsServiceImpl implements MetricsService {
         return result;
     }
 
+    /**
+     * 将指标实体转换为历史指标视图对象。
+     *
+     * @param entity 指标实体
+     * @return 历史指标视图对象
+     */
     private MetricsHistoryVo toHistoryVo(MetricsEntity entity) {
         MetricsHistoryVo result = new MetricsHistoryVo();
         MetricsLatestVo latest = toLatestVo(entity);

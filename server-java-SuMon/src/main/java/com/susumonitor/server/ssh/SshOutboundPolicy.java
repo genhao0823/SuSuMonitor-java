@@ -70,7 +70,11 @@ public class SshOutboundPolicy {
         return List.copyOf(addresses);
     }
 
-    /** 校验单个解析地址不是特殊地址且位于显式允许的 CIDR。 */
+    /**
+     * 校验单个解析地址不是特殊地址且位于显式允许的 CIDR。
+     *
+     * @param address 待校验的 IP 地址
+     */
     private void validateAddress(InetAddress address) {
         String normalized = address.getHostAddress();
         int scopeIndex = normalized.indexOf('%');
@@ -84,7 +88,12 @@ public class SshOutboundPolicy {
         }
     }
 
-    /** 保存一个已验证格式的 IPv4 或 IPv6 CIDR。 */
+    /**
+     * 保存一个已验证格式的 IPv4 或 IPv6 CIDR。
+     *
+     * @param network 网络地址字节数组
+     * @param prefixLength 前缀长度
+     */
     private record CidrRange(byte[] network, int prefixLength) {
 
         /** 将文本 CIDR 转换为网络字节和前缀长度。 */

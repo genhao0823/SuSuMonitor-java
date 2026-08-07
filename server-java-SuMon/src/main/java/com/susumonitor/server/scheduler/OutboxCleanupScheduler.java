@@ -16,6 +16,11 @@ public class OutboxCleanupScheduler {
 
     private final OutboxCleanupService outboxCleanupService;
 
+    /**
+     * 构造 Outbox 清理调度器。
+     *
+     * @param outboxCleanupService Outbox 清理服务
+     */
     public OutboxCleanupScheduler(OutboxCleanupService outboxCleanupService) {
         this.outboxCleanupService = outboxCleanupService;
     }

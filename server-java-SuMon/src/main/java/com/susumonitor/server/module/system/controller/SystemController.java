@@ -17,6 +17,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 系统控制器，提供健康检查和就绪检查等基础运维接口。
+ *
+ * <p>健康检查仅返回存活状态；就绪检查额外验证数据库和可选 RabbitMQ 的可用性。</p>
+ */
 @RestController
 @RequestMapping("/api")
 public class SystemController {
@@ -29,6 +34,13 @@ public class SystemController {
 
     private final String applicationName;
 
+    /**
+     * 构造系统控制器，注入数据库源、可选 RabbitMQ 健康检查器和应用名称。
+     *
+     * @param dataSource         数据库数据源（就绪检查时验证连接有效性）
+     * @param rabbitHealthChecker RabbitMQ 健康检查器（可选，未启用 Outbox 时为 null）
+     * @param applicationName    应用名称（从配置读取，默认 susumonitor）
+     */
     public SystemController(DataSource dataSource,
             ObjectProvider<RabbitHealthChecker> rabbitHealthChecker,
             @Value("${spring.application.name:susumonitor}") String applicationName) {
@@ -37,6 +49,11 @@ public class SystemController {
         this.applicationName = applicationName;
     }
 
+    /**
+     * 健康检查：返回应用存活状态和当前时间戳。
+     *
+     * @return 健康状态（始终返回 UP）
+     */
     @GetMapping("/health")
     public ApiResponse<HealthStatusVo> health() {
         return ApiResponse.success(new HealthStatusVo("UP", applicationName, OffsetDateTime.now(ZoneOffset.UTC)));

@@ -67,6 +67,13 @@ public class AgentTokenServiceImpl implements AgentTokenService {
         }
     }
 
+    /**
+     * 生成或轮换 Agent Token，并写入数据库。
+     *
+     * @param serverId 服务器 ID
+     * @param rotation 是否为轮换操作
+     * @return Agent Token 一次性响应对象
+     */
     private AgentTokenVo createToken(Long serverId, boolean rotation) {
         validateServerId(serverId);
         try {
@@ -93,18 +100,34 @@ public class AgentTokenServiceImpl implements AgentTokenService {
         }
     }
 
+    /**
+     * 生成安全随机的 Base64 URL 编码 Token。
+     *
+     * @return Token 字符串
+     */
     private String generateToken() {
         byte[] bytes = new byte[TOKEN_BYTES];
         secureRandom.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
+    /**
+     * 生成安全随机的 Agent 唯一标识。
+     *
+     * @return Agent ID 字符串
+     */
     private String generateAgentId() {
         byte[] bytes = new byte[16];
         secureRandom.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
+    /**
+     * 使用 SHA-256 对 Token 进行不可逆哈希。
+     *
+     * @param token 明文 Token
+     * @return 带前缀的十六进制哈希值
+     */
     private String hashToken(String token) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
@@ -115,12 +138,23 @@ public class AgentTokenServiceImpl implements AgentTokenService {
         }
     }
 
+    /**
+     * 校验服务器 ID 为正数。
+     *
+     * @param serverId 服务器 ID
+     */
     private void validateServerId(Long serverId) {
         if (serverId == null || serverId <= 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
         }
     }
 
+    /**
+     * 将数据库时间按应用时区转换为接口时间。
+     *
+     * @param dateTime 数据库时间
+     * @return 接口时间
+     */
     private OffsetDateTime toOffsetDateTime(LocalDateTime dateTime) {
         return dateTime.atZone(APPLICATION_ZONE).toOffsetDateTime();
     }

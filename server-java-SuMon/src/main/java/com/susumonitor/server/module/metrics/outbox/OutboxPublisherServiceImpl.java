@@ -109,6 +109,12 @@ public class OutboxPublisherServiceImpl implements OutboxPublisherService {
                 row.getId(), nextAttempts, delaySeconds, error);
     }
 
+    /**
+     * 截断异常消息至 500 字符，避免数据库 error 字段溢出。
+     *
+     * @param exception 异常对象
+     * @return 截断后的错误描述
+     */
     private String truncateError(Exception exception) {
         String message = exception.getMessage() == null ? exception.getClass().getSimpleName()
                 : exception.getMessage();

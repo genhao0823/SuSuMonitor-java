@@ -9,9 +9,12 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
-// 将当前类映射为 MyBatis-Plus 对应的 users 数据库表。
+/**
+ * 用户实体，映射 users 数据库表，承载注册、登录和审核所需的核心字段。
+ *
+ * <p>密码哈希排除在 toString、equals 和 hashCode 之外，防止敏感信息泄露。</p>
+ */
 @TableName("users")
-// 自动生成当前 Entity 的 getter、setter、toString、equals 和 hashCode 方法。
 @Data
 public class UserEntity {
 

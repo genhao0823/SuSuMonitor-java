@@ -90,6 +90,7 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
         return channels;
     }
 
+    /** 插入一条 pending 状态的通知记录。 */
     private AlertNotificationEntity insertPending(Long recordId, String channel) {
         AlertNotificationEntity entity = new AlertNotificationEntity();
         entity.setAlertRecordId(recordId);
@@ -130,6 +131,7 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
         return Math.min(1L << attempt, MAX_BACKOFF_SECONDS);
     }
 
+    /** 发送邮件通知。 */
     private void sendEmail(String to, AlertRuleEntity rule, AlertRecordVo record) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(appProperties.getAlert().getMailFrom());
@@ -139,6 +141,7 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
         mailSender.get().send(message);
     }
 
+    /** 发送钉钉机器人通知。 */
     private void sendDingtalk(String url, AlertRuleEntity rule, AlertRecordVo record) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("msgtype", "text");
@@ -146,6 +149,7 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
         restTemplate.postForObject(url, payload, String.class);
     }
 
+    /** 发送自定义 Webhook 通知。 */
     private void sendWebhook(String url, AlertRuleEntity rule, AlertRecordVo record) {
         restTemplate.postForObject(url, record, String.class);
     }
@@ -161,6 +165,7 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
         return truncate(message);
     }
 
+    /** 截断字符串到最大错误长度。 */
     static String truncate(String text) {
         if (text == null) {
             return null;

@@ -1,7 +1,7 @@
 package com.susumonitor.server.common;
 
 /**
- * Business exception carrying a stable API error code.
+ * 业务异常，携带稳定的 API 错误码。
  */
 public class BusinessException extends RuntimeException {
 
