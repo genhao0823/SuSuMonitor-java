@@ -27,6 +27,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.min
@@ -69,6 +70,13 @@ class WsClient @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var connectJob: Job? = null
+
+    /**
+     * WebSocket 专用客户端：派生自注入的 [okHttpClient] 并加 30s 应用层 Ping。
+     * nginx 空闲断开（半开连接）后 TCP 层无感知，Ping 无响应会触发 onFailure → 自动重连。
+     */
+    private val webSocketClient: OkHttpClient =
+        okHttpClient.newBuilder().pingInterval(30, TimeUnit.SECONDS).build()
 
     /**
      * 启动连接。幂等：已连接/连接中时忽略。
@@ -156,7 +164,7 @@ class WsClient @Inject constructor(
             .url(url)
             .build()
 
-        val ws = okHttpClient.newWebSocket(request, listener)
+        val ws = webSocketClient.newWebSocket(request, listener)
         webSocket = ws
         // 等待 onOpen 或超时（10s）
         var waited = 0
