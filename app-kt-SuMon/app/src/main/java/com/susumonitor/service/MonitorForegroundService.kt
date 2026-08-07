@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import com.susumonitor.api.WsClient
+import com.susumonitor.data.SettingsRepository
 import com.susumonitor.data.WsMessage
 import com.susumonitor.data.model.AlertPushPayload
 import com.susumonitor.data.model.MetricsUpdatePayload
@@ -87,6 +88,9 @@ class MonitorForegroundService : Service() {
     @Inject
     lateinit var notificationHelper: NotificationHelper
 
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var collectJob: Job? = null
 
@@ -161,15 +165,18 @@ class MonitorForegroundService : Service() {
         }
     }
 
-    /** 告警到达：发布高优通知。 */
+    /** 告警到达：通知开关开启时发布高优通知（开关在设置页持久化）。 */
     private fun postAlertNotification(payload: AlertPushPayload) {
-        val alert = payload.alert
-        notificationHelper.showAlertNotification(
-            serverName = "服务器 #${payload.serverId}",
-            metricLabel = ValueFormatter.metricLabel(alert.metric),
-            currentValue = ValueFormatter.formatMetric(alert.metric, alert.currentValue),
-            thresholdValue = ValueFormatter.formatMetric(alert.metric, alert.thresholdValue),
-            level = alert.level,
-        )
+        serviceScope.launch {
+            if (!settingsRepository.notificationsEnabledNow()) return@launch
+            val alert = payload.alert
+            notificationHelper.showAlertNotification(
+                serverName = "服务器 #${payload.serverId}",
+                metricLabel = ValueFormatter.metricLabel(alert.metric),
+                currentValue = ValueFormatter.formatMetric(alert.metric, alert.currentValue),
+                thresholdValue = ValueFormatter.formatMetric(alert.metric, alert.thresholdValue),
+                level = alert.level,
+            )
+        }
     }
 }
