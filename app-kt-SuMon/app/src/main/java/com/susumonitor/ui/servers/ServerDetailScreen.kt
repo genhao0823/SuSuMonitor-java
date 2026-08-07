@@ -1,7 +1,11 @@
 package com.susumonitor.ui.servers
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +36,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -91,51 +99,40 @@ fun ServerDetailScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // 动作栏：显式设深色背景+白色文字+白色边框，完全独立于主题/系统颜色
+                // 动作栏：完全自绘，绕过 OutlinedButton，直接 Box+Text 保证文字可见
                 val isDark = isSystemInDarkTheme()
-                val btnBg = if (isDark) androidx.compose.ui.graphics.Color(0xFF2D2540)
-                            else MaterialTheme.colorScheme.primaryContainer
-                val btnFg = if (isDark) androidx.compose.ui.graphics.Color.White
-                            else MaterialTheme.colorScheme.onPrimaryContainer
-                val btnBorder = BorderStroke(
-                    width = 1.dp,
-                    color = if (isDark) androidx.compose.ui.graphics.Color(0xFFD8C7F0)
-                            else MaterialTheme.colorScheme.primary,
-                )
-                val btnColors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = btnBg,
-                    contentColor = btnFg,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onMetrics, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
-                        Text("实时监控", color = btnFg)
+                val actBg = if (isDark) Color(0xFF2D2540) else Color(0xFFEDE7F6)
+                val actFg = if (isDark) Color.White else Color(0xFF7A5CB8)
+                val actBorder = if (isDark) Color(0xFFD8C7F0) else Color(0xFF9C7BD8)
+
+                @Composable
+                fun ActionBtn(label: String, fg: Color = actFg, onClick: () -> Unit) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, actBorder, RoundedCornerShape(50))
+                            .background(actBg, RoundedCornerShape(50))
+                            .clickable { onClick() }
+                            .padding(vertical = 10.dp, horizontal = 2.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = label,
+                            color = fg,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                        )
                     }
-                    if (isApproved) {
-                        OutlinedButton(onClick = onTerminal, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
-                            Text("终端", color = btnFg)
-                        }
-                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ActionBtn("实时监控") { onMetrics() }
+                    if (isApproved) ActionBtn("终端") { onTerminal() }
                     if (isAdmin) {
-                        OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
-                            Text("编辑", color = btnFg)
-                        }
-                        OutlinedButton(onClick = { showHostKeyDialog = true }, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
-                            Text("主机指纹", color = btnFg)
-                        }
-                        OutlinedButton(onClick = { showTokenDialog = true }, modifier = Modifier.weight(1f), colors = btnColors, border = btnBorder) {
-                            Text("Agent 令牌", color = btnFg)
-                        }
-                        OutlinedButton(
-                            onClick = { showDeleteDialog = true },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = btnBg,
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                        ) {
-                            Text("删除", color = MaterialTheme.colorScheme.error)
-                        }
+                        ActionBtn("编辑") { onEdit() }
+                        ActionBtn("主机指纹") { showHostKeyDialog = true }
+                        ActionBtn("Agent令牌") { showTokenDialog = true }
+                        ActionBtn("删除", fg = MaterialTheme.colorScheme.error) { showDeleteDialog = true }
                     }
                 }
 
