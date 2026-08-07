@@ -185,28 +185,31 @@ deploy/
 
 ```bash
 curl --fail --silent --show-error --location \
-  http://SERVER_IP_OR_DOMAIN/agent/install-agent.sh | \
+  https://genhaosan.online/agent/install-agent.sh | \
   sudo -E env \
-    AGENT_BASE_URL=http://SERVER_IP_OR_DOMAIN \
-    AGENT_ALLOW_INSECURE_HTTP=true \
+    AGENT_BASE_URL=https://genhaosan.online \
+    AGENT_TERMINAL_ENABLED=true \
     AGENT_VERSION=1.0.0 \
     bash
 ```
 
-> 临时 IPv4 测试用 `AGENT_ALLOW_INSECURE_HTTP=true`（仅允许授权测试 IP）。生产环境上 HTTPS 后去掉此变量，`AGENT_BASE_URL` 改为 `https://域名`。
+> 生产环境必须 HTTPS。脚本会把 `AGENT_BASE_URL` 的 `https:` 自动转成 `wss:` 写入 `SUSUMONITOR_BACKEND_URL`（agent 连后端地址），无需再传 `AGENT_ALLOW_INSECURE_HTTP`。终端功能需要 `AGENT_TERMINAL_ENABLED=true`（默认关闭）。
 
 脚本自动完成：下载二进制（sha256 校验）→ 交互输入 admin 账密 → 登录 → 预建 server → 发 token → 写配置 → 装 systemd → 启动验证。安装失败自动回滚。
+
+> ⚠️ **已装过 agent 的机器重跑不会更新旧地址**：脚本只在 `/etc/susumonitor/agent.env` 不存在时才写入 `SUSUMONITOR_BACKEND_URL`，已存在则保留原值。HTTPS 迁移后旧机器（指向 `ws://82.156.245.102` 等）需先手动改：`sed -i 's|SUSUMONITOR_BACKEND_URL=ws://.*|SUSUMONITOR_BACKEND_URL=wss://genhaosan.online|' /etc/susumonitor/agent.env && systemctl restart susumonitor-agent`，或 `rm /etc/susumonitor/agent.env` 后重跑脚本（会重新注册新 server）。
 
 **环境变量**：
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `AGENT_BASE_URL` | `https://monitor.example.com` | 后端地址，生产必须 HTTPS |
-| `AGENT_ALLOW_INSECURE_HTTP` | `false` | 临时明文 HTTP，仅允许授权 IPv4 |
+| `AGENT_BASE_URL` | `https://monitor.example.com` | 后端 HTTPS 地址，`https:` 自动转 `wss:` 写 agent 配置 |
 | `AGENT_VERSION` | `1.0.0` | release 版本号 |
 | `AGENT_NAME` | `hostname -s` | 主机显示名 |
 | `AGENT_SERVER_ID` | 空（新建） | 已有 server 时复用，跳过预建 |
+| `AGENT_TOKEN` | 空 | 已有 server 时配合 `AGENT_SERVER_ID` 复用，免交互 |
 | `AGENT_TERMINAL_ENABLED` | `false` | 设 `true` 开启 Web 终端 |
+| `AGENT_ALLOW_INSECURE_HTTP` | `false` | 仅历史 IPv4 明文测试用，生产勿设 |
 
 > 已有 `/etc/susumonitor/agent.env` 时脚本读取现有 `AGENT_SERVER_ID` + token，不重复预建。
 
