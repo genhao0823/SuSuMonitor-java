@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -88,42 +91,54 @@ fun ServerListScreen(
             }
             HorizontalDivider()
 
-            when {
-                uiState.isLoading && uiState.servers.isEmpty() -> LoadingState()
-                uiState.errorMessage != null && uiState.servers.isEmpty() ->
-                    ErrorState(
-                        message = uiState.errorMessage.orEmpty(),
-                        onRetry = { viewModel.loadFirstPage() },
-                    )
-                uiState.servers.isEmpty() -> EmptyState(text = "暂无服务器")
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(uiState.servers, key = { it.id }) { server ->
-                        ServerListCard(
-                            server = server,
-                            latest = uiState.latestMetrics[server.id],
-                            isAdmin = uiState.isAdmin,
-                            sshTest = uiState.sshTestResults[server.id],
-                            onTestSsh = { viewModel.testSsh(server.id) },
-                            onDelete = { deleteTarget = server },
-                            onClick = { onServerClick(server.id) },
-                            onEdit = { onEditServer(server.id) },
+            // 下拉刷新：PullToRefreshBox 依赖子内容可滚动，空/错误态补滚动容器以支持手势
+            PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                when {
+                    uiState.isLoading && uiState.servers.isEmpty() -> LoadingState()
+                    uiState.errorMessage != null && uiState.servers.isEmpty() ->
+                        ErrorState(
+                            message = uiState.errorMessage.orEmpty(),
+                            onRetry = { viewModel.loadFirstPage() },
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
                         )
-                    }
-                    // 加载更多：滚到底触发
-                    if (uiState.hasMore) {
-                        item {
-                            LaunchedEffect(uiState.page) {
-                                viewModel.loadMore()
-                            }
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+                    uiState.servers.isEmpty() ->
+                        EmptyState(
+                            text = "暂无服务器",
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                        )
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(uiState.servers, key = { it.id }) { server ->
+                            ServerListCard(
+                                server = server,
+                                latest = uiState.latestMetrics[server.id],
+                                isAdmin = uiState.isAdmin,
+                                sshTest = uiState.sshTestResults[server.id],
+                                onTestSsh = { viewModel.testSsh(server.id) },
+                                onDelete = { deleteTarget = server },
+                                onClick = { onServerClick(server.id) },
+                                onEdit = { onEditServer(server.id) },
+                            )
+                        }
+                        // 加载更多：滚到底触发
+                        if (uiState.hasMore) {
+                            item {
+                                LaunchedEffect(uiState.page) {
+                                    viewModel.loadMore()
+                                }
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+                                }
                             }
                         }
                     }
