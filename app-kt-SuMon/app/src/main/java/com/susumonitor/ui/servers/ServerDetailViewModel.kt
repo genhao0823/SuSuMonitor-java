@@ -24,6 +24,7 @@ import javax.inject.Inject
 /** 服务器详情 UI 状态。 */
 data class ServerDetailUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val server: Server? = null,
     val status: ServerStatus? = null,
@@ -65,9 +66,18 @@ class ServerDetailViewModel @Inject constructor(
         }
     }
 
-    fun load() {
+    fun load() = load(silent = false)
+
+    /** 下拉刷新：静默重拉详情，不显示全屏 Loading。 */
+    fun refresh() = load(silent = true)
+
+    private fun load(silent: Boolean) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            _uiState.value = if (silent) {
+                _uiState.value.copy(isRefreshing = true, errorMessage = null)
+            } else {
+                _uiState.value.copy(isLoading = true, errorMessage = null)
+            }
             try {
                 val server = serverRepository.get(serverId)
                 val status = serverRepository.status(serverId)
@@ -83,6 +93,7 @@ class ServerDetailViewModel @Inject constructor(
                     .getOrNull()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     server = server,
                     status = status,
                     latest = latest,
@@ -90,6 +101,7 @@ class ServerDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     errorMessage = ApiException.from(e).message,
                 )
             }

@@ -26,6 +26,7 @@ enum class ReviewTab(val label: String, val value: String?) {
 /** 用户审核 UI 状态。 */
 data class AdminUsersUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val users: List<AdminUserVo> = emptyList(),
     val total: Long = 0,
@@ -80,6 +81,13 @@ class AdminUsersViewModel @Inject constructor(
         val state = _uiState.value
         if (state.isLoading || !state.hasMore) return
         loadPage(state.page + 1, reset = false)
+    }
+
+    /** 下拉刷新：保留当前 Tab/关键词，静默重拉第一页。 */
+    fun refresh() {
+        if (_uiState.value.isRefreshing) return
+        _uiState.value = _uiState.value.copy(isRefreshing = true, errorMessage = null)
+        loadPage(1, reset = true, fromPull = true)
     }
 
     /** 单条通过。 */
@@ -153,9 +161,13 @@ class AdminUsersViewModel @Inject constructor(
         )
     }
 
-    private fun loadPage(page: Int, reset: Boolean) {
+    private fun loadPage(page: Int, reset: Boolean, fromPull: Boolean = false) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            _uiState.value = _uiState.value.copy(
+                isLoading = !fromPull,
+                isRefreshing = fromPull,
+                errorMessage = null,
+            )
             try {
                 val result = adminRepository.listUsers(
                     AdminUserQuery(
@@ -168,6 +180,7 @@ class AdminUsersViewModel @Inject constructor(
                 val users = if (reset) result.items else _uiState.value.users + result.items
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     users = users,
                     total = result.total,
                     page = page,
@@ -176,6 +189,7 @@ class AdminUsersViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     errorMessage = ApiException.from(e).message,
                 )
             }

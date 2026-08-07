@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +26,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -97,24 +100,35 @@ fun AlertListScreen(
                 }
             }
 
-            when {
-                uiState.isLoading && uiState.records.isEmpty() -> LoadingState()
-                uiState.errorMessage != null && uiState.records.isEmpty() ->
-                    ErrorState(
-                        message = uiState.errorMessage.orEmpty(),
-                        onRetry = { viewModel.loadFirstPage() },
-                    )
-                uiState.records.isEmpty() -> EmptyState(text = "暂无告警记录")
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(uiState.records, key = { it.id }) { record ->
-                        AlertRecordCard(
-                            record = record,
-                            onClick = { viewModel.markRead(record.id) },
+            // 下拉刷新：保留当前筛选，静默重拉第一页
+            PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) {
+                when {
+                    uiState.isLoading && uiState.records.isEmpty() -> LoadingState()
+                    uiState.errorMessage != null && uiState.records.isEmpty() ->
+                        ErrorState(
+                            message = uiState.errorMessage.orEmpty(),
+                            onRetry = { viewModel.loadFirstPage() },
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
                         )
+                    uiState.records.isEmpty() -> EmptyState(
+                        text = "暂无告警记录",
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                    )
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(uiState.records, key = { it.id }) { record ->
+                            AlertRecordCard(
+                                record = record,
+                                onClick = { viewModel.markRead(record.id) },
+                            )
+                        }
                     }
                 }
             }

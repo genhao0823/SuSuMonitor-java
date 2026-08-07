@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -51,11 +52,17 @@ fun DashboardScreen(
     Scaffold(
         topBar = { TopAppBar(title = { Text("SuSuMonitor 仪表盘") }) },
     ) { innerPadding ->
-        LazyColumn(
+        // 下拉刷新：探针/概览/服务器列表整体重拉
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             // 探针卡：健康/就绪
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -112,6 +119,7 @@ fun DashboardScreen(
                     )
                 }
             }
+        }
         }
     }
 }

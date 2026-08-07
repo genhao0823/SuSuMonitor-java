@@ -30,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -83,18 +84,22 @@ fun ServerDetailScreen(
             )
         },
     ) { innerPadding ->
+        // 下拉刷新：详情内容可滚动，静默重拉
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+        ) {
         when {
-            uiState.isLoading && uiState.server == null -> LoadingState(Modifier.padding(innerPadding))
+            uiState.isLoading && uiState.server == null -> LoadingState()
             uiState.errorMessage != null && uiState.server == null ->
                 ErrorState(
                     message = uiState.errorMessage.orEmpty(),
                     onRetry = { viewModel.load() },
-                    modifier = Modifier.padding(innerPadding),
                 )
             uiState.server != null -> Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -178,6 +183,7 @@ fun ServerDetailScreen(
 
                 MetricsGrid(uiState.latest)
             }
+        }
         }
     }
 

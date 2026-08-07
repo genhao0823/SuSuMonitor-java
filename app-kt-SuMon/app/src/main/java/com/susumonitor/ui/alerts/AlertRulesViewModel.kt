@@ -21,6 +21,7 @@ import javax.inject.Inject
 /** 告警规则 UI 状态。 */
 data class AlertRulesUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val rules: List<AlertRule> = emptyList(),
     val servers: List<Server> = emptyList(),
@@ -42,18 +43,33 @@ class AlertRulesViewModel @Inject constructor(
         loadAll()
     }
 
-    fun loadAll() {
+    fun loadAll() = loadAll(fromPull = false)
+
+    /** 下拉刷新：静默重拉规则与服务器列表。 */
+    fun refresh() = loadAll(fromPull = true)
+
+    private fun loadAll(fromPull: Boolean) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            _uiState.value = _uiState.value.copy(
+                isLoading = !fromPull,
+                isRefreshing = fromPull,
+                errorMessage = null,
+            )
             try {
                 val rules = alertRepository.listRules()
                 val servers = runCatching {
                     serverRepository.list(ServerQuery(pageSize = 100)).items
                 }.getOrDefault(emptyList())
-                _uiState.value = _uiState.value.copy(isLoading = false, rules = rules, servers = servers)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    rules = rules,
+                    servers = servers,
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     errorMessage = ApiException.from(e).message,
                 )
             }

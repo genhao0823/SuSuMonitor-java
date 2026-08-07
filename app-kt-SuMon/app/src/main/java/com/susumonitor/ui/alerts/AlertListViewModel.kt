@@ -27,6 +27,7 @@ enum class AlertFilter(val label: String, val value: String?) {
 /** 告警列表 UI 状态。 */
 data class AlertListUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val records: List<AlertRecord> = emptyList(),
     val total: Long = 0,
@@ -69,6 +70,14 @@ class AlertListViewModel @Inject constructor(
         loadPage(state.page + 1, state.filter, reset = false)
     }
 
+    /** 下拉刷新：保留当前筛选，静默重拉第一页。 */
+    fun refresh() {
+        if (_uiState.value.isRefreshing) return
+        val state = _uiState.value
+        _uiState.value = state.copy(isRefreshing = true, errorMessage = null)
+        loadPage(1, state.filter, reset = true, fromPull = true)
+    }
+
     /** 标记已读并更新本地状态。 */
     fun markRead(id: Long) {
         viewModelScope.launch {
@@ -83,9 +92,13 @@ class AlertListViewModel @Inject constructor(
         }
     }
 
-    private fun loadPage(page: Int, filter: AlertFilter, reset: Boolean) {
+    private fun loadPage(page: Int, filter: AlertFilter, reset: Boolean, fromPull: Boolean = false) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            _uiState.value = _uiState.value.copy(
+                isLoading = !fromPull,
+                isRefreshing = fromPull,
+                errorMessage = null,
+            )
             try {
                 val result = alertRepository.listRecords(
                     AlertRecordQuery(page = page, pageSize = 20, status = filter.value),
@@ -93,6 +106,7 @@ class AlertListViewModel @Inject constructor(
                 val records = if (reset) result.items else _uiState.value.records + result.items
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     records = records,
                     total = result.total,
                     page = page,
@@ -101,6 +115,7 @@ class AlertListViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     errorMessage = ApiException.from(e).message,
                 )
             }

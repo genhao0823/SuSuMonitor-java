@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -22,6 +24,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -99,28 +102,39 @@ fun AdminUsersScreen(
                 }
             }
 
-            when {
-                uiState.isLoading && uiState.users.isEmpty() -> LoadingState()
-                uiState.errorMessage != null && uiState.users.isEmpty() ->
-                    ErrorState(
-                        message = uiState.errorMessage.orEmpty(),
-                        onRetry = { viewModel.loadFirstPage() },
-                    )
-                uiState.users.isEmpty() -> EmptyState("暂无用户")
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(uiState.users, key = { it.id }) { user ->
-                        AdminUserRow(
-                            user = user,
-                            selected = user.id in uiState.selectedIds,
-                            selectable = uiState.tab == ReviewTab.PENDING,
-                            onSelect = { viewModel.toggleSelect(user.id) },
-                            onApprove = { viewModel.approveUser(user.id) },
-                            onReject = { rejectTarget = user },
+            // 下拉刷新：保留当前 Tab/关键词，静默重拉第一页
+            PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) {
+                when {
+                    uiState.isLoading && uiState.users.isEmpty() -> LoadingState()
+                    uiState.errorMessage != null && uiState.users.isEmpty() ->
+                        ErrorState(
+                            message = uiState.errorMessage.orEmpty(),
+                            onRetry = { viewModel.loadFirstPage() },
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
                         )
+                    uiState.users.isEmpty() -> EmptyState(
+                        text = "暂无用户",
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                    )
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(uiState.users, key = { it.id }) { user ->
+                            AdminUserRow(
+                                user = user,
+                                selected = user.id in uiState.selectedIds,
+                                selectable = uiState.tab == ReviewTab.PENDING,
+                                onSelect = { viewModel.toggleSelect(user.id) },
+                                onApprove = { viewModel.approveUser(user.id) },
+                                onReject = { rejectTarget = user },
+                            )
+                        }
                     }
                 }
             }

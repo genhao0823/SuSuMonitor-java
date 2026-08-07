@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -27,6 +29,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,28 +84,38 @@ fun AlertRulesScreen(
             )
         },
     ) { innerPadding ->
-        when {
-            uiState.isLoading && uiState.rules.isEmpty() -> LoadingState(Modifier.padding(innerPadding))
-            uiState.errorMessage != null && uiState.rules.isEmpty() ->
-                ErrorState(
-                    message = uiState.errorMessage.orEmpty(),
-                    onRetry = { viewModel.loadAll() },
-                    modifier = Modifier.padding(innerPadding),
-                )
-            uiState.rules.isEmpty() -> EmptyState("暂无告警规则", Modifier.padding(innerPadding))
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(uiState.rules, key = { it.id }) { rule ->
-                    AlertRuleCard(
-                        rule = rule,
-                        serverName = viewModel.serverName(rule),
-                        onToggle = { viewModel.toggleEnabled(rule) },
-                        onEdit = { editingRule = rule },
-                        onDelete = { deletingRule = rule },
+        // 下拉刷新：静默重拉规则与服务器列表
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+        ) {
+            when {
+                uiState.isLoading && uiState.rules.isEmpty() -> LoadingState()
+                uiState.errorMessage != null && uiState.rules.isEmpty() ->
+                    ErrorState(
+                        message = uiState.errorMessage.orEmpty(),
+                        onRetry = { viewModel.loadAll() },
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
                     )
+                uiState.rules.isEmpty() -> EmptyState(
+                    text = "暂无告警规则",
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(uiState.rules, key = { it.id }) { rule ->
+                        AlertRuleCard(
+                            rule = rule,
+                            serverName = viewModel.serverName(rule),
+                            onToggle = { viewModel.toggleEnabled(rule) },
+                            onEdit = { editingRule = rule },
+                            onDelete = { deletingRule = rule },
+                        )
+                    }
                 }
             }
         }

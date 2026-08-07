@@ -31,6 +31,7 @@ enum class TimeRange(val label: String, val hours: Long) {
 /** 实时监控 UI 状态。 */
 data class ServerMetricsUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val latest: Metrics? = null,
     val history: List<Metrics> = emptyList(),
@@ -83,9 +84,18 @@ class ServerMetricsViewModel @Inject constructor(
     }
 
     /** 并行加载最新/历史/状态/规则。 */
-    fun loadAll() {
+    fun loadAll() = loadAll(silent = false)
+
+    /** 下拉刷新：静默重拉全部数据。 */
+    fun refresh() = loadAll(silent = true)
+
+    private fun loadAll(silent: Boolean) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            _uiState.value = if (silent) {
+                _uiState.value.copy(isRefreshing = true, errorMessage = null)
+            } else {
+                _uiState.value.copy(isLoading = true, errorMessage = null)
+            }
             try {
                 val latest = runCatching { metricsRepository.latest(serverId) }.getOrNull()
                 val history = loadHistory(_uiState.value.timeRange)
@@ -93,6 +103,7 @@ class ServerMetricsViewModel @Inject constructor(
                 val rules = runCatching { alertRepository.listRules() }.getOrDefault(emptyList())
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     latest = latest,
                     history = history,
                     serverStatus = status,
@@ -101,6 +112,7 @@ class ServerMetricsViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     errorMessage = ApiException.from(e).message,
                 )
             }

@@ -25,6 +25,7 @@ import javax.inject.Inject
 /** 仪表盘 UI 状态。 */
 data class DashboardUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val servers: List<Server> = emptyList(),
     val latestMetrics: Map<Long, Metrics> = emptyMap(),
@@ -64,7 +65,7 @@ class DashboardViewModel @Inject constructor(
         collectServiceEvents()
     }
 
-    /** 加载服务器列表并启动监控服务订阅。 */
+    /** 加载服务器列表并启动监控服务订阅；下拉刷新时同时清掉刷新标记。 */
     fun loadServers() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
@@ -75,6 +76,7 @@ class DashboardViewModel @Inject constructor(
                 val offline = servers.count { it.status == "offline" }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     servers = servers,
                     onlineCount = online,
                     offlineCount = offline,
@@ -87,10 +89,19 @@ class DashboardViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     errorMessage = com.susumonitor.data.ApiException.from(e).message,
                 )
             }
         }
+    }
+
+    /** 下拉刷新：重拉服务器列表 + 探针概览（列表加载完成时清除刷新标记）。 */
+    fun refresh() {
+        if (_uiState.value.isRefreshing) return
+        _uiState.value = _uiState.value.copy(isRefreshing = true, errorMessage = null)
+        loadServers()
+        loadOverview()
     }
 
     /** 加载健康/就绪探针 + 未读告警计数 + admin 待审核计数。 */
