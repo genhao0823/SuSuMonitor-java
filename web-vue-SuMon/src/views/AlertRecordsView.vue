@@ -175,10 +175,18 @@
         </el-table-column>
         <el-table-column
           label="操作"
-          width="120"
+          width="180"
           fixed="right"
         >
           <template #default="{ row }">
+            <el-button
+              size="small"
+              plain
+              :loading="notificationsLoadingId === row.id"
+              @click="handleShowNotifications(row as AlertRecord)"
+            >
+              通知详情
+            </el-button>
             <el-button
               v-if="row.status === 'unread'"
               size="small"
@@ -209,6 +217,82 @@
         @size-change="onPageSizeChange"
       />
     </el-card>
+
+    <!-- 通知投递历史弹窗 -->
+    <el-dialog
+      v-model="notificationDialogVisible"
+      :title="`通知投递历史 · #${notificationDialogRecordId ?? ''}`"
+      width="620"
+    >
+      <el-table
+        v-if="notificationList.length > 0"
+        :data="notificationList"
+        stripe
+        empty-text="该记录无通知投递记录（规则可能未配置渠道）"
+      >
+        <el-table-column
+          prop="channel"
+          label="渠道"
+          width="110"
+        >
+          <template #default="{ row }">
+            {{ notificationChannelLabel(row.channel) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="status"
+          label="状态"
+          width="90"
+        >
+          <template #default="{ row }">
+            <el-tag :type="notificationStatusTagType(row.status)">
+              {{ notificationStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="attempts"
+          label="尝试次数"
+          width="90"
+        />
+        <el-table-column
+          prop="last_error"
+          label="最近错误"
+          min-width="180"
+        >
+          <template #default="{ row }">
+            <span :title="row.last_error">{{ row.last_error || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="next_attempt_at"
+          label="下次重试"
+          min-width="150"
+        >
+          <template #default="{ row }">
+            {{ row.next_attempt_at ? formatDateTime(row.next_attempt_at) : '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="updated_at"
+          label="更新时间"
+          min-width="150"
+        >
+          <template #default="{ row }">
+            {{ row.updated_at ? formatDateTime(row.updated_at) : '-' }}
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty
+        v-else-if="!notificationLoading"
+        description="该记录无通知投递记录"
+      />
+      <template #footer>
+        <el-button @click="notificationDialogVisible = false">
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -217,11 +301,17 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import { listServers } from '@/api/server'
-import { listAlertRules } from '@/api/alert'
+import { listAlertRules, listAlertRecordNotifications } from '@/api/alert'
 import { useAlertsStore } from '@/stores/alerts'
 import { MonitorWebSocket } from '@/services/websocket'
 import { formatDateTime } from '@/utils/format'
-import type { AlertRecord, AlertRecordQuery, AlertStatus, Server } from '@/types/api'
+import type {
+  AlertNotification,
+  AlertRecord,
+  AlertRecordQuery,
+  AlertStatus,
+  Server
+} from '@/types/api'
 
 const alerts = useAlertsStore()
 
@@ -233,6 +323,13 @@ const page = ref(1)
 const pageSizeOptions: number[] = [10, 20, 50, 100]
 const pageSize = ref<number>(pageSizeOptions[0])
 const markingReadId = ref<number | null>(null)
+
+/** 通知投递历史弹窗状态 */
+const notificationDialogVisible = ref(false)
+const notificationDialogRecordId = ref<number | null>(null)
+const notificationList = ref<AlertNotification[]>([])
+const notificationLoading = ref(false)
+const notificationsLoadingId = ref<number | null>(null)
 /** 规则 ID → 已配置的通知渠道；用于区分"规则未配渠道"与"配了但发送失败"。 */
 const ruleChannelsById = ref<Record<number, string[]>>({})
 
@@ -404,6 +501,43 @@ async function handleMarkRead(row: AlertRecord): Promise<void> {
   if (ok) {
     ElMessage.success('已标记为已读')
   }
+}
+
+/** 打开通知投递历史弹窗并加载。 */
+async function handleShowNotifications(row: AlertRecord): Promise<void> {
+  notificationDialogRecordId.value = row.id
+  notificationDialogVisible.value = true
+  notificationList.value = []
+  notificationLoading.value = true
+  notificationsLoadingId.value = row.id
+  try {
+    const res = await listAlertRecordNotifications(row.id)
+    notificationList.value = res.data ?? []
+  } catch {
+    ElMessage.error('加载通知历史失败')
+  } finally {
+    notificationLoading.value = false
+    notificationsLoadingId.value = null
+  }
+}
+
+function notificationChannelLabel(channel: string): string {
+  if (channel === 'email') return '邮件'
+  if (channel === 'dingtalk') return '钉钉'
+  if (channel === 'webhook') return 'Webhook'
+  return channel
+}
+
+function notificationStatusLabel(status: string): string {
+  if (status === 'sent') return '已送达'
+  if (status === 'failed') return '失败'
+  return '待重试'
+}
+
+function notificationStatusTagType(status: string): 'success' | 'info' | 'danger' | 'warning' {
+  if (status === 'sent') return 'success'
+  if (status === 'failed') return 'danger'
+  return 'warning'
 }
 
 function onPushBannerRefresh(): void {

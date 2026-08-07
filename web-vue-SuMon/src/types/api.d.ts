@@ -303,6 +303,24 @@ export interface AlertRecord {
 }
 
 /**
+ * /api/alerts/records/{id}/notifications 返回的单条渠道投递记录。
+ *
+ * status: pending(待发送/待重试) / sent(已送达) / failed(达重试上限放弃)。
+ * next_attempt_at 为 null 表示不再重试;last_error 记录最近失败原因。
+ */
+export interface AlertNotification {
+  id: number
+  alert_record_id: number
+  channel: 'email' | 'dingtalk' | 'webhook' | string
+  status: 'pending' | 'sent' | 'failed' | string
+  attempts: number
+  next_attempt_at: string | null
+  last_error: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+/**
  * /ws/monitor alert.push payload 中内嵌的简化告警对象。
  *
  * 注意:与完整 AlertRecord 不同,push 不承诺携带 message/read_by/read_at/created_at,

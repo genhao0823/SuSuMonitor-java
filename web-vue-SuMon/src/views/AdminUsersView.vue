@@ -124,8 +124,8 @@
       </div>
 
       <el-table
-        v-loading="loading"
         ref="tableRef"
+        v-loading="loading"
         :data="pendingList"
         stripe
         class="admin-users-view__table"

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
+import type * as ElementPlus from 'element-plus'
 import AdminUsersView from '@/views/AdminUsersView.vue'
 import * as adminApi from '@/api/admin'
 import type { CurrentUser } from '@/types/api'
@@ -39,7 +40,7 @@ vi.mock('@/api/admin', () => ({
 // 捕获批量失败明细弹窗调用(vi.hoisted 保证 mock 工厂 hoist 后仍可引用)。
 const { alertSpy } = vi.hoisted(() => ({ alertSpy: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('element-plus', async () => {
-  const actual = await vi.importActual<typeof import('element-plus')>('element-plus')
+  const actual = await vi.importActual<typeof ElementPlus>('element-plus')
   return {
     ...actual,
     ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
