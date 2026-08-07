@@ -33,6 +33,15 @@ sudo bash /opt/susumonitor/deploy/backup.sh --dir /var/backups/susumonitor --kee
 
 **异地/离线留存**：备份包必须额外留存一份到异地（云对象存储/离线盘）——本机磁盘损坏时密钥与数据同时丢失。
 
+**一键异地备份**（本机 Git Bash 运行，云端执行 backup.sh → 拉回本机 → AES-256 加密落盘）：
+```bash
+ENCRYPT_PASS='你的加密口令' bash scripts/remote-backup.sh --keep 7
+# 输出: OK: D:/SuSuMonitor-Backups/susumonitor-20260807-213825.tar.gz.enc (16M)
+```
+- 脚本会自动同步仓库 `server-java-SuMon/deploy/backup.sh` 到云端执行（云端保留 1 份中间产物），再拉回本机 `D:/SuSuMonitor-Backups/` 加密（AES-256-CBC + pbkdf2），并生成 `.sha256` 校验
+- 恢复：`export ENCRYPT_PASS=口令 && openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"$ENCRYPT_PASS" -in xxx.tar.gz.enc -out backup.tar.gz && tar -xzf backup.tar.gz`
+- ⚠️ 加密口令与备份文件**分开存放**，口令丢失则备份不可恢复
+
 **调度建议**（crontab，root）：
 ```cron
 # 每日 02:00 备份，保留 14 份

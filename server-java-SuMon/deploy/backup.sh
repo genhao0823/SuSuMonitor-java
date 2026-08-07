@@ -34,11 +34,12 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # 从 server.env 提取数据库密码（不打印、不入日志）
+# 注意：server.env 可能为 CRLF 行尾（Windows 编辑过），需剥离 \r 否则认证失败
 if [ ! -f "$ENV_FILE" ]; then
     echo "FATAL: $ENV_FILE 不存在，密钥未备份——JWT/AES 密钥丢失将导致 SSH 凭据密文永久不可解密" >&2
     exit 1
 fi
-DB_PASSWORD=$(grep -E '^DB_PASSWORD=' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+DB_PASSWORD=$(grep -E '^DB_PASSWORD=' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r')
 if [ -z "$DB_PASSWORD" ]; then
     echo "FATAL: 无法从 $ENV_FILE 提取 DB_PASSWORD" >&2
     exit 1
