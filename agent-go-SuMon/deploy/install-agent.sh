@@ -163,6 +163,7 @@ if [[ -z "${AGENT_SERVER_ID}" ]]; then
 
     TOKEN_JSON="$(curl --fail --silent --show-error --location "${CURL_TRANSPORT[@]}" \
         --retry 2 --connect-timeout 10 --max-time 30 \
+        -X POST \
         -H "Authorization: Bearer ${JWT}" \
         "${AGENT_BASE_URL}/api/servers/${AGENT_SERVER_ID}/agent/register")" \
         || die "Agent token request failed."
