@@ -1,7 +1,7 @@
 # app-kt-SuMon — Android 监控客户端
 
 SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端后端
-`http://82.156.245.102`（nginx 80 反代 `/api/` 与 `/ws/monitor`）。
+`https://genhaosan.online`（HTTPS/WSS 反代 `/api/` 与 `/ws/monitor`）。
 
 ## 功能（阶段一：Web 端完整移植）
 

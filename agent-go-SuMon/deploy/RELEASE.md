@@ -64,16 +64,18 @@ Nginx 必须只通过 HTTPS 发布这些文件。安装脚本拒绝 HTTP、带�
 
 ## 当前云端限制
 
-当前 `82.156.245.102` 只有 HTTP，没有域名和 HTTPS。经明确指定临时开关后，可以用于当前自有服务器的联调：
+生产环境已启用 HTTPS/WSS（域名 `genhaosan.online`）。一键安装使用 HTTPS 地址：
 
 ```bash
-curl --fail --silent --show-error --location http://82.156.245.102/agent/install-agent.sh | \
+curl --fail --silent --show-error --location https://genhaosan.online/agent/install-agent.sh | \
   sudo -E env \
-    AGENT_BASE_URL=http://82.156.245.102 \
-    AGENT_ALLOW_INSECURE_HTTP=true \
+    AGENT_BASE_URL=https://genhaosan.online \
+    AGENT_TERMINAL_ENABLED=true \
     AGENT_VERSION=1.0.0 \
     bash
 ```
+
+> 历史临时 IPv4 明文模式（`AGENT_BASE_URL=http://82.156.245.102` + `AGENT_ALLOW_INSECURE_HTTP=true`）仅用于授权测试 IP，生产勿用；脚本已自动把 `https:` 转为 `wss:` 写入 agent 配置。
 
 执行前提是云端已发布以下文件，并且新机器是 Linux x86_64：
 
