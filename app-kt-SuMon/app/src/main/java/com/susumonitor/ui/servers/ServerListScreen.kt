@@ -15,9 +15,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -89,6 +93,12 @@ fun ServerListScreen(
                     Button(onClick = onCreateServer) { Text("新建") }
                 }
             }
+            // 排序选择：字段 + 方向（复用 viewModel.onSortChange）
+            SortSelector(
+                sortBy = uiState.sortBy,
+                sortOrder = uiState.sortOrder,
+                onSortChange = viewModel::onSortChange,
+            )
             HorizontalDivider()
 
             // 下拉刷新：PullToRefreshBox 依赖子内容可滚动，空/错误态补滚动容器以支持手势
@@ -201,6 +211,91 @@ private fun ServerListCard(
                 }
                 OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
                     Text("删除")
+                }
+            }
+        }
+    }
+}
+
+/** 排序字段选项（与后端 SORT_BY_WHITELIST 对齐）。 */
+private val SortFields = listOf(
+    "id" to "默认(ID)",
+    "name" to "名称",
+    "host" to "主机",
+    "status" to "状态",
+    "created_at" to "创建时间",
+    "updated_at" to "更新时间",
+)
+
+/** 排序选择器：字段 + 方向两个下拉，选择后触发列表重拉。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortSelector(
+    sortBy: String,
+    sortOrder: String,
+    onSortChange: (String, String) -> Unit,
+) {
+    var sortByMenu by remember { mutableStateOf(false) }
+    var sortOrderMenu by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ExposedDropdownMenuBox(
+            expanded = sortByMenu,
+            onExpandedChange = { sortByMenu = it },
+        ) {
+            OutlinedTextField(
+                value = SortFields.firstOrNull { it.first == sortBy }?.second ?: "默认(ID)",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("排序字段") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortByMenu) },
+                modifier = Modifier
+                    .weight(1f)
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+            )
+            ExposedDropdownMenu(
+                expanded = sortByMenu,
+                onDismissRequest = { sortByMenu = false },
+            ) {
+                SortFields.forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onSortChange(value, sortOrder)
+                            sortByMenu = false
+                        },
+                    )
+                }
+            }
+        }
+        ExposedDropdownMenuBox(
+            expanded = sortOrderMenu,
+            onExpandedChange = { sortOrderMenu = it },
+        ) {
+            OutlinedTextField(
+                value = if (sortOrder == "asc") "升序" else "降序",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("排序方向") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortOrderMenu) },
+                modifier = Modifier
+                    .weight(1f)
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+            )
+            ExposedDropdownMenu(
+                expanded = sortOrderMenu,
+                onDismissRequest = { sortOrderMenu = false },
+            ) {
+                listOf("asc" to "升序", "desc" to "降序").forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onSortChange(sortBy, value)
+                            sortOrderMenu = false
+                        },
+                    )
                 }
             }
         }
