@@ -1,13 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   网络安全配置：
-  - 默认禁止明文流量（Android 9+ 行为）
-  - 仅放行云端演示服务器 82.156.245.102 的明文 HTTP/WS（当前后端无 TLS）
-  - 生产切 HTTPS 后应删除该 domain-config
+  - 全局禁止明文 HTTP（Android 9+ 默认）
+  - 已切换 HTTPS/WSS（genhaosan.online），无需再放行裸 IP 明文流量
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">82.156.245.102</domain>
-    </domain-config>
 </network-security-config>
