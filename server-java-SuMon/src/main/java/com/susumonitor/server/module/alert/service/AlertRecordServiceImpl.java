@@ -3,8 +3,11 @@ package com.susumonitor.server.module.alert.service;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
+import com.susumonitor.server.module.alert.entity.AlertNotificationEntity;
 import com.susumonitor.server.module.alert.entity.AlertRecordEntity;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
+import com.susumonitor.server.module.alert.vo.AlertNotificationVo;
 import com.susumonitor.server.module.alert.vo.AlertRecordVo;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -26,6 +29,7 @@ public class AlertRecordServiceImpl implements AlertRecordService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AlertRecordMapper recordMapper;
+    private final AlertNotificationMapper notificationMapper;
     private final Clock clock;
 
     /** 分页查询告警记录。 */
@@ -55,6 +59,19 @@ public class AlertRecordServiceImpl implements AlertRecordService {
         recordMapper.updateStatusToRead(recordId, userId, LocalDateTime.now(clock));
     }
 
+    /** 查询某告警记录的通知投递历史。 */
+    @Transactional(readOnly = true)
+    public List<AlertNotificationVo> listNotifications(Long recordId) {
+        AlertRecordEntity record = recordMapper.selectRecordById(recordId);
+        if (record == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        return notificationMapper.selectByRecordId(recordId).stream()
+                .map(this::toNotificationVo)
+                .toList();
+    }
+
+    /** 将 Entity 转换为 VO，时间字段转为 UTC OffsetDateTime。 */
     private AlertRecordVo toVo(AlertRecordEntity entity) {
         AlertRecordVo vo = new AlertRecordVo();
         vo.setId(entity.getId());
@@ -72,6 +89,21 @@ public class AlertRecordServiceImpl implements AlertRecordService {
         vo.setNotifiedAt(AlertRecordVo.toOffset(entity.getNotifiedAt()));
         vo.setNotifyChannels(entity.getNotifyChannels());
         vo.setCreatedAt(AlertRecordVo.toOffset(entity.getCreatedAt()));
+        return vo;
+    }
+
+    /** 将通知 Entity 转换为 VO。 */
+    private AlertNotificationVo toNotificationVo(AlertNotificationEntity entity) {
+        AlertNotificationVo vo = new AlertNotificationVo();
+        vo.setId(entity.getId());
+        vo.setAlertRecordId(entity.getAlertRecordId());
+        vo.setChannel(entity.getChannel());
+        vo.setStatus(entity.getStatus());
+        vo.setAttempts(entity.getAttempts());
+        vo.setNextAttemptAt(AlertNotificationVo.toOffset(entity.getNextAttemptAt()));
+        vo.setLastError(entity.getLastError());
+        vo.setCreatedAt(AlertNotificationVo.toOffset(entity.getCreatedAt()));
+        vo.setUpdatedAt(AlertNotificationVo.toOffset(entity.getUpdatedAt()));
         return vo;
     }
 }

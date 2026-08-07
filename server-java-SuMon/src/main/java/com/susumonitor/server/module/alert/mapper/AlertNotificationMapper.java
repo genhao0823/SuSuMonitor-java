@@ -23,4 +23,7 @@ public interface AlertNotificationMapper {
     int markAttempt(@Param("id") Long id, @Param("status") String status,
             @Param("attempts") Integer attempts, @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
             @Param("lastError") String lastError);
+
+    /** 查询某告警记录的全部通知投递记录（按渠道/ID 升序）。 */
+    List<AlertNotificationEntity> selectByRecordId(@Param("recordId") Long recordId);
 }

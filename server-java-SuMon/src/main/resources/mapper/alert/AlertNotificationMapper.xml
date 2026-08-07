@@ -33,4 +33,10 @@
             last_error = #{lastError}
         WHERE id = #{id}
     </update>
+    <select id="selectByRecordId" resultMap="AlertNotificationResultMap">
+        SELECT id, alert_record_id, channel, status, attempts, next_attempt_at, last_error, created_at, updated_at
+        FROM alert_notifications
+        WHERE alert_record_id = #{recordId}
+        ORDER BY id ASC
+    </select>
 </mapper>

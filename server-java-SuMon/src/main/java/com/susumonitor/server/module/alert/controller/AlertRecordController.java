@@ -3,11 +3,13 @@ package com.susumonitor.server.module.alert.controller;
 import com.susumonitor.server.common.ApiResponse;
 import com.susumonitor.server.common.vo.PageResult;
 import com.susumonitor.server.module.alert.service.AlertRecordService;
+import com.susumonitor.server.module.alert.vo.AlertNotificationVo;
 import com.susumonitor.server.module.alert.vo.AlertRecordVo;
 import com.susumonitor.server.security.AuthenticatedUser;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -56,5 +58,12 @@ public class AlertRecordController {
             @AuthenticationPrincipal AuthenticatedUser operator) {
         alertRecordService.markAsRead(recordId, operator.id());
         return ApiResponse.success(null);
+    }
+
+    /** 查询某告警记录的通知投递历史（每条渠道一行，含尝试次数与失败原因）。 */
+    @GetMapping("/{id}/notifications")
+    public ApiResponse<List<AlertNotificationVo>> listNotifications(
+            @PathVariable("id") @Positive Long recordId) {
+        return ApiResponse.success(alertRecordService.listNotifications(recordId));
     }
 }
