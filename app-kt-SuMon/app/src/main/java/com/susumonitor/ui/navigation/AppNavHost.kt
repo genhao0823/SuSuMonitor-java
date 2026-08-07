@@ -13,6 +13,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,6 +35,7 @@ import com.susumonitor.ui.servers.ServerFormScreen
 import com.susumonitor.ui.servers.ServerListScreen
 import com.susumonitor.ui.servers.ServerMetricsScreen
 import com.susumonitor.ui.terminal.TerminalScreen
+import kotlinx.coroutines.flow.Flow
 
 /** 底部导航目的地。 */
 enum class BottomTab(val route: String, val label: String, val icon: ImageVector) {
@@ -52,9 +54,26 @@ enum class BottomTab(val route: String, val label: String, val icon: ImageVector
 fun AppNavHost(
     isAdmin: Boolean,
     isApproved: Boolean,
+    openAlertsRequest: Flow<Unit>,
     onLogout: () -> Unit,
 ) {
     val navController = rememberNavController()
+
+    /** 切到指定底部 Tab（与底部栏点击一致的导航配置）。 */
+    fun navigateToTab(tab: BottomTab) {
+        navController.navigate(tab.route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    // 告警通知点击深链：切到告警 Tab
+    LaunchedEffect(openAlertsRequest) {
+        openAlertsRequest.collect { navigateToTab(BottomTab.ALERTS) }
+    }
 
     Scaffold(
         bottomBar = {
@@ -79,15 +98,7 @@ fun AppNavHost(
                         } == true
                         NavigationBarItem(
                             selected = selected,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onClick = { navigateToTab(tab) },
                             icon = {
                                 Icon(
                                     tab.icon,

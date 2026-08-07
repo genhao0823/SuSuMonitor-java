@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
                         AppNavHost(
                             isAdmin = session?.user?.role == "admin",
                             isApproved = session?.user?.reviewStatus == "approved",
+                            openAlertsRequest = mainViewModel.openAlertsRequest,
                             onLogout = {
                                 MonitorForegroundService.stop(applicationContext)
                                 mainViewModel.logout()
@@ -70,11 +71,10 @@ class MainActivity : ComponentActivity() {
         handleNotificationIntent(intent)
     }
 
-    /** 告警通知点击：深链到告警 Tab（通过启动携带 extra 由导航处理）。 */
+    /** 告警通知点击：深链到告警 Tab（事件总线由 AppNavHost 收集后切换）。 */
     private fun handleNotificationIntent(intent: Intent?) {
         if (intent?.action == NotificationHelper.ACTION_OPEN_ALERTS) {
-            // App 已唤起即满足通知诉求；告警 Tab 深链由 MainViewModel 事件总线承载，
-            // 此处保留扩展点（MVP 阶段：唤起 + 会话路由已足够）
+            mainViewModel.requestOpenAlerts()
         }
     }
 
