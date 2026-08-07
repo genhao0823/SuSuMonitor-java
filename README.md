@@ -16,8 +16,9 @@
 | 当前基线 | `main` HEAD(`456713c`，N6 运维收口) |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
 | 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
+| Android App | **核心监控版 MVP 已实现（2026-08-05）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情、实时指标（WS）、告警记录、前台服务告警通知；`gradlew assembleDebug` + 18 单测全绿；云端联调待模拟器/真机验证 |
 | 首次上云端部署 | 腾讯云 OpenCloudOS 公网明文 HTTP 已跑通(2026-07-31,前端 5173 + 后端 18080 + Agent 8089 + RabbitMQ 5672,端到端联调 PASS),详见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md` |
-| 已知遗留 | HTTPS/WSS 待域名与证书就绪后切 TLS；真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；多实例并发验证、Docker 镜像实机构建仍属后续阶段 |
+| 已知遗留 | HTTPS/WSS 待域名与证书就绪后切 TLS；真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；多实例并发验证、Docker 镜像实机构建、Android App 云端全链路手测（待设备）仍属后续阶段 |
 
 > 本节反映 2026-08-05 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录。
 
@@ -56,7 +57,7 @@
 > 本段保留 `7b01a60` 阶段的历史收口背景：当时 MVP-6 后端业务闭环已实现，前端告警页面尚未实现。后续前端告警、MVP-7 T4、明文云端部署、MVP-10/MVP-11 与 Agent M1-M3 的当前状态以本文顶部快照和后续带日期的对齐说明为准。
 >
 > **总体状态（2026-07-31 文档对齐修订，仅文档层，逐项核对代码事实）**：
-> 本次修订把下方”未验证 / 未实现 / 部署资产缺口”清单与代码事实逐项对齐，已闭环项见各清单内的划线注明：**公网明文 HTTP 云端部署已跑通**（2026-07-31，腾讯云 OpenCloudOS，前端+后端+Agent 端到端，见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md`；HTTPS/WSS 待域名备案）；**MVP-6 告警前端已收口**（2026-07-27 Sprint 0-7，真实 HTTP/WS 端到端链路 2026-07-28 验收通过）；**MVP-7 T4 xterm.js 前端已完成**（2026-07-28 最小可用版本）；**T5 部署资产已补齐**（Maven Wrapper / `application-prod.yml` / systemd Unit / Nginx 站点配置，2026-07-27）；**B-005/B-006/B-007 已闭环**（Agent 采集上报接入 + `build-linux` + Linux amd64 二进制实测）；**B-037/B-038 已收口**（`openapi-system.json:info.title` 补齐 + 前端 4 端点契约封装与真实浏览器联调，2026-07-29）；**后端限流 / CORS 已实现**。仍属”未验证/未实现”：首管理员空库并发、多 JVM AFTER_COMMIT 事件跨实例、Monitor 1012 真实背压、HTTPS/WSS、Dockerfile/docker-compose、数据库备份脚本、Android App、告警外部通知渠道。
+> 本次修订把下方”未验证 / 未实现 / 部署资产缺口”清单与代码事实逐项对齐，已闭环项见各清单内的划线注明：**公网明文 HTTP 云端部署已跑通**（2026-07-31，腾讯云 OpenCloudOS，前端+后端+Agent 端到端，见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md`；HTTPS/WSS 待域名备案）；**MVP-6 告警前端已收口**（2026-07-27 Sprint 0-7，真实 HTTP/WS 端到端链路 2026-07-28 验收通过）；**MVP-7 T4 xterm.js 前端已完成**（2026-07-28 最小可用版本）；**T5 部署资产已补齐**（Maven Wrapper / `application-prod.yml` / systemd Unit / Nginx 站点配置，2026-07-27）；**B-005/B-006/B-007 已闭环**（Agent 采集上报接入 + `build-linux` + Linux amd64 二进制实测）；**B-037/B-038 已收口**（`openapi-system.json:info.title` 补齐 + 前端 4 端点契约封装与真实浏览器联调，2026-07-29）；**后端限流 / CORS 已实现**；**Android App 核心监控版 MVP 已实现**（2026-08-05，`app-kt-SuMon/`，见 `docs-SuMon/Develop-log/20260805-Android-App-核心监控版MVP.md`）。仍属”未验证/未实现”：首管理员空库并发、多 JVM AFTER_COMMIT 事件跨实例、Monitor 1012 真实背压、HTTPS/WSS、数据库备份脚本、告警外部通知渠道、Android App 云端全链路手测（待设备）。
 
 ## 项目简介
 
@@ -122,7 +123,7 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 7. _(已实现：2026-07-27 Sprint 0-7 收口，告警记录页 `/alerts/records`、告警规则页 `/alerts/rules`、菜单挂载、`alert.push` WS 消费；真实端到端链路 2026-07-28 验收通过)_
 8. _(已实现：T4 xterm.js 前端最小可用版本 2026-07-28，路由 `/terminal/:serverId`；T5 云端部署已验证（明文 HTTP）、T6 家庭 Linux 主机部署仍待验)_
 9. _(MVP-9 已于 2026-07-31 收口：性能基线 7 场景 PASS + 数据所有权收口 + RabbitMQ 契约冻结；MVP-10~14 仍规划中)_
-10. **Android App** — `app-kt-SuMon/` 目录为空。
+10. _(已实现：**Android App 核心监控版 MVP** 2026-08-05，`app-kt-SuMon/`——登录/注册、服务器列表/详情、实时指标（WS）、告警记录、前台服务告警通知；`gradlew assembleDebug` + 18 单测全绿；云端全链路手测待设备，见 `Develop-log/20260805-Android-App-核心监控版MVP.md`)_
 11. _(限流 / CORS 已实现：`AgentConnectionLimiter` / `AgentMessageRateLimiter` / Monitor 背压 + `config/CorsConfig.java`；WebSocket Origin 白名单策略仍待评估)_
 
 ### 部署资产缺口清单（必须在新分支中补齐后，才可上线公网）
@@ -206,6 +207,14 @@ SuSuMonitor(Jvav)/
 │       ├── reporter/       # WS 上报
 │       ├── wsclient/       # 客户端连接(重连 + 心跳)
 │       └── config/         # 配置加载
+├── app-kt-SuMon/            # Android App(Kotlin + Compose,核心监控版 MVP)
+│   └── app/src/main/java/com/susumonitor/
+│       ├── api/            # Retrofit 接口 + WsClient + 拦截器
+│       ├── data/           # DTO + Repository + SessionStore + 帧解析
+│       ├── di/             # Hilt 模块
+│       ├── service/        # 前台监控服务 + 通知
+│       ├── ui/             # Compose 页面(login/dashboard/servers/alerts)
+│       └── util/           # 格式化/错误码/常量
 ├── docs-SuMon/              # 项目文档
 │   ├── Develop-log/         # 90+ dev-log(实施记录)
 │   ├── Develop-plans/       # 10 plan(规划)
@@ -280,10 +289,11 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - **隔离环境验收**（**已完成 2026-08-02**）：verify-mvp11（C1-C4 + 失败留痕 DB 断言）、verify-admin-batch（18 项）、verify-go-agent-reconnect（6 checks）、verify-mvp11-broker-down（B1-B7）四脚本全 PASS；RabbitMQ 凭据已重置（susumonitor/732682，建议登记 local/server.env），见 `Develop-log/20260802-隔离环境端到端验收.md`
 - **Agent 可靠投递**（**M1-M4 已完成 2026-08-05**）：M1 Server `metrics.ack` 入口确认 + M2 Agent 完整帧持久化 FIFO + M3 同 UUID 断线/ACK 超时重传、指数退避/equal jitter、积压重放节流 + **M4** Server 永久拒绝分类 `metrics.nack`（invalid_metrics_payload / stale_collected_at / server_not_found）、Agent 本地持久化死信（snapshot v2，v1 自动迁移）、心跳投递遥测（pending/bytes、oldest、drop、dead-letter）→ Flyway V19 → 状态接口 → 服务器详情页展示；loopback fixture 15 项 PASS，真实 Agent + Java/MySQL 独立 schema 场景待 DB 管理员凭据运行；队列字节上限仍属后续独立模块，见 `Develop-log/20260805-Agent指标可靠投递（NACK死信与投递遥测）.md`
 - **协作**:在 GitHub 上创建 PR / 提 issue
+- **Polish-6 三端收尾**（**已完成 2026-08-07**，commit `75b41e5`→`29effc0`）：HTTPS 迁移后 agent 配置核对与全库明文 URL 清扫；Android 告警通知深链到告警 Tab / 通知开关 DataStore 持久化（前台服务联动）/ 服务器列表排序选择器 / WS 半开连接检测（OkHttp pingInterval）/ 终端基础增强（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl）；数据库异地备份脚本 `scripts/remote-backup.sh`（云端备份→拉回→AES-256 加密落盘，含 backup.sh CRLF 修复）；Web 告警通知投递历史详情弹窗（新增 `GET /api/alerts/records/{id}/notifications`，OpenAPI alert 6→7 端点）；顺带恢复 Web lint 零警告基线。详见 `docs-SuMon/Develop-plans/20260807-Polish-6-三端全面收尾.md` 与各模块 Dev-log（`20260807-Polish6-M*.md`）
 
 ## 协议 / 工具
 
-- **OpenAPI 契约**:`docs-SuMon/OpenApi-SuMon/{openapi-auth,server,system,admin,alert}.json`(5 个文件 / 31 个 endpoint)
+- **OpenAPI 契约**:`docs-SuMon/OpenApi-SuMon/{openapi-auth,server,system,admin,alert}.json`(5 个文件 / 32 个 endpoint)
 - **WebSocket 协议**:`docs-SuMon/Protocol-SuMon/websocket-protocol.md`(v1.3)
 - **后端 OpenAPI 自动化**:`web-vue-SuMon/scripts/check-openapi.mjs`(pre-commit 钩子)
 - **代码质量门**:`web-vue-SuMon/scripts/audit-catchup.mjs`(11 条规则)
@@ -297,3 +307,4 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - 3 个 LONG_FILE 实际超 500 行(525-565)但 INFO 严重度,阈值 600
 - ~~`openapi-system.json` 缺 `info.title` 字段~~（已补齐 2026-07-29，B-037 关闭；pre-commit 钩子相关 dirty 处理见上一条）
 - 详细文档对齐性检查与修正记录:见 `docs-SuMon/Bug-fix/2026-07-25-文档对齐性修复.md`
+- **Polish-6 之后仍遗留（2026-08-07）**：真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需凭据/设备，脚本已备）；Android 终端 ANSI 光标/滚屏/TUI（top/vi）仍为简化渲染；多消费者并发消费、Docker 镜像实机构建、数据库异地备份的定时调度（crontab）未配置
