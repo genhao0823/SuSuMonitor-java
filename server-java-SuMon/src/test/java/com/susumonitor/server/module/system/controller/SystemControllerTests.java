@@ -6,11 +6,14 @@ import com.susumonitor.server.module.server.mapper.ServerMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsCleanupMapper;
+import com.susumonitor.server.module.metrics.mapper.IngestionCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertNotificationMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.consume.AlertMessageConsumer;
 import com.susumonitor.server.module.alert.consume.ConsumeRecordMapper;
+import com.susumonitor.server.module.alert.consume.ConsumeRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
+import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
 import com.susumonitor.server.module.system.RabbitHealthChecker;
 import com.susumonitor.server.module.terminal.mapper.TerminalSessionMapper;
@@ -72,6 +75,19 @@ class SystemControllerTests {
 
     @MockitoBean
     private MetricsCleanupMapper metricsCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的指标幂等接收记录清理 Mapper。
+    @MockitoBean
+    private IngestionCleanupMapper ingestionCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的消费幂等记录清理 Mapper。
+    @MockitoBean
+    private ConsumeRecordCleanupMapper consumeRecordCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的告警记录清理 Mapper。
+    @MockitoBean
+    private AlertRecordCleanupMapper alertRecordCleanupMapper;
+
 
     // 使用模拟告警 Mapper，避免告警模块 Mapper 扫描后创建真实 MyBatis 会话依赖。
     @MockitoBean

@@ -636,6 +636,25 @@ public class AppProperties {
         @Max(value = 1000, message = "Metrics cleanup max batches must not exceed 1000")
         private int cleanupMaxBatchesPerRun = 100;
 
+        /** 指标幂等接收记录保留天数，须覆盖消息可能重投的最大窗口。 */
+        @Min(value = 1, message = "Metrics ingestion retention days must be at least one")
+        @Max(value = 3650, message = "Metrics ingestion retention days must not exceed 3650")
+        private int ingestionRetentionDays = 7;
+
+        /** 指标幂等接收记录清理任务 Cron 表达式。 */
+        @NotBlank(message = "Metrics ingestion cleanup cron must not be blank")
+        private String ingestionCleanupCron = "0 0 3 * * ?";
+
+        /** 指标幂等接收记录单次清理 SQL 删除的最大记录数。 */
+        @Min(value = 1, message = "Metrics ingestion cleanup batch size must be at least one")
+        @Max(value = 10000, message = "Metrics ingestion cleanup batch size must not exceed 10000")
+        private int ingestionCleanupBatchSize = 1000;
+
+        /** 指标幂等接收记录单次定时任务允许执行的最大批次数。 */
+        @Min(value = 1, message = "Metrics ingestion cleanup max batches must be at least one")
+        @Max(value = 1000, message = "Metrics ingestion cleanup max batches must not exceed 1000")
+        private int ingestionCleanupMaxBatchesPerRun = 100;
+
         /**
          * 获取 Metrics 数据保留天数。
          *
@@ -706,6 +725,78 @@ public class AppProperties {
          */
         public void setCleanupMaxBatchesPerRun(int cleanupMaxBatchesPerRun) {
             this.cleanupMaxBatchesPerRun = cleanupMaxBatchesPerRun;
+        }
+
+        /**
+         * 获取指标幂等接收记录保留天数。
+         *
+         * @return 保留天数
+         */
+        public int getIngestionRetentionDays() {
+            return ingestionRetentionDays;
+        }
+
+        /**
+         * 设置指标幂等接收记录保留天数。
+         *
+         * @param ingestionRetentionDays 保留天数
+         */
+        public void setIngestionRetentionDays(int ingestionRetentionDays) {
+            this.ingestionRetentionDays = ingestionRetentionDays;
+        }
+
+        /**
+         * 获取指标幂等接收记录清理任务 Cron 表达式。
+         *
+         * @return Cron 表达式
+         */
+        public String getIngestionCleanupCron() {
+            return ingestionCleanupCron;
+        }
+
+        /**
+         * 设置指标幂等接收记录清理任务 Cron 表达式。
+         *
+         * @param ingestionCleanupCron Cron 表达式
+         */
+        public void setIngestionCleanupCron(String ingestionCleanupCron) {
+            this.ingestionCleanupCron = ingestionCleanupCron;
+        }
+
+        /**
+         * 获取指标幂等接收记录单次清理 SQL 删除的最大记录数。
+         *
+         * @return 单批清理上限
+         */
+        public int getIngestionCleanupBatchSize() {
+            return ingestionCleanupBatchSize;
+        }
+
+        /**
+         * 设置指标幂等接收记录单次清理 SQL 删除的最大记录数。
+         *
+         * @param ingestionCleanupBatchSize 单批清理上限
+         */
+        public void setIngestionCleanupBatchSize(int ingestionCleanupBatchSize) {
+            this.ingestionCleanupBatchSize = ingestionCleanupBatchSize;
+        }
+
+        /**
+         * 获取指标幂等接收记录单次定时任务允许执行的最大批次数。
+         *
+         * @return 最大批次数
+         */
+        public int getIngestionCleanupMaxBatchesPerRun() {
+            return ingestionCleanupMaxBatchesPerRun;
+        }
+
+        /**
+         * 设置指标幂等接收记录单次定时任务允许执行的最大批次数。
+         *
+         * @param ingestionCleanupMaxBatchesPerRun 最大批次数
+         */
+        public void setIngestionCleanupMaxBatchesPerRun(int ingestionCleanupMaxBatchesPerRun) {
+            this.ingestionCleanupMaxBatchesPerRun = ingestionCleanupMaxBatchesPerRun;
         }
     }
 
@@ -1048,6 +1139,28 @@ public class AppProperties {
         @Max(value = 1000, message = "Outbox cleanup max batches must not exceed 1000")
         private int outboxCleanupMaxBatchesPerRun = 100;
 
+        /** 是否启用消费幂等记录保留期清理。 */
+        private boolean consumeRecordCleanupEnabled = true;
+
+        /** 消费幂等记录保留天数，须覆盖事件可能重投的最大窗口。 */
+        @Min(value = 1, message = "Consume record retention days must be at least one")
+        @Max(value = 3650, message = "Consume record retention days must not exceed 3650")
+        private int consumeRecordRetentionDays = 30;
+
+        /** 消费幂等记录清理 cron。 */
+        @NotBlank(message = "Consume record cleanup cron must not be blank")
+        private String consumeRecordCleanupCron = "0 0 3 * * ?";
+
+        /** 消费幂等记录单批清理上限。 */
+        @Min(value = 1, message = "Consume record cleanup batch size must be at least one")
+        @Max(value = 10000, message = "Consume record cleanup batch size must not exceed 10000")
+        private int consumeRecordCleanupBatchSize = 1000;
+
+        /** 单轮消费幂等记录清理最多执行的批次数。 */
+        @Min(value = 1, message = "Consume record cleanup max batches must be at least one")
+        @Max(value = 1000, message = "Consume record cleanup max batches must not exceed 1000")
+        private int consumeRecordCleanupMaxBatchesPerRun = 100;
+
         /**
          * 返回是否启用 Outbox 发布与 RabbitMQ 就绪检查。
          *
@@ -1263,6 +1376,96 @@ public class AppProperties {
         public void setOutboxCleanupMaxBatchesPerRun(int outboxCleanupMaxBatchesPerRun) {
             this.outboxCleanupMaxBatchesPerRun = outboxCleanupMaxBatchesPerRun;
         }
+
+        /**
+         * 返回是否启用消费幂等记录保留期清理。
+         *
+         * @return 是否启用清理
+         */
+        public boolean isConsumeRecordCleanupEnabled() {
+            return consumeRecordCleanupEnabled;
+        }
+
+        /**
+         * 设置是否启用消费幂等记录保留期清理。
+         *
+         * @param consumeRecordCleanupEnabled 是否启用清理
+         */
+        public void setConsumeRecordCleanupEnabled(boolean consumeRecordCleanupEnabled) {
+            this.consumeRecordCleanupEnabled = consumeRecordCleanupEnabled;
+        }
+
+        /**
+         * 获取消费幂等记录保留天数。
+         *
+         * @return 保留天数
+         */
+        public int getConsumeRecordRetentionDays() {
+            return consumeRecordRetentionDays;
+        }
+
+        /**
+         * 设置消费幂等记录保留天数。
+         *
+         * @param consumeRecordRetentionDays 保留天数
+         */
+        public void setConsumeRecordRetentionDays(int consumeRecordRetentionDays) {
+            this.consumeRecordRetentionDays = consumeRecordRetentionDays;
+        }
+
+        /**
+         * 获取消费幂等记录清理 Cron 表达式。
+         *
+         * @return Cron 表达式
+         */
+        public String getConsumeRecordCleanupCron() {
+            return consumeRecordCleanupCron;
+        }
+
+        /**
+         * 设置消费幂等记录清理 Cron 表达式。
+         *
+         * @param consumeRecordCleanupCron Cron 表达式
+         */
+        public void setConsumeRecordCleanupCron(String consumeRecordCleanupCron) {
+            this.consumeRecordCleanupCron = consumeRecordCleanupCron;
+        }
+
+        /**
+         * 获取消费幂等记录单批清理上限。
+         *
+         * @return 单批清理上限
+         */
+        public int getConsumeRecordCleanupBatchSize() {
+            return consumeRecordCleanupBatchSize;
+        }
+
+        /**
+         * 设置消费幂等记录单批清理上限。
+         *
+         * @param consumeRecordCleanupBatchSize 单批清理上限
+         */
+        public void setConsumeRecordCleanupBatchSize(int consumeRecordCleanupBatchSize) {
+            this.consumeRecordCleanupBatchSize = consumeRecordCleanupBatchSize;
+        }
+
+        /**
+         * 获取单轮消费幂等记录清理最多执行的批次数。
+         *
+         * @return 最大批次数
+         */
+        public int getConsumeRecordCleanupMaxBatchesPerRun() {
+            return consumeRecordCleanupMaxBatchesPerRun;
+        }
+
+        /**
+         * 设置单轮消费幂等记录清理最多执行的批次数。
+         *
+         * @param consumeRecordCleanupMaxBatchesPerRun 最大批次数
+         */
+        public void setConsumeRecordCleanupMaxBatchesPerRun(int consumeRecordCleanupMaxBatchesPerRun) {
+            this.consumeRecordCleanupMaxBatchesPerRun = consumeRecordCleanupMaxBatchesPerRun;
+        }
     }
 
     /**
@@ -1368,6 +1571,28 @@ public class AppProperties {
         /** 邮件发件人地址，仅在启用邮件通知时使用。 */
         private String mailFrom = "noreply@susumonitor.local";
 
+        /** 是否启用告警记录保留期清理。 */
+        private boolean recordCleanupEnabled = true;
+
+        /** 告警记录保留天数。 */
+        @Min(value = 1, message = "Alert record retention days must be at least one")
+        @Max(value = 3650, message = "Alert record retention days must not exceed 3650")
+        private int recordRetentionDays = 90;
+
+        /** 告警记录清理 cron。 */
+        @NotBlank(message = "Alert record cleanup cron must not be blank")
+        private String recordCleanupCron = "0 0 3 * * ?";
+
+        /** 告警记录单批清理上限。 */
+        @Min(value = 1, message = "Alert record cleanup batch size must be at least one")
+        @Max(value = 10000, message = "Alert record cleanup batch size must not exceed 10000")
+        private int recordCleanupBatchSize = 1000;
+
+        /** 单轮告警记录清理最多执行的批次数。 */
+        @Min(value = 1, message = "Alert record cleanup max batches must be at least one")
+        @Max(value = 1000, message = "Alert record cleanup max batches must not exceed 1000")
+        private int recordCleanupMaxBatchesPerRun = 100;
+
         /**
          * 返回外部通知是否启用。
          *
@@ -1402,6 +1627,96 @@ public class AppProperties {
          */
         public void setMailFrom(String mailFrom) {
             this.mailFrom = mailFrom;
+        }
+
+        /**
+         * 返回是否启用告警记录保留期清理。
+         *
+         * @return 是否启用清理
+         */
+        public boolean isRecordCleanupEnabled() {
+            return recordCleanupEnabled;
+        }
+
+        /**
+         * 设置是否启用告警记录保留期清理。
+         *
+         * @param recordCleanupEnabled 是否启用清理
+         */
+        public void setRecordCleanupEnabled(boolean recordCleanupEnabled) {
+            this.recordCleanupEnabled = recordCleanupEnabled;
+        }
+
+        /**
+         * 获取告警记录保留天数。
+         *
+         * @return 保留天数
+         */
+        public int getRecordRetentionDays() {
+            return recordRetentionDays;
+        }
+
+        /**
+         * 设置告警记录保留天数。
+         *
+         * @param recordRetentionDays 保留天数
+         */
+        public void setRecordRetentionDays(int recordRetentionDays) {
+            this.recordRetentionDays = recordRetentionDays;
+        }
+
+        /**
+         * 获取告警记录清理 Cron 表达式。
+         *
+         * @return Cron 表达式
+         */
+        public String getRecordCleanupCron() {
+            return recordCleanupCron;
+        }
+
+        /**
+         * 设置告警记录清理 Cron 表达式。
+         *
+         * @param recordCleanupCron Cron 表达式
+         */
+        public void setRecordCleanupCron(String recordCleanupCron) {
+            this.recordCleanupCron = recordCleanupCron;
+        }
+
+        /**
+         * 获取告警记录单批清理上限。
+         *
+         * @return 单批清理上限
+         */
+        public int getRecordCleanupBatchSize() {
+            return recordCleanupBatchSize;
+        }
+
+        /**
+         * 设置告警记录单批清理上限。
+         *
+         * @param recordCleanupBatchSize 单批清理上限
+         */
+        public void setRecordCleanupBatchSize(int recordCleanupBatchSize) {
+            this.recordCleanupBatchSize = recordCleanupBatchSize;
+        }
+
+        /**
+         * 获取单轮告警记录清理最多执行的批次数。
+         *
+         * @return 最大批次数
+         */
+        public int getRecordCleanupMaxBatchesPerRun() {
+            return recordCleanupMaxBatchesPerRun;
+        }
+
+        /**
+         * 设置单轮告警记录清理最多执行的批次数。
+         *
+         * @param recordCleanupMaxBatchesPerRun 最大批次数
+         */
+        public void setRecordCleanupMaxBatchesPerRun(int recordCleanupMaxBatchesPerRun) {
+            this.recordCleanupMaxBatchesPerRun = recordCleanupMaxBatchesPerRun;
         }
     }
 }
