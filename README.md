@@ -3,22 +3,22 @@
 > 涂山苏苏主题的服务器监控平台 — 前后端 + Agent 全栈
 
 [![Branch](https://img.shields.io/badge/branch-main-blue)](https://github.com/genhao0823/SuSuMonitor-jvav-)
-[![Tag](https://img.shields.io/badge/tag-v0.4.0--sprint4-green)](https://github.com/genhao0823/SuSuMonitor-jvav-/releases/tag/v0.4.0-sprint4)
-[![Status](https://img.shields.io/badge/Sprint%201--4%20%E5%AE%8C%E6%88%90-brightgreen)](#%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6)
+[![Tag](https://img.shields.io/badge/tag-v0.5.0--cloud-green)](https://github.com/genhao0823/SuSuMonitor-jvav-/releases/tag/v0.5.0-cloud)
+[![Status](https://img.shields.io/badge/Polish--6%20%E5%AE%8C%E6%88%90-brightgreen)](#%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6)
 [![Docs](https://img.shields.io/badge/docs--alignment-2026--07--25-blue)](docs-SuMon/Bug-fix/2026-07-25-文档对齐性修复.md)
 
-## 🚀 当前进度快照（2026-08-05）
+## 🚀 当前进度快照（2026-08-07）
 
 | 项 | 状态 / 值 |
 |---|---|
 | GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-jvav-> |
 | 本次 tag | [`v0.5.0-cloud`](https://github.com/genhao0823/SuSuMonitor-jvav-/releases/tag/v0.5.0-cloud) |
-| 当前基线 | `main` HEAD(`456713c`，N6 运维收口) |
+| 当前基线 | `main` HEAD(`b721c3b`，Polish-6 javadoc + android spec sync) |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
-| 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
-| Android App | **核心监控版 MVP 已实现（2026-08-05）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情、实时指标（WS）、告警记录、前台服务告警通知；`gradlew assembleDebug` + 18 单测全绿；云端联调待模拟器/真机验证 |
+| 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/增长表保留期清理（幂等接收记录 7 天、消费记录 30 天、告警记录 90 天，Flyway V22）/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
+| Android App | **阶段一+阶段二已完整实现（Polish-6，2026-08-07）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情/排序、实时指标（WS + OkHttp pingInterval 心跳）、告警记录（通知深链到告警 Tab）、DataStore 通知开关持久化、前台服务告警通知、SSH 终端（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl）；`gradlew assembleDebug` + 45 单测全绿；云端全链路手测待真机 |
 | 首次上云端部署 | 腾讯云 OpenCloudOS 公网明文 HTTP 已跑通(2026-07-31,前端 5173 + 后端 18080 + Agent 8089 + RabbitMQ 5672,端到端联调 PASS),详见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md` |
-| 已知遗留 | HTTPS/WSS 待域名与证书就绪后切 TLS；真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；多实例并发验证、Docker 镜像实机构建、Android App 云端全链路手测（待设备）仍属后续阶段 |
+| 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；多实例并发验证、Docker 镜像实机构建、Android App 云端全链路手测（待设备）、数据库异地备份定时调度（crontab）仍属后续阶段 |
 
 > 本节反映 2026-08-05 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录。
 
@@ -216,9 +216,9 @@ SuSuMonitor(Jvav)/
 │       ├── ui/             # Compose 页面(login/dashboard/servers/alerts)
 │       └── util/           # 格式化/错误码/常量
 ├── docs-SuMon/              # 项目文档
-│   ├── Develop-log/         # 90+ dev-log(实施记录)
-│   ├── Develop-plans/       # 10 plan(规划)
-│   ├── OpenApi-SuMon/       # 5 个 OpenAPI 契约 JSON(auth / server / system / admin / alert),共 31 个 endpoint
+│   ├── Develop-log/         # 110+ dev-log(实施记录)
+│   ├── Develop-plans/       # 16 plan(规划)
+│   ├── OpenApi-SuMon/       # 5 个 OpenAPI 契约 JSON(auth / server / system / admin / alert),共 32 个 endpoint
 │   ├── Protocol-SuMon/     # WebSocket 协议(v1.3)
 │   ├── Bug-fix/             # 9 篇 bug 修复记录 + README 索引
 │   ├── 本机开发环境配置.md   # 本机开发约定(JWT/AES/SSH/Metrics/Outbox 环境变量)
