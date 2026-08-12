@@ -90,6 +90,9 @@ func newReporterOptions(cfg *config.Config) reporter.Options {
 		RetryMax:          time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
 		RetryJitter:       cfg.MetricsRetryJitterEnabled,
 		ReplayMinInterval: time.Duration(cfg.MetricsReplayMinIntervalMillis) * time.Millisecond,
+		NackRetryMax:      cfg.MetricsNackRetryMax,
+		NackRetryInitial:  time.Duration(cfg.MetricsNackRetryInitialSeconds) * time.Second,
+		NackRetryMaxDelay: time.Duration(cfg.MetricsNackRetryMaxSeconds) * time.Second,
 	}
 }
 

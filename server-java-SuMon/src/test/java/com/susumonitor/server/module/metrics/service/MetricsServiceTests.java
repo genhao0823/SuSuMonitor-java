@@ -147,6 +147,37 @@ class MetricsServiceTests {
         verify(eventPublisher, never()).publishEvent(any());
     }
 
+    /** 入库阶段的可恢复数据库故障应包装为 retriable nack 原因，供 Agent 有限重试。 */
+    @Test
+    void recoverableDatabaseFailureShouldRaiseRetriableRejection() {
+        lockActiveServer();
+        when(metricsMapper.insertIngestion(any())).thenReturn(1);
+        when(metricsMapper.selectLatestCollectedAt(SERVER_ID)).thenReturn(null);
+        when(metricsMapper.insertMetric(any()))
+                .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("connection lost"));
+
+        MetricsRejectedException exception = assertThrows(MetricsRejectedException.class,
+                () -> service.report(SERVER_ID, UUID.randomUUID().toString(), payload(COLLECTED_AT)));
+
+        org.junit.jupiter.api.Assertions.assertEquals(MetricsRejectionReason.RETRIABLE_SERVER_ERROR,
+                exception.getReason());
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.DATABASE_ERROR, exception.getErrorCode());
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any());
+    }
+
+    /** 重复投递竞态（DuplicateKeyException）不应被误判为可重试。 */
+    @Test
+    void duplicateKeyRaceShouldNotBeClassifiedAsRetriable() {
+        lockActiveServer();
+        when(metricsMapper.insertIngestion(any())).thenReturn(1);
+        when(metricsMapper.selectLatestCollectedAt(SERVER_ID)).thenReturn(null);
+        when(metricsMapper.insertMetric(any())).thenThrow(new DuplicateKeyException("duplicate"));
+
+        assertThrows(DuplicateKeyException.class,
+                () -> service.report(SERVER_ID, UUID.randomUUID().toString(), payload(COLLECTED_AT)));
+    }
+
     /** 未提供合法 UUID 时在进入数据库前拒绝，避免无法建立可靠幂等键。 */
     @Test
     void missingMessageIdShouldBeRejectedBeforeDatabaseAccess() {

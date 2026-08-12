@@ -264,3 +264,90 @@ func TestReporterIgnoresOutOfOrderRejection(t *testing.T) {
 		t.Fatalf("dead-letter count = %d, want 0", stats.DeadLetterCount)
 	}
 }
+
+// TestReporterRetriesRetriableNackThenDelivers verifies a retriable nack keeps
+// the FIFO head and retransmits the same message after the nack backoff; a
+// subsequent acknowledgement then removes it from the queue.
+func TestReporterRetriesRetriableNackThenDelivers(t *testing.T) {
+	sender := &recordingSender{}
+	options := retryOptions()
+	options.NackRetryMax = 3
+	options.NackRetryInitial = 10 * time.Millisecond
+	options.NackRetryMaxDelay = 40 * time.Millisecond
+	reporter, queue := newTestReporter(t, sender, options)
+	if err := reporter.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("Report() error = %v", err)
+	}
+	firstID := waitForMessages(t, sender, 1)[0].MessageID
+
+	reporter.HandleMetricsNack(firstID, wsclient.MetricsNack{
+		ServerID: 42, Code: 50001, Reason: "retriable_server_error", Message: "db hiccup"})
+	messages := waitForMessages(t, sender, 2)
+	if messages[1].MessageID != firstID {
+		t.Fatalf("retransmission message id = %s, want retained head %s", messages[1].MessageID, firstID)
+	}
+	if queue.Len() != 1 {
+		t.Fatalf("queued messages after retriable nack = %d, want 1 (head retained)", queue.Len())
+	}
+
+	reporter.HandleMetricsAck(firstID)
+	if queue.Len() != 0 {
+		t.Fatalf("queued messages after ack = %d, want 0", queue.Len())
+	}
+}
+
+// TestReporterDeadLettersRetriableNackAfterBudget verifies retriable nacks
+// beyond the retry budget move the head to the local dead-letter and delivery
+// advances to the next queued frame.
+func TestReporterDeadLettersRetriableNackAfterBudget(t *testing.T) {
+	sender := &recordingSender{}
+	options := retryOptions()
+	options.NackRetryMax = 1
+	options.NackRetryInitial = 10 * time.Millisecond
+	options.NackRetryMaxDelay = 40 * time.Millisecond
+	reporter, queue := newTestReporter(t, sender, options)
+	if err := reporter.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("first Report() error = %v", err)
+	}
+	firstID := waitForMessages(t, sender, 1)[0].MessageID
+	if err := reporter.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("second Report() error = %v", err)
+	}
+	nack := wsclient.MetricsNack{ServerID: 42, Code: 50001, Reason: "retriable_server_error", Message: "db hiccup"}
+
+	// 第 1 次：预算内 → 重发同一队首
+	reporter.HandleMetricsNack(firstID, nack)
+	messages := waitForMessages(t, sender, 2)
+	if messages[1].MessageID != firstID {
+		t.Fatalf("first retry message id = %s, want %s", messages[1].MessageID, firstID)
+	}
+
+	// 第 2 次：预算耗尽 → 死信并推进到下一帧
+	reporter.HandleMetricsNack(firstID, nack)
+	messages = waitForMessages(t, sender, 3)
+	if messages[2].MessageID == firstID {
+		t.Fatal("head was not advanced after retry budget exhaustion")
+	}
+	if queue.Len() != 1 {
+		t.Fatalf("queued messages after budget exhaustion = %d, want 1", queue.Len())
+	}
+	stats := queue.Stats()
+	if stats.DeadLetterCount != 1 {
+		t.Fatalf("dead-letter count = %d, want 1", stats.DeadLetterCount)
+	}
+}
+
+// TestReporterNackRetryDelayDoublesAndCaps verifies the nack backoff helper
+// doubles from the initial value and caps at the configured maximum.
+func TestReporterNackRetryDelayDoublesAndCaps(t *testing.T) {
+	options := Options{NackRetryInitial: 10 * time.Millisecond, NackRetryMaxDelay: 40 * time.Millisecond}
+	if got := nackRetryDelay(1, options); got != 10*time.Millisecond {
+		t.Fatalf("nackRetryDelay(1) = %v, want 10ms", got)
+	}
+	if got := nackRetryDelay(2, options); got != 20*time.Millisecond {
+		t.Fatalf("nackRetryDelay(2) = %v, want 20ms", got)
+	}
+	if got := nackRetryDelay(5, options); got != 40*time.Millisecond {
+		t.Fatalf("nackRetryDelay(5) = %v, want capped 40ms", got)
+	}
+}

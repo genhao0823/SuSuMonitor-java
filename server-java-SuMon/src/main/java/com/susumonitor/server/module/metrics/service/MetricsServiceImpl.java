@@ -18,6 +18,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -53,26 +54,38 @@ public class MetricsServiceImpl implements MetricsService {
      *
      * <p>指标入库成功后，与指标同事务登记 Outbox 待发布事件（MVP-10）：
      * 事务回滚时 outbox 行一并回滚，保证"已入库指标必有待发布事件"。</p>
+     *
+     * <p>入库阶段的可恢复数据库故障（连接/锁等）包装为
+     * {@link MetricsRejectionReason#RETRIABLE_SERVER_ERROR}，Agent 有限重试后死信；
+     * 永久拒绝（载荷/采样时间/服务器不存在）维持原语义。</p>
      */
     @Transactional
     public void report(Long authenticatedServerId, String messageId, MetricsReportPayload payload) {
         validatePayload(authenticatedServerId, messageId, payload);
-        if (!serverService.existsActiveForUpdate(authenticatedServerId)) {
-            throw new MetricsRejectedException(MetricsRejectionReason.SERVER_NOT_FOUND);
+        try {
+            if (!serverService.existsActiveForUpdate(authenticatedServerId)) {
+                throw new MetricsRejectedException(MetricsRejectionReason.SERVER_NOT_FOUND);
+            }
+            if (isDuplicateIngestion(authenticatedServerId, messageId, payload.getCollectedAt())) {
+                return;
+            }
+            MetricsEntity entity = toEntity(payload);
+            LocalDateTime latestCollectedAt = metricsMapper.selectLatestCollectedAt(authenticatedServerId);
+            if (latestCollectedAt != null && !entity.getCollectedAt().isAfter(latestCollectedAt)) {
+                throw new MetricsRejectedException(MetricsRejectionReason.STALE_COLLECTED_AT);
+            }
+            if (metricsMapper.insertMetric(entity) != 1) {
+                throw new BusinessException(ErrorCode.DATABASE_ERROR);
+            }
+            outboxService.enqueue(entity, messageId);
+            eventPublisher.publishEvent(new MetricsReportedEvent(toLatestVo(entity)));
+        } catch (DuplicateKeyException exception) {
+            // 重复投递竞态（isDuplicateIngestion 预检查兜底）：数据级冲突，重发不会改变结果
+            throw exception;
+        } catch (DataAccessException exception) {
+            // 可恢复入库故障 → retriable nack，Agent 有限重试后仍未成功再死信
+            throw new MetricsRejectedException(MetricsRejectionReason.RETRIABLE_SERVER_ERROR);
         }
-        if (isDuplicateIngestion(authenticatedServerId, messageId, payload.getCollectedAt())) {
-            return;
-        }
-        MetricsEntity entity = toEntity(payload);
-        LocalDateTime latestCollectedAt = metricsMapper.selectLatestCollectedAt(authenticatedServerId);
-        if (latestCollectedAt != null && !entity.getCollectedAt().isAfter(latestCollectedAt)) {
-            throw new MetricsRejectedException(MetricsRejectionReason.STALE_COLLECTED_AT);
-        }
-        if (metricsMapper.insertMetric(entity) != 1) {
-            throw new BusinessException(ErrorCode.DATABASE_ERROR);
-        }
-        outboxService.enqueue(entity, messageId);
-        eventPublisher.publishEvent(new MetricsReportedEvent(toLatestVo(entity)));
     }
 
     /** 查询服务器最新指标；无记录时返回资源不存在。 */

@@ -13,7 +13,7 @@ import (
 	"agent-go-SuMon/internal/wsclient"
 )
 
-const snapshotVersion = 2
+const snapshotVersion = 3
 
 // DeadLetterEntry 是被服务端 metrics.nack 永久拒绝的完整指标帧及其拒绝原因。
 //
@@ -24,6 +24,15 @@ type DeadLetterEntry struct {
 	Code       int                   `json:"code"`
 	Detail     string                `json:"detail"`
 	RejectedAt string                `json:"rejected_at"`
+}
+
+// QueueEntry 是待确认帧及其 nack 重试计数（snapshot v3 起持久化）。
+//
+// retriable_server_error 类 nack 会在队首原地重试（计数递增），
+// 达到上限后与永久拒绝一样移入死信。
+type QueueEntry struct {
+	Frame     wsclient.AgentMessage `json:"frame"`
+	NackCount int                   `json:"nack_count"`
 }
 
 // Stats 是队列与死信的投递遥测快照，供心跳暴露与管理端展示。
@@ -48,13 +57,22 @@ type Queue struct {
 	serverID     int64
 	capacity     int
 	maxBytes     int // 0 = 不限制
-	entries      []wsclient.AgentMessage
+	entries      []QueueEntry
 	deadLetter   []DeadLetterEntry
 	drops        uint64
 	currentBytes int // 已入队帧的序列化字节合计，启动时初始化，增量维护
 }
 
+// snapshot 是当前（v3）持久化格式：entries 携带 nack 重试计数。
 type snapshot struct {
+	Version    int               `json:"version"`
+	ServerID   int64             `json:"server_id"`
+	Entries    []QueueEntry      `json:"entries"`
+	DeadLetter []DeadLetterEntry `json:"dead_letter,omitempty"`
+}
+
+// legacySnapshot 是 v1/v2 持久化格式（entries 为裸帧），仅用于读取迁移。
+type legacySnapshot struct {
 	Version    int                     `json:"version"`
 	ServerID   int64                   `json:"server_id"`
 	Entries    []wsclient.AgentMessage `json:"entries"`
@@ -87,12 +105,51 @@ func Open(path string, serverID int64, capacity, maxBytes int) (*Queue, error) {
 		return nil, fmt.Errorf("read metrics buffer: %w", err)
 	}
 
-	var stored snapshot
-	if err := json.Unmarshal(data, &stored); err != nil {
+	// 先读版本再按格式解析：v1/v2 的 entries 是裸帧，v3 起是 frame/nack_count 包装
+	var raw struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse metrics buffer: %w", err)
 	}
-	if stored.Version < 1 || stored.Version > snapshotVersion {
-		return nil, fmt.Errorf("unsupported metrics buffer version: %d", stored.Version)
+	if raw.Version < 1 || raw.Version > snapshotVersion {
+		return nil, fmt.Errorf("unsupported metrics buffer version: %d", raw.Version)
+	}
+
+	if raw.Version >= 3 {
+		var stored snapshot
+		if err := json.Unmarshal(data, &stored); err != nil {
+			return nil, fmt.Errorf("parse metrics buffer: %w", err)
+		}
+		if stored.ServerID != serverID {
+			return nil, fmt.Errorf("metrics buffer server ID %d does not match configured server ID %d", stored.ServerID, serverID)
+		}
+		if len(stored.Entries) > capacity {
+			return nil, fmt.Errorf("metrics buffer has %d entries, exceeding configured capacity %d", len(stored.Entries), capacity)
+		}
+		if len(stored.DeadLetter) > capacity {
+			return nil, fmt.Errorf("metrics buffer has %d dead-letter entries, exceeding configured capacity %d", len(stored.DeadLetter), capacity)
+		}
+		for index, entry := range stored.Entries {
+			if err := validateMessage(entry.Frame, serverID); err != nil {
+				return nil, fmt.Errorf("metrics buffer entry %d: %w", index, err)
+			}
+		}
+		for index, entry := range stored.DeadLetter {
+			if err := validateMessage(entry.Frame, serverID); err != nil {
+				return nil, fmt.Errorf("metrics buffer dead-letter entry %d: %w", index, err)
+			}
+		}
+		queue.entries = stored.Entries
+		queue.deadLetter = stored.DeadLetter
+		queue.currentBytes = framesBytes(entryFrames(stored.Entries))
+		return queue, nil
+	}
+
+	// v1/v2 快照：裸帧读取，原地升级为 v3（NackCount=0）并持久化一次，不丢弃任何待确认数据。
+	var stored legacySnapshot
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return nil, fmt.Errorf("parse metrics buffer: %w", err)
 	}
 	if stored.ServerID != serverID {
 		return nil, fmt.Errorf("metrics buffer server ID %d does not match configured server ID %d", stored.ServerID, serverID)
@@ -100,29 +157,36 @@ func Open(path string, serverID int64, capacity, maxBytes int) (*Queue, error) {
 	if len(stored.Entries) > capacity {
 		return nil, fmt.Errorf("metrics buffer has %d entries, exceeding configured capacity %d", len(stored.Entries), capacity)
 	}
+	if len(stored.DeadLetter) > capacity {
+		return nil, fmt.Errorf("metrics buffer has %d dead-letter entries, exceeding configured capacity %d", len(stored.DeadLetter), capacity)
+	}
+	queue.entries = make([]QueueEntry, len(stored.Entries))
 	for index, message := range stored.Entries {
 		if err := validateMessage(message, serverID); err != nil {
 			return nil, fmt.Errorf("metrics buffer entry %d: %w", index, err)
 		}
-	}
-	if len(stored.DeadLetter) > capacity {
-		return nil, fmt.Errorf("metrics buffer has %d dead-letter entries, exceeding configured capacity %d", len(stored.DeadLetter), capacity)
+		queue.entries[index] = QueueEntry{Frame: message}
 	}
 	for index, entry := range stored.DeadLetter {
 		if err := validateMessage(entry.Frame, serverID); err != nil {
 			return nil, fmt.Errorf("metrics buffer dead-letter entry %d: %w", index, err)
 		}
 	}
-	queue.entries = stored.Entries
 	queue.deadLetter = stored.DeadLetter
 	queue.currentBytes = framesBytes(stored.Entries)
-	// v1 快照没有死信字段：原地升级为 v2 并持久化一次，不丢弃任何待确认数据。
-	if stored.Version < snapshotVersion {
-		if err := queue.persist(queue.entries, queue.deadLetter); err != nil {
-			return nil, fmt.Errorf("migrate metrics buffer: %w", err)
-		}
+	if err := queue.persist(queue.entries, queue.deadLetter); err != nil {
+		return nil, fmt.Errorf("migrate metrics buffer: %w", err)
 	}
 	return queue, nil
+}
+
+// entryFrames 提取队列项的原始帧列表，用于字节统计。
+func entryFrames(entries []QueueEntry) []wsclient.AgentMessage {
+	frames := make([]wsclient.AgentMessage, len(entries))
+	for index, entry := range entries {
+		frames[index] = entry.Frame
+	}
+	return frames
 }
 
 // Enqueue durably appends one complete metrics.report frame. It never replaces
@@ -144,7 +208,7 @@ func (q *Queue) Enqueue(message wsclient.AgentMessage) error {
 			return fmt.Errorf("metrics buffer exceeds byte limit (%d bytes); newest metric was not queued", q.maxBytes)
 		}
 	}
-	entries := append(append([]wsclient.AgentMessage(nil), q.entries...), message)
+	entries := append(append([]QueueEntry(nil), q.entries...), QueueEntry{Frame: message})
 	if err := q.persist(entries, q.deadLetter); err != nil {
 		return err
 	}
@@ -160,7 +224,7 @@ func (q *Queue) Head() (wsclient.AgentMessage, bool) {
 	if len(q.entries) == 0 {
 		return wsclient.AgentMessage{}, false
 	}
-	return q.entries[0], true
+	return q.entries[0].Frame, true
 }
 
 // Acknowledge durably removes the FIFO head only when messageID matches it.
@@ -168,16 +232,16 @@ func (q *Queue) Head() (wsclient.AgentMessage, bool) {
 func (q *Queue) Acknowledge(messageID string) (bool, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if len(q.entries) == 0 || q.entries[0].MessageID != messageID {
+	if len(q.entries) == 0 || q.entries[0].Frame.MessageID != messageID {
 		return false, nil
 	}
 	removed := q.entries[0]
-	entries := append([]wsclient.AgentMessage(nil), q.entries[1:]...)
+	entries := append([]QueueEntry(nil), q.entries[1:]...)
 	if err := q.persist(entries, q.deadLetter); err != nil {
 		return false, err
 	}
 	q.entries = entries
-	q.currentBytes -= frameSize(removed)
+	q.currentBytes -= frameSize(removed.Frame)
 	if q.currentBytes < 0 {
 		q.currentBytes = 0
 	}
@@ -185,19 +249,42 @@ func (q *Queue) Acknowledge(messageID string) (bool, error) {
 }
 
 // RejectHead durably moves the FIFO head to the local dead-letter when
-// messageID matches it. The server returns metrics.nack only for correlated,
-// permanently invalid metrics, so a rejected head is never retried.
+// messageID matches it and the nack is permanent (or retry budget exhausted).
+// It is a shortcut of RejectOrRetryHead with zero retries.
+func (q *Queue) RejectHead(messageID string, nack wsclient.MetricsNack) (DeadLetterEntry, bool, bool, error) {
+	_, _, entry, rejected, evicted, err := q.RejectOrRetryHead(messageID, nack, 0)
+	return entry, rejected, evicted, err
+}
+
+// RejectOrRetryHead grades the FIFO head on metrics.nack:
+//
+//   - retriable reasons (retriable_server_error) below the retry budget keep the
+//     head in place with an incremented NackCount, returning retried=true so the
+//     caller can schedule a bounded backoff retransmission;
+//   - permanent reasons (or retries exhausted) move the head to the local
+//     dead-letter, returning rejected=true with the created entry.
 //
 // The returned evicted flag reports whether the oldest dead-letter entry was
 // dropped because the shared capacity bound was reached.
-func (q *Queue) RejectHead(messageID string, nack wsclient.MetricsNack) (DeadLetterEntry, bool, bool, error) {
+func (q *Queue) RejectOrRetryHead(messageID string, nack wsclient.MetricsNack, maxRetries int) (bool, int, DeadLetterEntry, bool, bool, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if len(q.entries) == 0 || q.entries[0].MessageID != messageID {
-		return DeadLetterEntry{}, false, false, nil
+	if len(q.entries) == 0 || q.entries[0].Frame.MessageID != messageID {
+		return false, 0, DeadLetterEntry{}, false, false, nil
+	}
+	head := q.entries[0]
+	if maxRetries > 0 && isRetriableReason(nack.Reason) && head.NackCount < maxRetries {
+		// 可重试原因且未达上限：保留队首（严格时序不受影响），计数 +1 并持久化
+		entries := append([]QueueEntry(nil), q.entries...)
+		entries[0].NackCount++
+		if err := q.persist(entries, q.deadLetter); err != nil {
+			return false, 0, DeadLetterEntry{}, false, false, err
+		}
+		q.entries = entries
+		return true, entries[0].NackCount, DeadLetterEntry{}, false, false, nil
 	}
 	entry := DeadLetterEntry{
-		Frame:      q.entries[0],
+		Frame:      head.Frame,
 		Reason:     nack.Reason,
 		Code:       nack.Code,
 		Detail:     nack.Message,
@@ -210,9 +297,9 @@ func (q *Queue) RejectHead(messageID string, nack wsclient.MetricsNack) (DeadLet
 		deadLetter = deadLetter[len(deadLetter)-q.capacity:]
 		evicted = true
 	}
-	entries := append([]wsclient.AgentMessage(nil), q.entries[1:]...)
+	entries := append([]QueueEntry(nil), q.entries[1:]...)
 	if err := q.persist(entries, deadLetter); err != nil {
-		return DeadLetterEntry{}, false, false, err
+		return false, 0, DeadLetterEntry{}, false, false, err
 	}
 	q.entries = entries
 	q.deadLetter = deadLetter
@@ -220,7 +307,15 @@ func (q *Queue) RejectHead(messageID string, nack wsclient.MetricsNack) (DeadLet
 	if q.currentBytes < 0 {
 		q.currentBytes = 0
 	}
-	return entry, true, evicted, nil
+	return false, 0, entry, true, evicted, nil
+}
+
+// isRetriableReason 判定 nack 原因是否属于可重试分类。
+//
+// 当前仅 retriable_server_error（服务端入库阶段临时故障）；其余原因重发不会
+// 改变拒绝条件（载荷非法/采样时间过期/服务器不存在），直接死信。
+func isRetriableReason(reason string) bool {
+	return reason == "retriable_server_error"
 }
 
 // Stats returns a delivery telemetry snapshot of the queue and dead-letter.
@@ -244,7 +339,7 @@ func (q *Queue) Len() int {
 	return len(q.entries)
 }
 
-func (q *Queue) persist(entries []wsclient.AgentMessage, deadLetter []DeadLetterEntry) error {
+func (q *Queue) persist(entries []QueueEntry, deadLetter []DeadLetterEntry) error {
 	data, err := json.Marshal(snapshot{Version: snapshotVersion, ServerID: q.serverID, Entries: entries, DeadLetter: deadLetter})
 	if err != nil {
 		return fmt.Errorf("marshal metrics buffer: %w", err)
@@ -337,12 +432,12 @@ func frameSize(msg wsclient.AgentMessage) int {
 }
 
 // oldestCollectedAt 返回队首帧的 collected_at；无法解析时返回空字符串。
-func oldestCollectedAt(entries []wsclient.AgentMessage) string {
+func oldestCollectedAt(entries []QueueEntry) string {
 	if len(entries) == 0 {
 		return ""
 	}
 	var payload wsclient.MetricsPayload
-	if err := json.Unmarshal(entries[0].Payload, &payload); err != nil {
+	if err := json.Unmarshal(entries[0].Frame.Payload, &payload); err != nil {
 		return ""
 	}
 	return payload.CollectedAt

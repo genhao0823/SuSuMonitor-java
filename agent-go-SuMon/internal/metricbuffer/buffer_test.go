@@ -179,8 +179,8 @@ func TestQueueMigratesV1Snapshot(t *testing.T) {
 	if err := json.Unmarshal(migrated, &stored); err != nil {
 		t.Fatalf("parse migrated snapshot: %v", err)
 	}
-	if stored.Version != 2 {
-		t.Fatalf("migrated snapshot version = %d, want 2", stored.Version)
+	if stored.Version != 3 {
+		t.Fatalf("migrated snapshot version = %d, want 3", stored.Version)
 	}
 	if len(stored.DeadLetter) != 0 {
 		t.Fatalf("migrated dead-letter count = %d, want 0", len(stored.DeadLetter))
@@ -383,4 +383,107 @@ func largeMetricsMessage(id string, serverID int64, collectedAt string) wsclient
 	}{
 		ServerID: serverID, CollectedAt: collectedAt, Filler: strings.Repeat("x", 2000),
 	})
+}
+
+// TestQueueRetriableNackKeepsHeadWithCounter verifies a retriable nack below the
+// retry budget keeps the FIFO head and increments its persisted counter,
+// including across a process restart.
+func TestQueueRetriableNackKeepsHeadWithCounter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "metrics.json")
+	queue, err := Open(path, 42, 3, 0)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	first := metricsMessage("11111111-1111-4111-8111-111111111111", 42, "2026-08-03T00:00:00Z")
+	second := metricsMessage("22222222-2222-4222-8222-222222222222", 42, "2026-08-03T00:00:05Z")
+	if err := queue.Enqueue(first); err != nil {
+		t.Fatalf("enqueue first: %v", err)
+	}
+	if err := queue.Enqueue(second); err != nil {
+		t.Fatalf("enqueue second: %v", err)
+	}
+	nack := wsclient.MetricsNack{ServerID: 42, Code: 50001, Reason: "retriable_server_error", Message: "db hiccup"}
+
+	retried, count, _, rejected, _, err := queue.RejectOrRetryHead(first.MessageID, nack, 3)
+	if err != nil || !retried || count != 1 || rejected {
+		t.Fatalf("first RejectOrRetryHead() = retried %v, count %d, rejected %v, error %v; want true, 1, false, nil", retried, count, rejected, err)
+	}
+	if queue.Len() != 2 {
+		t.Fatalf("queued messages after retry = %d, want 2 (head retained)", queue.Len())
+	}
+	head, _ := queue.Head()
+	if head.MessageID != first.MessageID {
+		t.Fatalf("head after retry = %s, want first message retained in place", head.MessageID)
+	}
+
+	// 第二次重试计数 +1
+	retried, count, _, _, _, err = queue.RejectOrRetryHead(first.MessageID, nack, 3)
+	if err != nil || !retried || count != 2 {
+		t.Fatalf("second RejectOrRetryHead() = retried %v, count %d, error %v; want true, 2, nil", retried, count, err)
+	}
+
+	// 重试计数跨重启持久化（snapshot v3）
+	reopened, err := Open(path, 42, 3, 0)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	retried, count, _, _, _, err = reopened.RejectOrRetryHead(first.MessageID, nack, 3)
+	if err != nil || !retried || count != 3 {
+		t.Fatalf("reopened RejectOrRetryHead() = retried %v, count %d, error %v; want true, 3, nil", retried, count, err)
+	}
+}
+
+// TestQueueRetriableNackExhaustsBudgetThenDeadLetter verifies the head moves to
+// the local dead-letter once the retry budget is exhausted.
+func TestQueueRetriableNackExhaustsBudgetThenDeadLetter(t *testing.T) {
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 3, 0)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	first := metricsMessage("11111111-1111-4111-8111-111111111111", 42, "2026-08-03T00:00:00Z")
+	if err := queue.Enqueue(first); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	nack := wsclient.MetricsNack{ServerID: 42, Code: 50001, Reason: "retriable_server_error", Message: "db hiccup"}
+
+	for wantCount := 1; wantCount <= 2; wantCount++ {
+		retried, count, _, rejected, _, err := queue.RejectOrRetryHead(first.MessageID, nack, 2)
+		if err != nil || !retried || count != wantCount || rejected {
+			t.Fatalf("RejectOrRetryHead(%d) = retried %v, count %d, rejected %v, error %v", wantCount, retried, count, rejected, err)
+		}
+	}
+	// 第 3 次（超预算）→ 死信
+	_, _, entry, rejected, evicted, err := queue.RejectOrRetryHead(first.MessageID, nack, 2)
+	if err != nil || !rejected || evicted {
+		t.Fatalf("budget-exhausted RejectOrRetryHead() = rejected %v, evicted %v, error %v; want true, false, nil", rejected, evicted, err)
+	}
+	if queue.Len() != 0 {
+		t.Fatalf("queued messages after rejection = %d, want 0", queue.Len())
+	}
+	stats := queue.Stats()
+	if stats.DeadLetterCount != 1 || entry.Reason != "retriable_server_error" {
+		t.Fatalf("dead-letter stats = %+v, entry reason = %s; want one retriable record", stats, entry.Reason)
+	}
+}
+
+// TestQueuePermanentNackDeadLettersImmediately verifies permanent reasons bypass
+// the retry budget entirely.
+func TestQueuePermanentNackDeadLettersImmediately(t *testing.T) {
+	queue, err := Open(filepath.Join(t.TempDir(), "metrics.json"), 42, 3, 0)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	first := metricsMessage("11111111-1111-4111-8111-111111111111", 42, "2026-08-03T00:00:00Z")
+	if err := queue.Enqueue(first); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	retried, count, _, rejected, _, err := queue.RejectOrRetryHead(
+		first.MessageID, rejection("server_not_found"), 5)
+	if err != nil || retried || count != 0 || !rejected {
+		t.Fatalf("permanent RejectOrRetryHead() = retried %v, count %d, rejected %v, error %v; want false, 0, true, nil", retried, count, rejected, err)
+	}
+	if queue.Len() != 0 {
+		t.Fatalf("queued messages after rejection = %d, want 0", queue.Len())
+	}
 }

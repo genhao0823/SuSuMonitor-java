@@ -43,6 +43,12 @@ type Config struct {
 	MetricsReplayMinIntervalMillis int
 	// MetricsRetryJitterEnabled 控制确认超时重传是否使用 equal jitter。
 	MetricsRetryJitterEnabled bool
+	// MetricsNackRetryMax 是可重试 nack（retriable_server_error）的最大重试次数，默认 3。
+	MetricsNackRetryMax int
+	// MetricsNackRetryInitialSeconds 是可重试 nack 的首次退避间隔，默认 2。
+	MetricsNackRetryInitialSeconds int
+	// MetricsNackRetryMaxSeconds 是可重试 nack 的最大退避间隔，默认 60。
+	MetricsNackRetryMaxSeconds int
 	// LogLevel 是日志级别，如 info、debug。
 	LogLevel string
 	// TerminalEnabled 控制是否接受远程终端协议消息，默认关闭。
@@ -119,6 +125,15 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.MetricsRetryJitterEnabled, err = getenvBoolDefault("SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED", true); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsNackRetryMax, err = getenvIntDefault("SUSUMONITOR_NACK_RETRY_MAX", 3); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsNackRetryInitialSeconds, err = getenvIntDefault("SUSUMONITOR_NACK_RETRY_INITIAL_SECONDS", 2); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsNackRetryMaxSeconds, err = getenvIntDefault("SUSUMONITOR_NACK_RETRY_MAX_SECONDS", 60); err != nil {
 		return nil, err
 	}
 	if cfg.TerminalEnabled, err = getenvBoolDefault("SUSUMONITOR_TERMINAL_ENABLED", false); err != nil {

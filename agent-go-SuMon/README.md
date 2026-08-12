@@ -67,6 +67,9 @@ cp .env.example .env
 | `SUSUMONITOR_METRICS_RETRY_MAX_SECONDS` | ACK 超时重传退避上限，默认 60 秒 |
 | `SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS` | 积压 FIFO 相邻发送的最小间隔，默认 2500ms（约 24 条/分钟） |
 | `SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED` | ACK 超时重传是否使用 equal jitter，默认 `true`（实际等待为退避值的 1/2 至 1 倍） |
+| `SUSUMONITOR_NACK_RETRY_MAX` | 可重试 nack（`retriable_server_error`）的最大重试次数，默认 3，达到上限后移入本地死信 |
+| `SUSUMONITOR_NACK_RETRY_INITIAL_SECONDS` | 可重试 nack 的首次退避间隔，默认 2 秒（指数翻倍至上限） |
+| `SUSUMONITOR_NACK_RETRY_MAX_SECONDS` | 可重试 nack 的最大退避间隔，默认 60 秒 |
 
 ## 指标上报边界
 
@@ -76,7 +79,7 @@ cp .env.example .env
 - 已认证连接中若 `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` 内未收到 ACK，Agent 保留队首并按 `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` 至 `SUSUMONITOR_METRICS_RETRY_MAX_SECONDS` 的指数退避重发；重发仍使用原完整帧和 UUID。
 - 为保持 Server 对 `collected_at` 的严格递增规则，最多只有一条指标处于 in-flight 状态，后续记录等待前一条 ACK；若 ACK 后仍有积压，下一条会等待 `SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS`，避免恢复时触发服务端指标限流。
 - 缓冲满（条数或字节超限）时拒绝最新采样并记录错误，保留既有 FIFO；缓存文件损坏、不支持的版本或 `server_id` 不匹配时启动失败，避免静默丢弃未确认数据；v1 快照会自动原地迁移为 v2（新增本地死信）。
-- 服务端对可关联且永久无效的指标（`invalid_metrics_payload` / `stale_collected_at` / `server_not_found`）返回 correlated `metrics.nack`；Agent 将队首移入本地持久化死信（`dead_letter` 数组，与队列共用容量上限、超限丢最旧）且不重试；泛化 `error` 帧不会删除队首。
+- 服务端对可关联且永久无效的指标（`invalid_metrics_payload` / `stale_collected_at` / `server_not_found`）返回 correlated `metrics.nack`；Agent 将队首移入本地持久化死信（`dead_letter` 数组，与队列共用容量上限、超限丢最旧）且不重试；入库阶段可恢复故障（`retriable_server_error`，如数据库连接抖动）按 `SUSUMONITOR_NACK_RETRY_*` 有限重试（默认 3 次、2s→60s 指数退避），预算耗尽后同样死信；泛化 `error` 帧不会删除队首。
 - 心跳帧携带投递遥测（pending count/bytes、最旧采样、丢弃计数、死信条数/字节），Server 落库后经 `GET /api/servers/{id}/status` 在服务器详情页展示。
 - Agent 部署前必须先升级 Server 至支持 `metrics.ack` 的版本（`773fc4d` 或后续）；旧 Server 不会确认，队首将按可靠语义持续保留。
 - 队列容量上限双维度生效：条数上限 `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES`（默认 720）与字节上限 `SUSUMONITOR_METRICS_BUFFER_MAX_BYTES`（默认 0=不限制，设为 ≥1024 字节生效；2026-08-05 d0b17bf 起实现），任一超限即拒绝最新采样并记录错误；可靠投递已完成两层隔离 E2E：真实 Agent + loopback fixture 15 项（含 NACK 死信/重启持久化/泛化 error 不移队首/字节上限）PASS，真实 Agent + Java/MySQL 独立 schema 场景待 DB 管理员凭据运行。

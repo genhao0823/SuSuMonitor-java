@@ -26,6 +26,12 @@ type Options struct {
 	RetryMax          time.Duration
 	RetryJitter       bool
 	ReplayMinInterval time.Duration
+	// NackRetryMax 是可重试 nack（retriable_server_error）的最大重试次数，达到上限后死信。
+	NackRetryMax int
+	// NackRetryInitial 是可重试 nack 的首次退避间隔。
+	NackRetryInitial time.Duration
+	// NackRetryMaxDelay 是可重试 nack 的最大退避间隔。
+	NackRetryMaxDelay time.Duration
 }
 
 // Reporter persists metrics before sending and permits only one unacknowledged
@@ -165,6 +171,25 @@ func (r *Reporter) jitterDelay(delay time.Duration) time.Duration {
 	return half + time.Duration(rand.Int63n(int64(half)+1))
 }
 
+// nackRetryDelay 返回可重试 nack 第 count 次重试的退避间隔：
+// NackRetryInitial 起指数翻倍，封顶 NackRetryMaxDelay（抖动由调用方叠加）。
+func nackRetryDelay(count int, options Options) time.Duration {
+	if count < 1 {
+		count = 1
+	}
+	delay := options.NackRetryInitial
+	for attempt := 1; attempt < count; attempt++ {
+		if delay >= options.NackRetryMaxDelay {
+			return options.NackRetryMaxDelay
+		}
+		delay *= 2
+	}
+	if delay > options.NackRetryMaxDelay {
+		return options.NackRetryMaxDelay
+	}
+	return delay
+}
+
 func (r *Reporter) scheduleRetryLocked(messageID string, generation uint64, delay time.Duration) {
 	if r.retryTimer != nil {
 		r.retryTimer.Stop()
@@ -211,15 +236,35 @@ func (r *Reporter) HandleMetricsAck(messageID string) {
 		"minimum_interval", r.options.ReplayMinInterval)
 }
 
-// HandleMetricsNack durably moves the FIFO head to the local dead-letter when
-// the server permanently rejects it, then advances delivery like an
-// acknowledgement. Generic error frames never reach here; only correlated
-// metrics.nack frames for permanently invalid metrics are consumed, so a
-// rejected head is never retried.
+// HandleMetricsNack grades the FIFO head on the correlated metrics.nack frame:
+//
+//   - retriable reasons below the retry budget keep the head in place and schedule
+//     a bounded backoff retransmission (NackRetryInitial doubling up to
+//     NackRetryMaxDelay, with the configured jitter);
+//   - permanent reasons (or retries exhausted) durably move the head to the local
+//     dead-letter, then delivery advances like an acknowledgement.
+//
+// Generic error frames never reach here; only correlated metrics.nack frames are
+// consumed, so a rejected head is never silently dropped.
 func (r *Reporter) HandleMetricsNack(messageID string, nack wsclient.MetricsNack) {
-	entry, rejected, evicted, err := r.queue.RejectHead(messageID, nack)
+	retried, retryCount, _, rejected, evicted, err := r.queue.RejectOrRetryHead(messageID, nack, r.options.NackRetryMax)
 	if err != nil {
 		r.logger.Error("persist metrics rejection failed", "message_id", messageID, "error", err)
+		return
+	}
+	if retried {
+		next, backlog := r.queue.Head()
+		delay := nackRetryDelay(retryCount, r.options)
+		r.mu.Lock()
+		r.clearDeliveryLocked()
+		if backlog {
+			r.messageID = next.MessageID
+			r.scheduleRetryLocked(next.MessageID, r.generation, r.jitterDelay(delay))
+		}
+		r.mu.Unlock()
+		r.logger.Warn("metrics temporarily rejected; retaining head for bounded retry",
+			"message_id", messageID, "reason", nack.Reason, "code", nack.Code,
+			"retry_count", retryCount, "retry_delay", delay)
 		return
 	}
 	if !rejected {
@@ -235,8 +280,7 @@ func (r *Reporter) HandleMetricsNack(messageID string, nack wsclient.MetricsNack
 	}
 	r.mu.Unlock()
 	r.logger.Warn("metrics permanently rejected; moved to local dead-letter",
-		"message_id", messageID, "reason", nack.Reason, "code", nack.Code, "detail", nack.Message,
-		"rejected_at", entry.RejectedAt)
+		"message_id", messageID, "reason", nack.Reason, "code", nack.Code, "detail", nack.Message)
 	if evicted {
 		r.logger.Warn("dead-letter capacity reached; oldest dead-letter entry evicted",
 			"message_id", messageID)
