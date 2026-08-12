@@ -4,8 +4,12 @@ import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.module.server.dto.UpdateSshHostKeyRequest;
 import com.susumonitor.server.module.server.entity.ServerEntity;
+import com.susumonitor.server.module.server.entity.SshTestHistoryEntity;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
+import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
+import com.susumonitor.server.module.server.vo.SshHostKeyObservationVo;
 import com.susumonitor.server.module.server.vo.SshHostKeyVo;
+import com.susumonitor.server.module.server.vo.SshTestHistoryVo;
 import com.susumonitor.server.module.server.vo.SshTestVo;
 import com.susumonitor.server.security.CredentialCipher;
 import com.susumonitor.server.ssh.SshConnectionException;
@@ -14,6 +18,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
@@ -32,24 +37,28 @@ public class ServerSshServiceImpl implements ServerSshService {
     private static final String OPERATION_CONFIRMED = "confirmed";
     private static final String OPERATION_ROTATED = "rotated";
     private static final String OPERATION_UNCHANGED = "unchanged";
+    private static final int HISTORY_LIMIT = 10;
     private static final ZoneId APPLICATION_ZONE = ZoneOffset.UTC;
 
     private final ServerMapper serverMapper;
     private final CredentialCipher credentialCipher;
     private final SshConnectionTester connectionTester;
+    private final SshTestHistoryMapper sshTestHistoryMapper;
 
     /**
-     * 注入服务器持久化、凭据解密和 SSH 网络组件。
+     * 注入服务器持久化、凭据解密、SSH 网络组件和测试历史持久化。
      *
      * @param serverMapper 服务器 Mapper
      * @param credentialCipher 凭据加解密组件
      * @param connectionTester SSH 网络组件
+     * @param sshTestHistoryMapper SSH 测试历史 Mapper
      */
     public ServerSshServiceImpl(ServerMapper serverMapper, CredentialCipher credentialCipher,
-            SshConnectionTester connectionTester) {
+            SshConnectionTester connectionTester, SshTestHistoryMapper sshTestHistoryMapper) {
         this.serverMapper = serverMapper;
         this.credentialCipher = credentialCipher;
         this.connectionTester = connectionTester;
+        this.sshTestHistoryMapper = sshTestHistoryMapper;
     }
 
     /**
@@ -127,12 +136,95 @@ public class ServerSshServiceImpl implements ServerSshService {
             } else {
                 throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
             }
+            recordTestHistory(server, true, null, result.algorithm(), result.fingerprint(),
+                    result.durationMillis());
             return toSshTestVo(server, result);
         } catch (SshConnectionException exception) {
-            throw mapConnectionException(exception);
+            BusinessException mapped = mapConnectionException(exception);
+            recordTestHistory(server, false, mapped.getErrorCode().getCode(), null, null, 0);
+            throw mapped;
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, exception);
         }
+    }
+
+    /**
+     * 只读观察目标主机当前公钥，供管理员"一键信任"前核对，不登记、不发送凭据。
+     *
+     * @param serverId 服务器 ID
+     * @return 观察到的远端主机公钥信息
+     */
+    public SshHostKeyObservationVo observeHostKey(Long serverId) {
+        validateServerId(serverId);
+        ServerEntity server = selectHostKey(serverId);
+        SshConnectionTester.SshHostKeyObservation observation = observeHostKey(server);
+        SshHostKeyObservationVo result = new SshHostKeyObservationVo();
+        result.setServerId(server.getId());
+        result.setHostKeyAlgorithm(observation.algorithm());
+        result.setHostKeyFingerprint(observation.fingerprint());
+        result.setRegisteredFingerprint(server.getSshHostKeyFingerprint());
+        result.setObservedAt(OffsetDateTime.now(APPLICATION_ZONE));
+        return result;
+    }
+
+    /** 调用网络层读取目标主机实际公钥，并转换稳定错误码。 */
+    private SshConnectionTester.SshHostKeyObservation observeHostKey(ServerEntity server) {
+        try {
+            return connectionTester.observeHostKey(server.getSshHost(), server.getSshPort());
+        } catch (SshConnectionException exception) {
+            throw mapConnectionException(exception);
+        }
+    }
+
+    /**
+     * 查询某服务器最近的 SSH 连接测试历史（含成功与失败记录）。
+     *
+     * @param serverId 服务器 ID
+     * @return 最近的测试历史列表，按测试时间倒序
+     */
+    public List<SshTestHistoryVo> listTestHistory(Long serverId) {
+        validateServerId(serverId);
+        try {
+            List<SshTestHistoryEntity> records =
+                    sshTestHistoryMapper.selectRecentByServerId(serverId, HISTORY_LIMIT);
+            return records.stream().map(this::toTestHistoryVo).toList();
+        } catch (DataAccessException exception) {
+            throw new BusinessException(ErrorCode.DATABASE_ERROR, exception);
+        }
+    }
+
+    /** 持久化一次连接测试结果到历史表，失败时 duration 记为 0。 */
+    private void recordTestHistory(ServerEntity server, boolean connected, Integer errorCode,
+            String hostKeyAlgorithm, String hostKeyFingerprint, long durationMs) {
+        try {
+            SshTestHistoryEntity entity = new SshTestHistoryEntity();
+            entity.setServerId(server.getId());
+            entity.setConnected(connected);
+            entity.setErrorCode(errorCode);
+            entity.setHostKeyAlgorithm(hostKeyAlgorithm);
+            entity.setHostKeyFingerprint(hostKeyFingerprint);
+            entity.setAuthType(server.getSshAuthType());
+            entity.setDurationMs(durationMs);
+            entity.setTestedAt(LocalDateTime.now(APPLICATION_ZONE));
+            entity.setCreatedAt(LocalDateTime.now(APPLICATION_ZONE));
+            sshTestHistoryMapper.insert(entity);
+        } catch (DataAccessException exception) {
+            throw new BusinessException(ErrorCode.DATABASE_ERROR, exception);
+        }
+    }
+
+    /** 转换测试历史实体为对外响应。 */
+    private SshTestHistoryVo toTestHistoryVo(SshTestHistoryEntity entity) {
+        SshTestHistoryVo result = new SshTestHistoryVo();
+        result.setServerId(entity.getServerId());
+        result.setConnected(Boolean.TRUE.equals(entity.getConnected()));
+        result.setErrorCode(entity.getErrorCode());
+        result.setHostKeyAlgorithm(entity.getHostKeyAlgorithm());
+        result.setHostKeyFingerprint(entity.getHostKeyFingerprint());
+        result.setAuthType(entity.getAuthType());
+        result.setDurationMs(entity.getDurationMs() == null ? 0 : entity.getDurationMs());
+        result.setTestedAt(toOffsetDateTime(entity.getTestedAt()));
+        return result;
     }
 
     /** 查询不含凭据的主机公钥快照。 */

@@ -27,6 +27,7 @@ import com.susumonitor.server.module.server.dto.CreateServerRequest;
 import com.susumonitor.server.module.server.dto.ServerQueryRequest;
 import com.susumonitor.server.module.server.dto.UpdateServerRequest;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
+import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsCleanupMapper;
@@ -35,7 +36,9 @@ import com.susumonitor.server.module.server.service.ServerService;
 import com.susumonitor.server.module.server.service.ServerSshService;
 import com.susumonitor.server.module.server.vo.ServerStatusVo;
 import com.susumonitor.server.module.server.vo.ServerVo;
+import com.susumonitor.server.module.server.vo.SshHostKeyObservationVo;
 import com.susumonitor.server.module.server.vo.SshHostKeyVo;
+import com.susumonitor.server.module.server.vo.SshTestHistoryVo;
 import com.susumonitor.server.module.server.vo.SshTestVo;
 import com.susumonitor.server.security.JwtTokenService;
 import com.susumonitor.server.module.alert.mapper.AlertNotificationMapper;
@@ -103,6 +106,10 @@ class ServerControllerTests {
     // 提供服务器 Mapper 替身，避免测试上下文创建真实 MyBatis 会话工厂。
     @MockitoBean
     private ServerMapper serverMapper;
+
+    // 替代全局 Mapper 扫描注册的 SSH 测试历史 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private SshTestHistoryMapper sshTestHistoryMapper;
 
     @MockitoBean
     private MetricsMapper metricsMapper;
@@ -624,6 +631,75 @@ class ServerControllerTests {
                 .andExpect(status().isBadGateway())
                 .andExpect(header().string("X-Request-ID", not(blankOrNullString())))
                 .andExpect(jsonPath("$.code").value(50003));
+    }
+
+    /** 验证 SSH 测试历史接口返回最近记录列表（成功记录含公钥信息）。 */
+    @Test
+    void sshTestHistoryShouldReturnRecords() throws Exception {
+        authenticateAdmin();
+        SshTestHistoryVo history = new SshTestHistoryVo();
+        history.setServerId(1L);
+        history.setConnected(true);
+        history.setErrorCode(null);
+        history.setHostKeyAlgorithm("ssh-ed25519");
+        history.setHostKeyFingerprint("SHA256:test");
+        history.setAuthType("password");
+        history.setDurationMs(25L);
+        history.setTestedAt(OffsetDateTime.now());
+        when(serverSshService.listTestHistory(1L)).thenReturn(List.of(history));
+
+        mockMvc.perform(get("/api/servers/1/ssh/test/history")
+                        .header(AUTHORIZATION, ADMIN_BEARER))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data[0].server_id").value(1))
+                .andExpect(jsonPath("$.data[0].connected").value(true))
+                .andExpect(jsonPath("$.data[0].error_code").doesNotExist())
+                .andExpect(jsonPath("$.data[0].duration_ms").value(25));
+
+        verify(serverSshService).listTestHistory(1L);
+    }
+
+    /** 验证未认证访问 SSH 测试历史返回 40100。 */
+    @Test
+    void sshTestHistoryWithoutAuthShouldReturnUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/servers/1/ssh/test/history"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(40100));
+
+        verify(serverSshService, never()).listTestHistory(any());
+    }
+
+    /** 验证观察主机公钥接口返回目标主机当前公钥。 */
+    @Test
+    void observeSshHostKeyShouldReturnObservedKey() throws Exception {
+        authenticateAdmin();
+        SshHostKeyObservationVo observation = new SshHostKeyObservationVo();
+        observation.setServerId(1L);
+        observation.setHostKeyAlgorithm("ssh-ed25519");
+        observation.setHostKeyFingerprint("SHA256:test");
+        observation.setObservedAt(OffsetDateTime.now());
+        when(serverSshService.observeHostKey(1L)).thenReturn(observation);
+
+        mockMvc.perform(post("/api/servers/1/ssh/host-key/observe")
+                        .header(AUTHORIZATION, ADMIN_BEARER))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.server_id").value(1))
+                .andExpect(jsonPath("$.data.host_key_algorithm").value("ssh-ed25519"))
+                .andExpect(jsonPath("$.data.host_key_fingerprint").value("SHA256:test"));
+
+        verify(serverSshService).observeHostKey(1L);
+    }
+
+    /** 验证未认证访问观察主机公钥返回 40100。 */
+    @Test
+    void observeSshHostKeyWithoutAuthShouldReturnUnauthorized() throws Exception {
+        mockMvc.perform(post("/api/servers/1/ssh/host-key/observe"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(40100));
+
+        verify(serverSshService, never()).observeHostKey(any());
     }
 
     /** 配置管理员 JWT 和数据库最新状态回查。 */

@@ -231,3 +231,9 @@ Apifox 独立用例：
 真实 JUnit 报告断言 HTTP `502`、业务码 `50002`、消息 `ssh connection failed` 和 `X-Request-ID` 存在，4 项断言均通过。临时服务器仅通过业务接口软删除，临时 SSHD、密钥目录和后端进程均已清理。
 
 当前已确认连接阶段异常映射为 `CONNECTION_FAILED -> HTTP 502 / 50002`，认证阶段异常映射为 `AUTHENTICATION_FAILED -> HTTP 502 / 50003`。
+
+## 2026-08-10 补充：超时分类修复与 sshj/OpenSSH 兼容性根因说明
+
+- **超时分类已修复**：`SshConnectionTester.connect()` 的 `catch (IOException | RuntimeException)` 中新增 `isSocketTimeout()` 判断（遍历异常链识别 `SocketTimeoutException`），握手/认证阶段的读超时现在分类为 `TIMEOUT -> HTTP 504 / 50400`，不再被吞成 `CONNECTION_FAILED(50002)`。整体超时（`future.get(totalTimeoutSeconds)`）与取消路径仍为 `TIMEOUT`；连接拒绝仍为 `CONNECTION_FAILED`；主机密钥不匹配仍优先于超时判定。
+- **自动化验证**：`SshConnectionTesterTests` 新增 3 个网络层用例——不响应 socket 的握手读超时 → `TIMEOUT`、连接拒绝 → `CONNECTION_FAILED`、整体超时 → `TIMEOUT`；`mvn test` 全量回归通过。
+- **sshj 0.39.0 与 OpenSSH 主机密钥协商兼容性**：J5 记录的"真实 WSL OpenSSH 下指纹登记返回 50002、需后续排查"根因至今未在真实环境复现定位。J6/J7 已通过受控独立 SSHD 闭环 `50002/50003` 分类验收；本 bug 单涉及的其余阶段（50002 连接失败、50003 认证失败）均已真实验收。该兼容性项需真实 OpenSSH 环境，仓库内无待改代码缺陷，保留为真实环境待办。

@@ -52,6 +52,17 @@
         </el-button>
         <el-button
           v-if="auth.isAdmin"
+          type="success"
+          plain
+          :disabled="!data || agentBusy"
+          :loading="agentBusy"
+          class="server-detail-view__host-key-trust"
+          @click="trustHostKeyOneClick"
+        >
+          一键信任主机
+        </el-button>
+        <el-button
+          v-if="auth.isAdmin"
           type="info"
           plain
           :disabled="!data"
@@ -344,7 +355,7 @@ import ServerFormDialog from '@/components/ServerFormDialog.vue'
 import AgentTokenDialog from '@/components/AgentTokenDialog.vue'
 import TushanFoxMark from '@/components/TushanFoxMark.vue'
 import { ApiBusinessError } from '@/api/client'
-import { confirmSshHostKey, deleteServer, getServer, getServerStatus, testSshConnection } from '@/api/server'
+import { confirmSshHostKey, deleteServer, getServer, getServerStatus, observeSshHostKey, testSshConnection } from '@/api/server'
 import { revokeAgentToken } from '@/api/agent-token'
 import { ErrorCode } from '@/types/error-code'
 import { useAuthStore } from '@/stores/auth'
@@ -524,6 +535,55 @@ async function handleDelete(): Promise<void> {
     goBack()
   } catch (error) {
     ElMessage.error(explainError(error))
+  }
+}
+
+/**
+ * 一键信任主机密钥：观察目标主机当前公钥 → 弹窗核对 → 确认后登记。
+ *
+ * 由后端只读握手读取实际公钥，前端展示算法与指纹供管理员显式确认
+ * （等同 SSH 客户端首次连接的 yes/no）；已登记指纹不同时提示"密钥已变更"
+ * 并携带 replace=true 完成显式轮换。
+ */
+async function trustHostKeyOneClick(): Promise<void> {
+  if (!data.value) {
+    ElMessage.warning('服务器数据未加载')
+    return
+  }
+  agentBusy.value = true
+  try {
+    const observation = (await observeSshHostKey(data.value.id)).data
+    const registered = observation.registered_fingerprint
+    const changed = registered !== null && registered !== observation.host_key_fingerprint
+    const message = changed
+      ? `目标主机当前公钥与已登记的不一致（可能重装系统或密钥被替换）。\n\n算法: ${observation.host_key_algorithm}\n指纹: ${observation.host_key_fingerprint}\n\n确认以新密钥替换并信任？`
+      : `检测到目标主机公钥。\n\n算法: ${observation.host_key_algorithm}\n指纹: ${observation.host_key_fingerprint}\n\n确认信任该主机？`
+    let confirmed = false
+    try {
+      await ElMessageBox.confirm(message, changed ? '主机密钥已变更' : '确认信任主机密钥', {
+        confirmButtonText: '确认信任',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      confirmed = true
+    } catch {
+      // 管理员取消，不登记。
+    }
+    if (!confirmed) {
+      return
+    }
+    const response = await confirmSshHostKey(data.value.id, {
+      expected_fingerprint: observation.host_key_fingerprint,
+      replace: changed
+    })
+    const resultData: SshHostKey = response.data
+    ElMessage.success(
+      `指纹已${operationLabel(resultData.operation)}(算法 ${resultData.host_key_algorithm})`
+    )
+  } catch (error) {
+    ElMessage.error(explainSshHostKeyError(error))
+  } finally {
+    agentBusy.value = false
   }
 }
 

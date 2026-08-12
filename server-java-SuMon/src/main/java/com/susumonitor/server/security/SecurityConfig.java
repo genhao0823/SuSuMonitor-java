@@ -88,6 +88,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(registry -> registry
                         .requestMatchers(HttpMethod.GET, "/api/health", "/api/ready").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        // Swagger UI 与 OpenAPI 文档为只读开发/联调资产，公开放行（仅 GET）。
+                        .requestMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**",
+                                "/api-docs", "/api-docs/**", "/webjars/**").permitAll()
                          .requestMatchers("/api/admin/**").hasRole("ADMIN")
                          .requestMatchers(HttpMethod.POST, "/api/servers").hasRole("ADMIN")
                          .requestMatchers("/api/servers/*/agent/**").hasRole("ADMIN")

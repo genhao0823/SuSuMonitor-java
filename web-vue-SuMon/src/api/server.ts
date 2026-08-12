@@ -8,6 +8,7 @@ import type {
   ServerQuery,
   ServerStatus,
   SshHostKey,
+  SshHostKeyObservation,
   SshTestResult,
   UpdateServerRequest
 } from '@/types/api'
@@ -93,6 +94,17 @@ export function testSshConnection(id: number): Promise<ApiResponse<SshTestResult
 }
 
 /**
+ * 查询目标服务器最近的 SSH 连接测试历史(成功与失败均记录,最新在前)。
+ *
+ * @param id 服务器 ID
+ */
+export function listSshTestHistory(id: number): Promise<ApiResponse<SshTestResult[]>> {
+  return apiClient
+    .get<ApiResponse<SshTestResult[]>>(`/servers/${id}/ssh/test/history`)
+    .then((r) => r.data)
+}
+
+/**
  * 首次确认或显式轮换服务器 SSH 主机公钥指纹(OpenAPI confirmServerSshHostKey)。
  *
  * 后端只做目标解析与 SSH 握手指纹比对,不发送任何登录凭据。
@@ -108,5 +120,17 @@ export function confirmSshHostKey(
 ): Promise<ApiResponse<SshHostKey>> {
   return apiClient
     .put<ApiResponse<SshHostKey>>(`/servers/${id}/ssh/host-key`, body)
+    .then((r) => r.data)
+}
+
+/**
+ * 只读观察目标主机当前公钥(OpenAPI observeServerSshHostKey)。
+ * 后端连接目标主机读取实际公钥,不登记、不发送凭据;供"一键信任"确认前核对。
+ *
+ * @param id 服务器 ID
+ */
+export function observeSshHostKey(id: number): Promise<ApiResponse<SshHostKeyObservation>> {
+  return apiClient
+    .post<ApiResponse<SshHostKeyObservation>>(`/servers/${id}/ssh/host-key/observe`)
     .then((r) => r.data)
 }

@@ -61,6 +61,6 @@
 ## 已知边界与后续
 
 - 死信与队列共用容量上限（默认 720），超限丢最旧；`drop_count` 为进程内计数，重启归零。
-- 队列字节上限（`SUSUMONITOR_METRICS_BUFFER_*` 字节级限制）仍未实施，属后续独立模块。
+- ~~队列字节上限（`SUSUMONITOR_METRICS_BUFFER_*` 字节级限制）仍未实施，属后续独立模块。~~ —— 已于 2026-08-05 同日落地（`d0b17bf`：新增 `SUSUMONITOR_METRICS_BUFFER_MAX_BYTES`，默认 0=不限制，≥1024 字节生效；超限拒绝最新采样），本行作废。
 - 多实例/多消费者并发验证仍待独立环境执行。
 - 投递遥测经现有 REST 状态接口展示，Monitor WebSocket 状态帧未携带投递统计。

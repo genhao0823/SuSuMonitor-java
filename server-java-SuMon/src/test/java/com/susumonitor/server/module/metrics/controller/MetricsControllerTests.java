@@ -26,6 +26,7 @@ import com.susumonitor.server.module.metrics.service.MetricsService;
 import com.susumonitor.server.module.metrics.vo.MetricsHistoryVo;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
+import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
 import com.susumonitor.server.security.JwtTokenService;
 import com.susumonitor.server.security.SecurityConfig;
 import com.susumonitor.server.security.SecurityErrorHandler;
@@ -86,6 +87,10 @@ class MetricsControllerTests {
     // 替代全局 Mapper 扫描注册的服务器 Mapper。
     @MockitoBean
     private ServerMapper serverMapper;
+
+    // 替代全局 Mapper 扫描注册的 SSH 测试历史 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private SshTestHistoryMapper sshTestHistoryMapper;
 
     // 替代全局 Mapper 扫描注册的指标 Mapper。
     @MockitoBean

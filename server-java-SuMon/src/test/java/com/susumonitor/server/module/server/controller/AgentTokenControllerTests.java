@@ -25,6 +25,7 @@ import com.susumonitor.server.module.metrics.mapper.IngestionCleanupMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
+import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
 import com.susumonitor.server.module.server.service.AgentTokenService;
 import com.susumonitor.server.module.server.vo.AgentTokenVo;
 import com.susumonitor.server.security.JwtTokenService;
@@ -87,6 +88,10 @@ class AgentTokenControllerTests {
     // 替代全局 Mapper 扫描注册的服务器 Mapper。
     @MockitoBean
     private ServerMapper serverMapper;
+
+    // 替代全局 Mapper 扫描注册的 SSH 测试历史 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private SshTestHistoryMapper sshTestHistoryMapper;
 
     // 替代全局 Mapper 扫描注册的指标 Mapper。
     @MockitoBean

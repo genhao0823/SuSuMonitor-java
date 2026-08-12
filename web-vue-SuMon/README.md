@@ -76,8 +76,8 @@ Vite 已配置代理 `/api → http://localhost:18080`，前端直接以 `/api/*
 ## 已知约束
 
 - 实时指标与 MVP-6 告警前端（记录页 + 规则页）已经接入；Web SSH 终端属于 MVP-7，~~尚未实现~~（T4 已于 2026-07-28 实现最小可用版本，见 [`docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md`](../docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md)）。
-- Dashboard 通过现有 health、ready、servers 和 pending users 接口聚合，专用 `/api/dashboard/summary` 后置评估。
-- ~~服务器总数趋势和 SSH 历史卡仍是明确标注的模拟/占位内容~~（2026-07-31 更新：服务器总数卡 spark line 已于 Sprint 3 接真实 metrics 历史；仅"SSH 测试历史卡"`DashboardSshCard` 仍为占位，等待 SSH test history 接口）。
+- Dashboard 通过现有 health、ready、servers、pending users 与 SSH 测试历史接口聚合，专用 `/api/dashboard/summary` 后置评估。
+- ~~服务器总数趋势和 SSH 历史卡仍是明确标注的模拟/占位内容~~（2026-08-10 更新：服务器总数卡 spark line 已接真实 metrics 历史；"SSH 测试历史卡"`DashboardSshCard` 已接入 `GET /api/servers/{id}/ssh/test/history`（V23 历史表，成功与失败均留痕），Dashboard 运行概览区展示最近 10 条）。
 - `package-lock.json` 在执行 `npm install` 后生成，需提交至版本控制。
 
 ## 前端开发
@@ -116,7 +116,7 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | 代码拆分重构(Polish-3,拆 9 子组件) | ✅ | 自动化 |
 | pre-commit 钩子(跑 openapi:check) | ✅ | 自动化 |
 | 服务器列表 spark line | ~~⚠️ mock~~ → ✅ 已接真实（Sprint 2） | metrics history 接口已接入 |
-| 上次 SSH 测试结果卡 | ⚠️ 占位 | 等待 SSH test history 接口 |
+| 上次 SSH 测试结果卡 | ✅ 已接入（2026-08-10）：Dashboard 运行概览区展示最近 10 条测试历史（成功/失败 + 错误码） | GET /api/servers/{id}/ssh/test/history（V23） |
 | 批量审核/用户搜索/历史记录 | ✅ 批量审核 + 用户搜索已实现（2026-08-02，Sprint 5）；历史记录待后端接口 | admin API 已接入 |
 | 服务器详情投递状态（积压/最旧采样/缓冲丢弃/本地死信） | ✅ | M4-3（2026-08-05） |
 | 监控页 ECharts 折线图 + 时间范围选择（1h/6h/24h/7d，图表/表格切换） | ✅ | N2（2026-08-05） |

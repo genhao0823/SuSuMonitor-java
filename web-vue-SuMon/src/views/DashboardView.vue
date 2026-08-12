@@ -121,13 +121,11 @@
           :xs="24"
           :md="12"
         >
-          <DashboardCard>
-            <div class="dashboard-view__overview-empty">
-              <span>运行概览</span>
-              <strong>服务器运行状态已整合至上方服务器总数卡</strong>
-              <p>集中查看总量、在线分布与示例服务器的最近资源采集。</p>
-            </div>
-          </DashboardCard>
+          <DashboardSshCard
+            :history="sshHistory"
+            :loading="loading.sshHistory"
+            :error="sshHistoryError"
+          />
         </el-col>
       </el-row>
     </section>
@@ -170,7 +168,7 @@ import { ElMessage } from 'element-plus'
 import { ApiBusinessError } from '@/api/client'
 import { listAlertRecords } from '@/api/alert'
 import { getLatestMetrics, getMetricsHistory } from '@/api/metrics'
-import { listServers } from '@/api/server'
+import { listServers, listSshTestHistory } from '@/api/server'
 import { getHealth, getReady } from '@/api/system'
 import { useAuthStore } from '@/stores/auth'
 import { ErrorCode } from '@/types/error-code'
@@ -181,7 +179,8 @@ import DashboardHero from '@/components/DashboardHero.vue'
 import DashboardProbeCard from '@/components/DashboardProbeCard.vue'
 import DashboardRecentAlertsCard from '@/components/DashboardRecentAlertsCard.vue'
 import DashboardServersCard from '@/components/DashboardServersCard.vue'
-import type { AlertRecord, AlertLevel, Server } from '@/types/api'
+import DashboardSshCard from '@/components/DashboardSshCard.vue'
+import type { AlertRecord, AlertLevel, Server, SshTestResult } from '@/types/api'
 
 const SERVER_STATUS_SAMPLE_SIZE = 100
 const RECENT_ALERTS_SIZE = 5
@@ -192,7 +191,7 @@ const auth = useAuthStore()
 interface ProbeResult { ok: boolean; detail: string; checkedAt: string | null; responseTimeMs: number | null }
 interface CountedProbe extends ProbeResult { count: number }
 
-const loading = reactive({ health: true, ready: true, servers: true, serverStatuses: true, alerts: true, pending: true })
+const loading = reactive({ health: true, ready: true, servers: true, serverStatuses: true, alerts: true, pending: true, sshHistory: true })
 const refreshing = ref(false)
 const loggingOut = ref(false)
 const health = ref<ProbeResult>({ ok: false, detail: '', checkedAt: null, responseTimeMs: null })
@@ -205,6 +204,8 @@ const trendCollectedAt = ref<string | null>(null)
 const latestMetrics = reactive({ cpu: null as number | null, memory: null as number | null, disk: null as number | null, collectedAt: null as string | null })
 const serverStatuses = reactive({ online: 0, offline: 0, unknown: 0, sampledCount: 0, complete: true })
 const alerts = reactive<{ count: number; highestLevel: AlertLevel; items: AlertRecord[]; error: string }>({ count: 0, highestLevel: 'warning', items: [], error: '' })
+const sshHistory = ref<SshTestResult[]>([])
+const sshHistoryError = ref<string | null>(null)
 
 function mapErrorToProbe(error: unknown, fallback: string): ProbeResult {
   if (error instanceof ApiBusinessError) {
@@ -345,6 +346,18 @@ async function loadLatestMetrics(server: Server | null): Promise<void> {
   }
 }
 
+async function loadSshHistory(server: Server | null): Promise<void> {
+  sshHistory.value = []
+  sshHistoryError.value = null
+  if (!server) return
+  try {
+    const response = await listSshTestHistory(server.id)
+    sshHistory.value = response.data ?? []
+  } catch (error) {
+    sshHistoryError.value = mapErrorToProbe(error, '未能加载 SSH 测试历史').detail
+  } finally { loading.sshHistory = false }
+}
+
 async function refresh(): Promise<void> {
   if (refreshing.value) return
   refreshing.value = true
@@ -354,8 +367,9 @@ async function refresh(): Promise<void> {
   loading.serverStatuses = true
   loading.alerts = true
   loading.pending = true
+  loading.sshHistory = true
   const [,, firstServer] = await Promise.all([probeHealth(), probeReady(), probeServers(), loadRecentAlerts(), probePendingCount()])
-  void Promise.all([loadSparkHistory(firstServer), loadLatestMetrics(firstServer)])
+  void Promise.all([loadSparkHistory(firstServer), loadLatestMetrics(firstServer), loadSshHistory(firstServer)])
   refreshing.value = false
 }
 

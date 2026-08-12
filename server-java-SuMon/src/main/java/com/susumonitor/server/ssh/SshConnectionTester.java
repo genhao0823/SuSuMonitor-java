@@ -77,6 +77,21 @@ public class SshConnectionTester implements AutoCloseable {
     }
 
     /**
+     * 只执行 SSH 握手并读取远端实际公钥，不做任何匹配或登记。
+     *
+     * <p>观察模式供管理员"一键信任"前核对目标主机当前公钥；公钥不匹配概念
+     * 在观察模式下不存在，只要观察到公钥即返回。</p>
+     *
+     * @param host SSH 主机
+     * @param port SSH 端口
+     * @return 观察到的远端主机密钥
+     */
+    public SshHostKeyObservation observeHostKey(String host, int port) {
+        return execute(host, port, null, null, (sshClient, cancelled) -> {
+        });
+    }
+
+    /**
      * 严格验证主机身份后，按需取得密码并完成认证。
      *
      * @param host SSH 主机
@@ -248,6 +263,9 @@ public class SshConnectionTester implements AutoCloseable {
                 if (verifier.observed() && !verifier.matched()) {
                     throw new SshConnectionException(SshConnectionException.Category.HOST_KEY_MISMATCH, exception);
                 }
+                if (isSocketTimeout(exception)) {
+                    throw new SshConnectionException(SshConnectionException.Category.TIMEOUT, exception);
+                }
                 lastFailure = new SshConnectionException(SshConnectionException.Category.CONNECTION_FAILED, exception);
             } finally {
                 closeQuietly(sshClient);
@@ -281,6 +299,21 @@ public class SshConnectionTester implements AutoCloseable {
         if (cancelled.get() || Thread.currentThread().isInterrupted()) {
             throw new SshConnectionException(SshConnectionException.Category.TIMEOUT);
         }
+    }
+
+    /**
+     * 判断异常链中是否存在套接字超时信号，用于区分握手/认证阶段的超时与普通连接失败。
+     *
+     * @param throwable 待判断异常
+     * @return 是否由套接字读/连接超时导致
+     */
+    private static boolean isSocketTimeout(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            if (current instanceof java.net.SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -319,6 +352,9 @@ public class SshConnectionTester implements AutoCloseable {
 
     /**
      * 捕获远端公钥并使用 sshj SHA-256 verifier 完成恒定内容比较。
+     *
+     * <p>expectedFingerprint 为 null 时进入观察模式：只记录观察到的公钥，
+     * 不做指纹比对（matched 恒为 true），供"一键信任"确认前核对。</p>
      */
     static final class CapturingHostKeyVerifier implements HostKeyVerifier {
 
@@ -330,22 +366,23 @@ public class SshConnectionTester implements AutoCloseable {
         /**
          * 构造捕获型主机密钥验证器。
          *
-         * @param expectedFingerprint 预期主机公钥指纹
-         * @param expectedAlgorithm 预期主机公钥算法
+         * @param expectedFingerprint 预期主机公钥指纹；null 表示观察模式不比对
+         * @param expectedAlgorithm 预期主机公钥算法；null 表示不限制算法
          */
         CapturingHostKeyVerifier(String expectedFingerprint, String expectedAlgorithm) {
-            this.fingerprintVerifier = FingerprintVerifier.getInstance(expectedFingerprint);
+            this.fingerprintVerifier = expectedFingerprint == null ? null
+                    : FingerprintVerifier.getInstance(expectedFingerprint);
             this.expectedAlgorithm = expectedAlgorithm;
         }
 
-        /** 计算算法和 SHA-256 指纹，并同时校验登记算法与指纹。 */
+        /** 计算算法和 SHA-256 指纹，并按登记预期校验；观察模式下只记录不比对。 */
         @Override
         public boolean verify(String hostname, int port, PublicKey key) {
             String algorithm = KeyType.fromKey(key).toString();
             String fingerprint = sha256Fingerprint(key);
             this.observation = new SshHostKeyObservation(algorithm, fingerprint);
             boolean algorithmMatches = expectedAlgorithm == null || expectedAlgorithm.equals(algorithm);
-            boolean fingerprintMatches = fingerprintVerifier.verify(hostname, port, key);
+            boolean fingerprintMatches = fingerprintVerifier == null || fingerprintVerifier.verify(hostname, port, key);
             this.matched = algorithmMatches && fingerprintMatches;
             LOGGER.debug("SSH host key observed: host={}, port={}, algorithm={}, fingerprint={}, "
                             + "algorithmMatched={}, fingerprintMatched={}",
@@ -363,6 +400,11 @@ public class SshConnectionTester implements AutoCloseable {
         /** 返回已观察到的算法，仅用于连接失败时的诊断日志和同包测试。 */
         String observedAlgorithm() {
             return observation == null ? null : observation.algorithm();
+        }
+
+        /** 返回已观察到的指纹，仅用于诊断日志和同包测试。 */
+        String observedFingerprint() {
+            return observation == null ? null : observation.fingerprint();
         }
 
         /** 返回已观察且通过校验的主机密钥。 */

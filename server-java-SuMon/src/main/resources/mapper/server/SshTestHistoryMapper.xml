@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.server.mapper.SshTestHistoryMapper">
+    <resultMap id="SshTestHistoryResultMap" type="com.susumonitor.server.module.server.entity.SshTestHistoryEntity">
+        <id column="id" property="id"/>
+        <result column="server_id" property="serverId"/>
+        <result column="connected" property="connected"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="host_key_algorithm" property="hostKeyAlgorithm"/>
+        <result column="host_key_fingerprint" property="hostKeyFingerprint"/>
+        <result column="auth_type" property="authType"/>
+        <result column="duration_ms" property="durationMs"/>
+        <result column="tested_at" property="testedAt"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="entity.id">
+        INSERT INTO ssh_test_history
+            (server_id, connected, error_code, host_key_algorithm, host_key_fingerprint,
+             auth_type, duration_ms, tested_at, created_at)
+        VALUES (#{entity.serverId}, #{entity.connected}, #{entity.errorCode},
+            #{entity.hostKeyAlgorithm}, #{entity.hostKeyFingerprint},
+            #{entity.authType}, #{entity.durationMs}, #{entity.testedAt}, #{entity.createdAt})
+    </insert>
+
+    <select id="selectRecentByServerId" resultMap="SshTestHistoryResultMap">
+        SELECT id, server_id, connected, error_code, host_key_algorithm, host_key_fingerprint,
+               auth_type, duration_ms, tested_at, created_at
+        FROM ssh_test_history
+        WHERE server_id = #{serverId}
+        ORDER BY tested_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

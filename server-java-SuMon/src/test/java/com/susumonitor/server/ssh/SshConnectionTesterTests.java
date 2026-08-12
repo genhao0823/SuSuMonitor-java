@@ -2,8 +2,12 @@ package com.susumonitor.server.ssh;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.susumonitor.server.config.AppProperties;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
@@ -14,7 +18,7 @@ import net.schmizz.sshj.common.Buffer;
 import org.junit.jupiter.api.Test;
 
 /**
- * 验证 sshj 主机密钥 verifier 的算法选择和指纹校验行为，不建立网络连接。
+ * 验证 sshj 主机密钥 verifier 的算法选择和指纹校验行为，以及握手/连接失败阶段的超时分类。
  */
 class SshConnectionTesterTests {
 
@@ -65,6 +69,78 @@ class SshConnectionTesterTests {
 
         assertFalse(verifier.verify(HOST, PORT, keyPair.getPublic()));
         assertFalse(verifier.matched());
+    }
+
+    /** 验证观察模式（指纹为 null）只记录公钥，不比对且 matched 恒为 true。 */
+    @Test
+    void observeModeShouldRecordKeyWithoutFingerprintComparison() throws Exception {
+        KeyPair keyPair = generateRsaKeyPair();
+        String fingerprint = sha256Fingerprint(keyPair.getPublic());
+        SshConnectionTester.CapturingHostKeyVerifier verifier =
+                new SshConnectionTester.CapturingHostKeyVerifier(null, null);
+
+        assertTrue(verifier.verify(HOST, PORT, keyPair.getPublic()));
+        assertTrue(verifier.matched());
+        assertEquals("ssh-rsa", verifier.observedAlgorithm());
+        assertEquals(fingerprint, verifier.observedFingerprint());
+    }
+
+    /** 验证握手阶段读取服务器标识超时被分类为 TIMEOUT 而非 CONNECTION_FAILED。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void handshakeReadTimeoutShouldBeClassifiedAsTimeout() throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName(HOST))) {
+            int port = server.getLocalPort();
+            SshConnectionTester tester = connectionTester(port, 1, 30, 30);
+
+            SshConnectionException exception = assertThrows(SshConnectionException.class,
+                    () -> tester.verifyHostKey(HOST, port, "SHA256:unused"));
+
+            assertEquals(SshConnectionException.Category.TIMEOUT, exception.getCategory());
+        }
+    }
+
+    /** 验证连接被拒绝时仍分类为 CONNECTION_FAILED，不误报为超时。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void connectionRefusedShouldBeClassifiedAsConnectionFailed() throws Exception {
+        int port;
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName(HOST))) {
+            port = server.getLocalPort();
+        }
+        SshConnectionTester tester = connectionTester(port, 10, 15, 30);
+
+        SshConnectionException exception = assertThrows(SshConnectionException.class,
+                () -> tester.verifyHostKey(HOST, port, "SHA256:unused"));
+
+        assertEquals(SshConnectionException.Category.CONNECTION_FAILED, exception.getCategory());
+    }
+
+    /** 验证整体连接超时取消仍分类为 TIMEOUT。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void overallTimeoutShouldBeClassifiedAsTimeout() throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName(HOST))) {
+            int port = server.getLocalPort();
+            SshConnectionTester tester = connectionTester(port, 30, 30, 1);
+
+            SshConnectionException exception = assertThrows(SshConnectionException.class,
+                    () -> tester.verifyHostKey(HOST, port, "SHA256:unused"));
+
+            assertEquals(SshConnectionException.Category.TIMEOUT, exception.getCategory());
+        }
+    }
+
+    /** 使用指定超时参数和允许端口构造不依赖 Spring 上下文的连接测试器。 */
+    private SshConnectionTester connectionTester(int allowedPort, int connectTimeoutSeconds,
+            int socketTimeoutSeconds, int totalTimeoutSeconds) {
+        AppProperties properties = new AppProperties();
+        properties.getSsh().setAllowedPorts(List.of(allowedPort));
+        properties.getSsh().setAllowedCidrs(List.of("127.0.0.0/8"));
+        properties.getSsh().setConnectTimeoutSeconds(connectTimeoutSeconds);
+        properties.getSsh().setSocketTimeoutSeconds(socketTimeoutSeconds);
+        properties.getSsh().setTotalTimeoutSeconds(totalTimeoutSeconds);
+        return new SshConnectionTester(new SshOutboundPolicy(properties), properties);
     }
 
     /** 使用 SSH 公钥 blob 计算与 OpenSSH 和 sshj 一致的无填充 SHA-256 指纹。 */

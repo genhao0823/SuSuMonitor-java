@@ -79,7 +79,7 @@ cp .env.example .env
 - 服务端对可关联且永久无效的指标（`invalid_metrics_payload` / `stale_collected_at` / `server_not_found`）返回 correlated `metrics.nack`；Agent 将队首移入本地持久化死信（`dead_letter` 数组，与队列共用容量上限、超限丢最旧）且不重试；泛化 `error` 帧不会删除队首。
 - 心跳帧携带投递遥测（pending count/bytes、最旧采样、丢弃计数、死信条数/字节），Server 落库后经 `GET /api/servers/{id}/status` 在服务器详情页展示。
 - Agent 部署前必须先升级 Server 至支持 `metrics.ack` 的版本（`773fc4d` 或后续）；旧 Server 不会确认，队首将按可靠语义持续保留。
-- 当前未实现队列字节上限（死信与队列按条数共用 `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` 上限）；可靠投递已完成两层隔离 E2E：真实 Agent + loopback fixture 15 项（含 NACK 死信/重启持久化/泛化 error 不移队首）PASS，真实 Agent + Java/MySQL 独立 schema 场景待 DB 管理员凭据运行。
+- 队列容量上限双维度生效：条数上限 `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES`（默认 720）与字节上限 `SUSUMONITOR_METRICS_BUFFER_MAX_BYTES`（默认 0=不限制，设为 ≥1024 字节生效；2026-08-05 d0b17bf 起实现），任一超限即拒绝最新采样并记录错误；可靠投递已完成两层隔离 E2E：真实 Agent + loopback fixture 15 项（含 NACK 死信/重启持久化/泛化 error 不移队首/字节上限）PASS，真实 Agent + Java/MySQL 独立 schema 场景待 DB 管理员凭据运行。
 
 ## 平台支持
 

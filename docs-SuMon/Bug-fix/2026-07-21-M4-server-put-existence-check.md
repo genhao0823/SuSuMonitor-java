@@ -146,5 +146,5 @@ async function reload(): Promise<void> {
 - [x] MockMvc: 有效服务器 body 缺字段返回 `40002`
 - [x] MockMvc: 有效服务器 body 合法时仍调用更新 Service
 - [x] 真实 HTTP: `PUT /api/servers/99999` 返回 `40400`
-- [ ] 真实 HTTP: 合法服务器更新成功
-- [ ] 集成测试:连续两次 PUT 同一个 ID,第二次应 404(第一次成功后被软删除的场景)
+- [~] 真实 HTTP: 合法服务器更新成功（2026-08-10 已交付 `api-test/verify-server-put.mjs`，P2 项覆盖；待隔离库/联调环境实跑）
+- [~] 集成测试:连续两次 PUT 同一个 ID,第二次应 404(第一次成功后被软删除的场景)（2026-08-10 已交付 `api-test/verify-server-put.mjs`，P4+P5 项覆盖：创建→PUT 成功→软删→二次 PUT 40400）

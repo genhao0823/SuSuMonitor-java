@@ -214,11 +214,13 @@ export interface UpdateServerRequest {
 }
 
 /**
- * SSH 连接测试结果(与后端 SshTestVo 字段对齐)。
+ * SSH 连接测试结果(与后端 SshTestVo / SshTestHistoryVo 字段对齐)。
+ * 单次测试响应 connected 恒为 true;历史记录中 connected=false 时 error_code 非空。
  */
 export interface SshTestResult {
   server_id: number
   connected: boolean
+  error_code: number | null
   host_key_algorithm: string | null
   host_key_fingerprint: string | null
   auth_type: string
@@ -411,6 +413,19 @@ export interface SshHostKey {
   host_key_fingerprint: string
   operation: 'confirmed' | 'rotated' | 'unchanged'
   verified_at: string
+}
+
+/**
+ * 只读观察到的目标主机公钥(与后端 SshHostKeyObservationVo 字段对齐)。
+ * 供管理员"一键信任"确认前核对,不涉及登记。
+ * registered_fingerprint 为当前已登记指纹,未确认过为 null;与观察指纹不同表示密钥已变更。
+ */
+export interface SshHostKeyObservation {
+  server_id: number
+  host_key_algorithm: string
+  host_key_fingerprint: string
+  registered_fingerprint: string | null
+  observed_at: string
 }
 
 /**
