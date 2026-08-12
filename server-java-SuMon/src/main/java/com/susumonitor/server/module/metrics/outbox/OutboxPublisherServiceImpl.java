@@ -65,13 +65,16 @@ public class OutboxPublisherServiceImpl implements OutboxPublisherService {
     /**
      * 投递单行并回写状态。
      *
+     * <p>routing key 取自行的 routing_key 列（V25），按事件类型路由到对应业务队列，
+     * 不再使用全局单一配置。</p>
+     *
      * @param row 待发布行
      * @return 是否成功发布
      */
     private boolean publishRow(OutboxEntity row) {
         try {
             CorrelationData correlationData = new CorrelationData(row.getId().toString());
-            rabbitTemplate.convertAndSend(properties.getExchange(), properties.getRoutingKey(),
+            rabbitTemplate.convertAndSend(properties.getExchange(), row.getRoutingKey(),
                     row.getPayload(), correlationData);
             boolean ack = correlationData.getFuture()
                     .get(properties.getPublishTimeoutMs(), TimeUnit.MILLISECONDS).isAck();

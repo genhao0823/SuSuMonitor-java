@@ -7,6 +7,7 @@ import com.susumonitor.server.module.metrics.dto.MetricsReportPayload;
 import com.susumonitor.server.module.metrics.entity.MetricsEntity;
 import com.susumonitor.server.module.metrics.entity.MetricsIngestionEntity;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
+import com.susumonitor.server.module.metrics.outbox.OutboxEnvelopeFactory;
 import com.susumonitor.server.module.metrics.outbox.OutboxService;
 import com.susumonitor.server.module.metrics.vo.MetricsHistoryVo;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
@@ -34,14 +35,17 @@ public class MetricsServiceImpl implements MetricsService {
     private final MetricsMapper metricsMapper;
     private final ServerService serverService;
     private final OutboxService outboxService;
+    private final OutboxEnvelopeFactory outboxEnvelopeFactory;
     private final ApplicationEventPublisher eventPublisher;
 
-    /** 注入指标数据访问组件、服务器契约与 Outbox 登记服务（servers 表访问统一走 ServerService）。 */
+    /** 注入指标数据访问组件、服务器契约、Outbox 登记服务与信封工厂（servers 表访问统一走 ServerService）。 */
     public MetricsServiceImpl(MetricsMapper metricsMapper, ServerService serverService,
-            OutboxService outboxService, ApplicationEventPublisher eventPublisher) {
+            OutboxService outboxService, OutboxEnvelopeFactory outboxEnvelopeFactory,
+            ApplicationEventPublisher eventPublisher) {
         this.metricsMapper = metricsMapper;
         this.serverService = serverService;
         this.outboxService = outboxService;
+        this.outboxEnvelopeFactory = outboxEnvelopeFactory;
         this.eventPublisher = eventPublisher;
     }
 
@@ -77,7 +81,12 @@ public class MetricsServiceImpl implements MetricsService {
             if (metricsMapper.insertMetric(entity) != 1) {
                 throw new BusinessException(ErrorCode.DATABASE_ERROR);
             }
-            outboxService.enqueue(entity, messageId);
+            // 与指标同事务登记 Outbox 待发布事件：eventId 由本处生成并写入信封，
+            // 保证行内 event_id 与 payload 中 event_id 一致（消费侧幂等主键）。
+            String eventId = UUID.randomUUID().toString();
+            String envelope = outboxEnvelopeFactory.build(entity, messageId, eventId);
+            outboxService.enqueue(OutboxEnvelopeFactory.EVENT_TYPE, OutboxEnvelopeFactory.ROUTING_KEY,
+                    envelope, eventId);
             eventPublisher.publishEvent(new MetricsReportedEvent(toLatestVo(entity)));
         } catch (DuplicateKeyException exception) {
             // 重复投递竞态（isDuplicateIngestion 预检查兜底）：数据级冲突，重发不会改变结果

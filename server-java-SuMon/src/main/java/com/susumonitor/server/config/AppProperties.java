@@ -1107,9 +1107,6 @@ public class AppProperties {
         /** 冻结的 Topic Exchange 名（rabbitmq-topology-v1.md §二）。 */
         private String exchange = "susumonitor.events";
 
-        /** 冻结的 Routing Key（metrics.reported.v1）。 */
-        private String routingKey = "metrics.reported.v1";
-
         /** 发布器轮询间隔（毫秒）。 */
         @Min(value = 100, message = "Outbox poll interval must be at least 100 ms")
         @Max(value = 60000, message = "Outbox poll interval must not exceed 60000 ms")
@@ -1208,24 +1205,6 @@ public class AppProperties {
          */
         public void setExchange(String exchange) {
             this.exchange = exchange;
-        }
-
-        /**
-         * 获取 Routing Key。
-         *
-         * @return Routing Key
-         */
-        public String getRoutingKey() {
-            return routingKey;
-        }
-
-        /**
-         * 设置 Routing Key。
-         *
-         * @param routingKey Routing Key
-         */
-        public void setRoutingKey(String routingKey) {
-            this.routingKey = routingKey;
         }
 
         /**

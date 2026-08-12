@@ -20,6 +20,8 @@ public class OutboxEntity {
     private String eventId;
     @TableField("event_type")
     private String eventType;
+    @TableField("routing_key")
+    private String routingKey;
     private String payload;
     private String status;
     private Integer attempts;

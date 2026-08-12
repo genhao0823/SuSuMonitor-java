@@ -22,6 +22,9 @@ public class OutboxEnvelopeFactory {
     /** 契约事件类型（消费侧校验复用）。 */
     public static final String EVENT_TYPE = "metrics.reported";
 
+    /** 契约路由键（版本化名，发布器按行路由复用）。 */
+    public static final String ROUTING_KEY = "metrics.reported.v1";
+
     static final String PRODUCER = "metrics-service";
 
     /** 契约 schema 版本（消费侧校验复用）。 */
