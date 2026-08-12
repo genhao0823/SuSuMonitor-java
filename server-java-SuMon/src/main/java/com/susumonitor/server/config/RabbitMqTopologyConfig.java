@@ -26,6 +26,9 @@ public class RabbitMqTopologyConfig {
     static final String ALERT_METRICS_QUEUE = "susumonitor.alert.metrics";
     static final String ALERT_METRICS_DLQ = "susumonitor.alert.metrics.dlq";
     static final String METRICS_REPORTED_KEY = "metrics.reported.v1";
+    static final String ALERT_TRIGGERED_QUEUE = "susumonitor.alert.triggered";
+    static final String ALERT_TRIGGERED_DLQ = "susumonitor.alert.triggered.dlq";
+    static final String ALERT_TRIGGERED_KEY = "alert.triggered.v1";
 
     /** 业务事件交换器。 */
     @Bean
@@ -54,6 +57,26 @@ public class RabbitMqTopologyConfig {
         return QueueBuilder.durable(ALERT_METRICS_DLQ).build();
     }
 
+    /**
+     * alert.triggered.v1 业务队列（出站告警事件，供未来消费者/外部系统接入）。
+     *
+     * <p>告警事件由 Outbox 发布器按行 routing_key 路由至此；当前暂无消费者，
+     * 消息堆积在业务队列等待消费者接入，不视为丢失（与 MVP-10 发布先行先例一致）。</p>
+     */
+    @Bean
+    Queue susumonitorAlertTriggeredQueue() {
+        return QueueBuilder.durable(ALERT_TRIGGERED_QUEUE)
+                .deadLetterExchange(DLX_EXCHANGE)
+                .deadLetterRoutingKey(ALERT_TRIGGERED_KEY)
+                .build();
+    }
+
+    /** alert.triggered.v1 死信队列，不自动回投业务队列。 */
+    @Bean
+    Queue susumonitorAlertTriggeredDlq() {
+        return QueueBuilder.durable(ALERT_TRIGGERED_DLQ).build();
+    }
+
     /** 业务队列绑定：susumonitor.events -- metrics.reported.v1 --> susumonitor.alert.metrics。 */
     @Bean
     Binding alertMetricsBinding() {
@@ -66,5 +89,19 @@ public class RabbitMqTopologyConfig {
     Binding alertMetricsDlqBinding() {
         return BindingBuilder.bind(susumonitorAlertMetricsDlq())
                 .to(susumonitorDlxExchange()).with(METRICS_REPORTED_KEY);
+    }
+
+    /** 业务队列绑定：susumonitor.events -- alert.triggered.v1 --> susumonitor.alert.triggered。 */
+    @Bean
+    Binding alertTriggeredBinding() {
+        return BindingBuilder.bind(susumonitorAlertTriggeredQueue())
+                .to(susumonitorEventsExchange()).with(ALERT_TRIGGERED_KEY);
+    }
+
+    /** 死信队列绑定：susumonitor.dlx -- alert.triggered.v1 --> susumonitor.alert.triggered.dlq。 */
+    @Bean
+    Binding alertTriggeredDlqBinding() {
+        return BindingBuilder.bind(susumonitorAlertTriggeredDlq())
+                .to(susumonitorDlxExchange()).with(ALERT_TRIGGERED_KEY);
     }
 }
