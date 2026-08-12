@@ -40,6 +40,9 @@ public class AlertRabbitConfig {
     /**
      * 覆盖 Boot 自动容器工厂：AUTO 确认（容器在监听方法返回后 ACK，事务提交后才
      * 返回）+ 有限重试 + 耗尽后失败留痕并 reject 进 DLQ。
+     *
+     * <p>并发消费：concurrency 个消费者共享同一队列，幂等由 V15
+     * message_consume_records 唯一键 + 业务事务保障（重复投递只消费一次）；</p>
      */
     @Bean
     public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
@@ -48,11 +51,18 @@ public class AlertRabbitConfig {
             @Value("${spring.rabbitmq.listener.simple.retry.initial-interval:1000ms}") Duration initialInterval,
             @Value("${spring.rabbitmq.listener.simple.retry.multiplier:2}") double multiplier,
             @Value("${spring.rabbitmq.listener.simple.retry.max-interval:10000ms}") Duration maxInterval,
+            @Value("${spring.rabbitmq.listener.simple.concurrency:1}") int concurrency,
+            @Value("${spring.rabbitmq.listener.simple.prefetch:1}") int prefetch,
             MessageRecoverer failedConsumeRecordRecoverer) {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setAdviceChain(buildRetryAdvice(maxAttempts, initialInterval.toMillis(), multiplier,
                 maxInterval.toMillis(), failedConsumeRecordRecoverer));
+        if (concurrency > 1) {
+            factory.setConcurrentConsumers(concurrency);
+            factory.setMaxConcurrentConsumers(concurrency);
+            factory.setPrefetchCount(prefetch);
+        }
         return factory;
     }
 

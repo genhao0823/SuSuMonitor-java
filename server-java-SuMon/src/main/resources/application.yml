@@ -36,6 +36,9 @@ spring:
           initial-interval: 1000ms
           multiplier: 2
           max-interval: 10000ms
+        # 告警消费并发：>1 启用多消费者（幂等由 V15 唯一键 + 业务事务保障）
+        concurrency: ${ALERT_CONSUMER_CONCURRENCY:1}
+        prefetch: ${ALERT_CONSUMER_PREFETCH:1}
 
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
