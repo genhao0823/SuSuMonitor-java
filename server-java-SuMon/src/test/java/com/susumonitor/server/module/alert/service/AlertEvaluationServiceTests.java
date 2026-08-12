@@ -15,6 +15,8 @@ import com.susumonitor.server.module.alert.entity.AlertStateEntity;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
+import com.susumonitor.server.module.alert.outbox.AlertTriggeredEnvelopeFactory;
+import com.susumonitor.server.module.metrics.outbox.OutboxService;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -48,11 +50,15 @@ class AlertEvaluationServiceTests {
     private AlertRecordMapper recordMapper;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private OutboxService outboxService;
+    @Mock
+    private AlertTriggeredEnvelopeFactory envelopeFactory;
     private final AlertStateMachine stateMachine = new AlertStateMachine();
 
     private AlertEvaluationService service;
 
-    /** 首次越界应创建 record + state 并发布事件。 */
+    /** 首次越界应创建 record + state 并发布事件与 Outbox 事件登记。 */
     @Test
     void firstBreachShouldInsertRecordStateAndPublishEvent() {
         setupService();
@@ -66,6 +72,8 @@ class AlertEvaluationServiceTests {
         verify(recordMapper).insertRecord(any(AlertRecordEntity.class));
         verify(stateMapper).insertState(any(AlertStateEntity.class));
         verify(eventPublisher).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService).enqueue(eq(AlertTriggeredEnvelopeFactory.EVENT_TYPE),
+                eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
     }
 
     /** 持续越界应更新 state 但不创建新 record 也不发布事件。 */
@@ -84,6 +92,7 @@ class AlertEvaluationServiceTests {
         verify(stateMapper).updateStateActive(eq(1L), eq(1L), any(LocalDateTime.class), eq(0));
         verify(recordMapper, never()).insertRecord(any());
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
     /** 恢复应标记 record resolved 并删除 state 行（恢复后 state 为 null 才能再次触发）。 */
@@ -102,6 +111,7 @@ class AlertEvaluationServiceTests {
         verify(recordMapper).updateStatusToResolved(eq(1L), any(LocalDateTime.class));
         verify(stateMapper).deleteState(eq(1L), eq(0));
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
     /** 恢复后再次越界（state 为 null）应创建新 record + state。 */
@@ -118,6 +128,8 @@ class AlertEvaluationServiceTests {
         verify(recordMapper).insertRecord(any(AlertRecordEntity.class));
         verify(stateMapper).insertState(any(AlertStateEntity.class));
         verify(eventPublisher).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService).enqueue(eq(AlertTriggeredEnvelopeFactory.EVENT_TYPE),
+                eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
     }
 
     /** 无启用规则时不执行任何操作。 */
@@ -132,6 +144,7 @@ class AlertEvaluationServiceTests {
         verify(stateMapper, never()).selectByRuleAndServer(anyLong(), anyLong());
         verify(recordMapper, never()).insertRecord(any());
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
     /** 多规则同时命中应各自独立创建 record。 */
@@ -150,6 +163,8 @@ class AlertEvaluationServiceTests {
         verify(recordMapper, times(2)).insertRecord(any(AlertRecordEntity.class));
         verify(stateMapper, times(2)).insertState(any(AlertStateEntity.class));
         verify(eventPublisher, times(2)).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService, times(2)).enqueue(eq(AlertTriggeredEnvelopeFactory.EVENT_TYPE),
+                eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
     }
 
     /** 乐观锁冲突应跳过不抛异常。 */
@@ -191,7 +206,7 @@ class AlertEvaluationServiceTests {
 
     private void setupService() {
         service = new AlertEvaluationServiceImpl(ruleMapper, stateMapper, recordMapper,
-                stateMachine, eventPublisher, CLOCK);
+                stateMachine, eventPublisher, outboxService, envelopeFactory, CLOCK);
     }
 
     // ---- 逃逸窗口（confirm_count > 1）----
@@ -211,6 +226,7 @@ class AlertEvaluationServiceTests {
                 !Boolean.TRUE.equals(state.getActive()) && state.getBreachCount() == 1));
         verify(recordMapper, never()).insertRecord(any());
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
     /** 计数未达阈值：仅递增 breach_count。 */
@@ -233,6 +249,7 @@ class AlertEvaluationServiceTests {
         verify(stateMapper).incrementBreachCount(eq(1L), any(LocalDateTime.class), eq(0));
         verify(recordMapper, never()).insertRecord(any());
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
     /** 计数达阈值：升级活跃 + 建 record + 发事件（激活用 activateOnBreachThreshold）。 */
@@ -256,6 +273,8 @@ class AlertEvaluationServiceTests {
         verify(recordMapper).insertRecord(any(AlertRecordEntity.class));
         verify(stateMapper).activateOnBreachThreshold(eq(1L), any(), any(LocalDateTime.class), eq(0));
         verify(eventPublisher).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService).enqueue(eq(AlertTriggeredEnvelopeFactory.EVENT_TYPE),
+                eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
     }
 
     /** 计数中断恢复：删除计数行。 */

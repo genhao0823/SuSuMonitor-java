@@ -40,6 +40,7 @@ class OutboxMapperMybatisTests {
                         id BIGINT AUTO_INCREMENT PRIMARY KEY,
                         event_id VARCHAR(36) NOT NULL,
                         event_type VARCHAR(64) NOT NULL,
+                        routing_key VARCHAR(64) NOT NULL DEFAULT 'metrics.reported.v1',
                         payload TEXT NOT NULL,
                         status VARCHAR(20) NOT NULL DEFAULT 'pending',
                         attempts INT NOT NULL DEFAULT 0,
@@ -74,20 +75,22 @@ class OutboxMapperMybatisTests {
         assertNotNull(outbox.getId());
     }
 
-    /** 轮询只返回 pending 且已到退避时刻的行，按 ID 升序并受 limit 限制。 */
+    /** 轮询返回行携带按行 routing_key（V25），按 ID 升序并受 limit 限制。 */
     @Test
-    void selectPendingShouldReturnEligibleRowsOrderedAndLimited() {
+    void selectPendingShouldReturnRowsWithRoutingKeyOrderedAndLimited() {
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
             OutboxMapper mapper = session.getMapper(OutboxMapper.class);
-            mapper.insert(outboxWith("a", LocalDateTime.now().minusSeconds(10)));
-            mapper.insert(outboxWith("b", LocalDateTime.now().plusSeconds(60))); // 未到退避时刻
-            mapper.insert(outboxWith("c", LocalDateTime.now().minusSeconds(5)));
+            mapper.insert(outboxWith("a", "metrics.reported.v1", LocalDateTime.now().minusSeconds(10)));
+            mapper.insert(outboxWith("b", "metrics.reported.v1", LocalDateTime.now().plusSeconds(60))); // 未到退避时刻
+            mapper.insert(outboxWith("c", "alert.triggered.v1", LocalDateTime.now().minusSeconds(5)));
 
             List<OutboxEntity> rows = mapper.selectPendingForPublish(2);
 
             assertEquals(2, rows.size());
             assertEquals("a", rows.get(0).getEventId());
+            assertEquals("metrics.reported.v1", rows.get(0).getRoutingKey());
             assertEquals("c", rows.get(1).getEventId());
+            assertEquals("alert.triggered.v1", rows.get(1).getRoutingKey());
         }
     }
 
@@ -137,13 +140,18 @@ class OutboxMapperMybatisTests {
     }
 
     private OutboxEntity newOutbox() {
-        return outboxWith(java.util.UUID.randomUUID().toString(), LocalDateTime.now());
+        return outboxWith(java.util.UUID.randomUUID().toString(), "metrics.reported.v1", LocalDateTime.now());
     }
 
     private OutboxEntity outboxWith(String eventId, LocalDateTime nextAttemptAt) {
+        return outboxWith(eventId, "metrics.reported.v1", nextAttemptAt);
+    }
+
+    private OutboxEntity outboxWith(String eventId, String routingKey, LocalDateTime nextAttemptAt) {
         OutboxEntity outbox = new OutboxEntity();
         outbox.setEventId(eventId);
         outbox.setEventType("metrics.reported");
+        outbox.setRoutingKey(routingKey);
         outbox.setPayload("{\"event_id\":\"" + eventId + "\"}");
         outbox.setStatus(OutboxStatus.PENDING.ruleValue());
         outbox.setAttempts(0);
