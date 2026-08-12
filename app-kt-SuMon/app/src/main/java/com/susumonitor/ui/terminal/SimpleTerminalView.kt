@@ -16,7 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -25,23 +28,44 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/** 终端底色（与旧实现一致）。 */
+internal val TerminalBackground = Color(0xFF1E1E1E)
+
+/** 默认前景色（调色板 7 的浅灰）。 */
+private val TerminalDefaultFg = Color(0xFFE5E5E5)
+
+/** 光标块颜色（半透明白）。 */
+private val TerminalCursorColor = Color(0x66FFFFFF)
+
 /**
- * 自绘简化终端渲染组件：等宽字体行缓冲 + 软键盘输入。
+ * 自研 ANSI 终端渲染组件：按格绘制（背景色块 + 同样式文本段 + 光标块）+ 软键盘输入。
  *
- * @param lines 终端行缓冲（由上层管理，TerminalClient 输出回调追加）
+ * @param rows 可视快照（滚动回退 + 当前屏，由 TerminalBuffer.visibleRows() 提供）
+ * @param cols 当前终端列数
+ * @param screenRows 当前终端行数（快照尾部即屏幕行）
+ * @param cursorRow 光标所在屏行（相对屏幕顶部）
+ * @param cursorCol 光标列
+ * @param cursorVisible 光标是否可见
  * @param onInput 输入回调（UTF-8 字节 → TerminalClient.sendInput）
  */
 @Composable
 fun SimpleTerminalView(
-    lines: List<String>,
+    rows: List<List<Cell>>,
+    cols: Int,
+    screenRows: Int,
+    cursorRow: Int,
+    cursorCol: Int,
+    cursorVisible: Boolean,
     onInput: (ByteArray) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -53,7 +77,7 @@ fun SimpleTerminalView(
 
     Box(
         modifier = modifier
-            .background(Color(0xFF1E1E1E))
+            .background(TerminalBackground)
             .pointerInput(Unit) {
                 detectTapGestures { keyboardController?.show() }
             }
@@ -95,8 +119,13 @@ fun SimpleTerminalView(
                 }
             },
     ) {
-        TerminalLinesCanvas(
-            lines = lines,
+        TerminalGridCanvas(
+            rows = rows,
+            cols = cols,
+            screenRows = screenRows,
+            cursorRow = cursorRow,
+            cursorCol = cursorCol,
+            cursorVisible = cursorVisible,
             fontSize = fontSize,
             lineHeight = lineHeight,
             modifier = Modifier.fillMaxSize(),
@@ -136,74 +165,137 @@ fun SimpleTerminalView(
     }
 }
 
-/** 行缓冲 Canvas 渲染（等宽字体）。 */
+/** 终端快照中的光标描述（供 Canvas 绘制定位）。 */
+private data class CursorInfo(val row: Int, val col: Int, val visible: Boolean)
+
+/** 逐格 Canvas 渲染：背景色块 + 同样式文本段 + 光标块。 */
 @Composable
-private fun TerminalLinesCanvas(
-    lines: List<String>,
+private fun TerminalGridCanvas(
+    rows: List<List<Cell>>,
+    cols: Int,
+    screenRows: Int,
+    cursorRow: Int,
+    cursorCol: Int,
+    cursorVisible: Boolean,
     fontSize: TextUnit,
     lineHeight: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
+    val cursor = CursorInfo(cursorRow, cursorCol, cursorVisible)
     Canvas(modifier = modifier) {
-        val style = TextStyle(
-            fontSize = fontSize,
-            fontFamily = FontFamily.Monospace,
-            color = Color(0xFFE0E0E0),
-        )
         val lineHeightPx = lineHeight.toPx()
         val visibleCount = (size.height / lineHeightPx).toInt().coerceAtLeast(1)
-        lines.takeLast(visibleCount)
-            .forEachIndexed { index, line ->
-                val layout = textMeasurer.measure(line, style)
-                drawText(layout, topLeft = Offset(8f, index * lineHeightPx))
-            }
+        // 视口取快照末尾 visibleCount 行（滚动回退 + 屏幕底部）
+        val visibleRows = rows.takeLast(visibleCount)
+        val charWidthPx = textMeasurer.measure("M", TextStyle(
+            fontSize = fontSize,
+            fontFamily = FontFamily.Monospace,
+        )).size.width.toFloat().coerceAtLeast(1f)
+
+        drawRows(visibleRows, cols, charWidthPx, lineHeightPx, fontSize, textMeasurer)
+        drawCursor(rows, screenRows, cursor, visibleCount, charWidthPx, lineHeightPx)
+    }
+}
+
+/** 绘制背景色块（跳过默认背景）。 */
+private fun DrawScope.drawRowBackgrounds(row: List<Cell>, y: Float, charWidthPx: Float, lineHeightPx: Float) {
+    var i = 0
+    while (i < row.size) {
+        val cell = row[i]
+        if (cell.bg == Cell.DEFAULT_BG) {
+            i++
+            continue
+        }
+        var j = i
+        while (j + 1 < row.size && row[j + 1].bg == cell.bg) j++
+        val bgColor = Color(TerminalPalette.color(cell.bg))
+        drawRect(
+            color = bgColor,
+            topLeft = Offset(i * charWidthPx, y),
+            size = Size((j - i + 1) * charWidthPx, lineHeightPx),
+        )
+        i = j + 1
+    }
+}
+
+/** 绘制同样式文本段（跳过空白格；空格背景已在背景阶段覆盖）。 */
+private fun DrawScope.drawRowText(
+    row: List<Cell>,
+    y: Float,
+    charWidthPx: Float,
+    fontSize: TextUnit,
+    textMeasurer: androidx.compose.ui.text.TextMeasurer,
+) {
+    var i = 0
+    while (i < row.size) {
+        val cell = row[i]
+        if (cell.ch == ' ') {
+            i++
+            continue
+        }
+        var j = i
+        while (j + 1 < row.size &&
+            row[j + 1].ch != ' ' &&
+            row[j + 1].fg == cell.fg &&
+            row[j + 1].bold == cell.bold
+        ) {
+            j++
+        }
+        val text = buildString {
+            for (k in i..j) append(row[k].ch)
+        }
+        val layout = textMeasurer.measure(
+            AnnotatedString(text),
+            TextStyle(
+                fontSize = fontSize,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = if (cell.bold) FontWeight.Bold else FontWeight.Normal,
+                color = Color(TerminalPalette.color(cell.fg)),
+            ),
+        )
+        drawText(layout, topLeft = Offset(i * charWidthPx, y))
+        i = j + 1
+    }
+}
+
+private fun DrawScope.drawRows(
+    visibleRows: List<List<Cell>>,
+    cols: Int,
+    charWidthPx: Float,
+    lineHeightPx: Float,
+    fontSize: TextUnit,
+    textMeasurer: androidx.compose.ui.text.TextMeasurer,
+) {
+    visibleRows.forEachIndexed { index, row ->
+        val y = index * lineHeightPx
+        val clipped = if (row.size <= cols) row else row.take(cols)
+        drawRowBackgrounds(clipped, y, charWidthPx, lineHeightPx)
+        drawRowText(clipped, y, charWidthPx, fontSize, textMeasurer)
     }
 }
 
 /**
- * 字节流 → 行缓冲（UTF-8 解码 + 基础 ANSI 剥离）。
- * 由 TerminalClient 输出回调调用。
- *
- * 换行语义：`\r\n` 整体视为换行（保留当前行内容，PTY 默认 onlcr 输出以 \r\n 结尾）；
- * 单独 `\n` 结束当前行另起新行；单独 `\r` 回到行首（覆盖重写，用于进度条等）。
+ * 绘制光标块：屏幕行 r 在快照中的索引 = rows.size - screenRows + r。
+ * 视口显示快照末尾 visibleCount 行，光标行不在视口内时不绘制。
  */
-fun MutableList<String>.feedTerminal(bytes: ByteArray) {
-    val text = String(bytes, Charsets.UTF_8)
-    // ANSI 剥离：颜色/清行/光标移动等控制序列
-    val cleaned = text.replace(Regex("\u001b\\[[0-9;]*[A-Za-z]"), "")
-
-    if (this.isEmpty()) this.add("")
-    var i = 0
-    while (i < cleaned.length) {
-        val c = cleaned[i]
-        when {
-            // \r\n 组合换行：保留当前行内容
-            c == '\r' && i + 1 < cleaned.length && cleaned[i + 1] == '\n' -> {
-                this.add("")
-                i += 2
-            }
-            // 单独 \r：回到行首覆盖（后续字符从行首重写）
-            c == '\r' -> {
-                this[this.size - 1] = ""
-                i++
-            }
-            c == '\n' -> {
-                this.add("")
-                i++
-            }
-            else -> {
-                this[this.size - 1] = this[this.size - 1] + c
-                i++
-            }
-        }
-    }
-    // 若末行为空且文本以换行结尾，移除多余空行
-    if (cleaned.endsWith("\n") && this.size > 1 && this.last().isEmpty()) {
-        this.removeAt(this.size - 1)
-    }
-    // 限制行数
-    if (this.size > 2000) {
-        repeat(this.size - 2000) { this.removeAt(0) }
-    }
+private fun DrawScope.drawCursor(
+    rows: List<List<Cell>>,
+    screenRows: Int,
+    cursor: CursorInfo,
+    visibleCount: Int,
+    charWidthPx: Float,
+    lineHeightPx: Float,
+) {
+    if (!cursor.visible) return
+    val snapshotIndex = rows.size - screenRows + cursor.row
+    val viewportStart = rows.size - visibleCount
+    if (snapshotIndex < viewportStart) return
+    val x = cursor.col * charWidthPx
+    val y = (snapshotIndex - viewportStart) * lineHeightPx
+    drawRect(
+        color = TerminalCursorColor,
+        topLeft = Offset(x, y),
+        size = Size(charWidthPx, lineHeightPx),
+    )
 }

@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,11 +47,11 @@ private val SpecialKeys = listOf(
 )
 
 /**
- * SSH 终端页（自绘简化版）：SimpleTerminalView 渲染 + WS 双向传输。
+ * SSH 终端页（自研 ANSI 终端模拟器）：TerminalEmulator 解析渲染 + WS 双向传输。
  *
- * 输出：TerminalClient.onOutput → 行缓冲 feedTerminal。
+ * 输出：TerminalClient.onOutput → TerminalBuffer.feed（增量 ANSI 解析，版本号驱动重组）。
  * 输入：软键盘字符/回车 → TerminalClient.sendInput；功能键行/物理键盘组合 → 控制字节。
- * 尺寸：按容器实际宽高换算 cols/rows，open 时用实际尺寸、变化时发 resize 帧。
+ * 尺寸：按容器实际宽高换算 cols/rows，open 时用实际尺寸、变化时发 resize 帧并重建缓冲网格。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,16 +61,19 @@ fun TerminalScreen(
     viewModel: TerminalViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val lines = remember { mutableStateOf(emptyList<String>()) }
+    val buffer = remember { TerminalBuffer() }
+    // 每次 feed 递增版本号，驱动 Compose 重组并重绘
+    var bufferVersion by remember { mutableLongStateOf(0L) }
 
-    // 输出回调：WS terminal.output → 行缓冲
-    // 注意：必须用不可变副本替换列表以触发 Compose 重组（直接改 MutableList 内容不通知快照）
+    // 输出回调：WS terminal.output → 终端模拟器（UTF-8/ANSI 增量解析）
+    // 注意：必须读 bufferVersion 触发重组（缓冲为普通对象，不通知 Compose 快照）
     LaunchedEffect(Unit) {
         viewModel.setOutputCallback { bytes ->
-            val next = lines.value.toMutableList()
-            next.feedTerminal(bytes)
-            lines.value = next
+            buffer.feed(bytes)
+            bufferVersion++
         }
+        // CSI n 状态报告应答回传 PTY 输入通道
+        buffer.reportOutput = { report -> viewModel.sendInput(report.toByteArray(Charsets.UTF_8)) }
     }
 
     Scaffold(
@@ -115,18 +119,29 @@ fun TerminalScreen(
                 val cols = ((maxWidth - 16.dp) / charWidth).toInt().coerceIn(2, 300)
                 val rows = (maxHeight / lineHeight).toInt().coerceIn(1, 100)
 
-                // 首次 open 用实际尺寸；之后尺寸变化（旋转/软键盘）发 resize
+                // 缓冲网格跟随尺寸；首次 open 前清空旧缓冲，之后尺寸变化重建网格并发 resize
                 LaunchedEffect(cols, rows) {
+                    buffer.resize(cols, rows)
                     if (!opened) {
+                        buffer.clear()
                         viewModel.open(cols = cols, rows = rows)
                         opened = true
                     } else if (uiState.phase == TerminalPhase.OPEN) {
                         viewModel.resize(cols, rows)
                     }
+                    bufferVersion++
                 }
 
+                // 版本号状态读取：每次 feed 递增 → 触发重组（快照由 visibleRows() 每次重建）
+                @Suppress("UNUSED_VARIABLE")
+                val snapshotVersion = bufferVersion
                 SimpleTerminalView(
-                    lines = lines.value,
+                    rows = buffer.visibleRows(),
+                    cols = buffer.screenCols,
+                    screenRows = buffer.screenRows,
+                    cursorRow = buffer.cursorScreenRow,
+                    cursorCol = buffer.cursorScreenCol,
+                    cursorVisible = buffer.isCursorVisible,
                     onInput = viewModel::sendInput,
                     modifier = Modifier.fillMaxSize(),
                 )
