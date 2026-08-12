@@ -55,6 +55,10 @@ public class AppProperties {
     @Valid
     private final Alert alert = new Alert();
 
+    /** SSH 测试历史保留期与清理批次配置。 */
+    @Valid
+    private final SshTestHistory sshTestHistory = new SshTestHistory();
+
     /**
      * 获取 JWT 配置。
      *
@@ -134,6 +138,15 @@ public class AppProperties {
      */
     public Alert getAlert() {
         return alert;
+    }
+
+    /**
+     * 获取 SSH 测试历史保留期配置。
+     *
+     * @return SSH 测试历史保留期配置
+     */
+    public SshTestHistory getSshTestHistory() {
+        return sshTestHistory;
     }
 
     public static class Jwt {
@@ -1717,6 +1730,124 @@ public class AppProperties {
          */
         public void setRecordCleanupMaxBatchesPerRun(int recordCleanupMaxBatchesPerRun) {
             this.recordCleanupMaxBatchesPerRun = recordCleanupMaxBatchesPerRun;
+        }
+    }
+
+    /**
+     * SSH 测试历史（ssh_test_history）保留期与分批清理配置。
+     */
+    public static class SshTestHistory {
+
+        /** 是否启用 SSH 测试历史保留期清理。 */
+        private boolean cleanupEnabled = true;
+
+        /** SSH 测试历史保留天数。 */
+        @Min(value = 1, message = "SSH test history retention days must be at least one")
+        @Max(value = 3650, message = "SSH test history retention days must not exceed 3650")
+        private int retentionDays = 90;
+
+        /** SSH 测试历史清理 cron。 */
+        @NotBlank(message = "SSH test history cleanup cron must not be blank")
+        private String cleanupCron = "0 0 3 * * ?";
+
+        /** SSH 测试历史单批清理上限。 */
+        @Min(value = 1, message = "SSH test history cleanup batch size must be at least one")
+        @Max(value = 10000, message = "SSH test history cleanup batch size must not exceed 10000")
+        private int cleanupBatchSize = 1000;
+
+        /** 单轮 SSH 测试历史清理最多执行的批次数。 */
+        @Min(value = 1, message = "SSH test history cleanup max batches must be at least one")
+        @Max(value = 1000, message = "SSH test history cleanup max batches must not exceed 1000")
+        private int cleanupMaxBatchesPerRun = 100;
+
+        /**
+         * 返回 SSH 测试历史清理是否启用。
+         *
+         * @return 是否启用清理
+         */
+        public boolean isCleanupEnabled() {
+            return cleanupEnabled;
+        }
+
+        /**
+         * 设置 SSH 测试历史清理是否启用。
+         *
+         * @param cleanupEnabled 是否启用清理
+         */
+        public void setCleanupEnabled(boolean cleanupEnabled) {
+            this.cleanupEnabled = cleanupEnabled;
+        }
+
+        /**
+         * 返回 SSH 测试历史保留天数。
+         *
+         * @return 保留天数
+         */
+        public int getRetentionDays() {
+            return retentionDays;
+        }
+
+        /**
+         * 设置 SSH 测试历史保留天数。
+         *
+         * @param retentionDays 保留天数
+         */
+        public void setRetentionDays(int retentionDays) {
+            this.retentionDays = retentionDays;
+        }
+
+        /**
+         * 返回 SSH 测试历史清理 cron。
+         *
+         * @return 清理 cron
+         */
+        public String getCleanupCron() {
+            return cleanupCron;
+        }
+
+        /**
+         * 设置 SSH 测试历史清理 cron。
+         *
+         * @param cleanupCron 清理 cron
+         */
+        public void setCleanupCron(String cleanupCron) {
+            this.cleanupCron = cleanupCron;
+        }
+
+        /**
+         * 返回 SSH 测试历史单批清理上限。
+         *
+         * @return 单批清理上限
+         */
+        public int getCleanupBatchSize() {
+            return cleanupBatchSize;
+        }
+
+        /**
+         * 设置 SSH 测试历史单批清理上限。
+         *
+         * @param cleanupBatchSize 单批清理上限
+         */
+        public void setCleanupBatchSize(int cleanupBatchSize) {
+            this.cleanupBatchSize = cleanupBatchSize;
+        }
+
+        /**
+         * 返回单轮 SSH 测试历史清理最多执行的批次数。
+         *
+         * @return 最大批次数
+         */
+        public int getCleanupMaxBatchesPerRun() {
+            return cleanupMaxBatchesPerRun;
+        }
+
+        /**
+         * 设置单轮 SSH 测试历史清理最多执行的批次数。
+         *
+         * @param cleanupMaxBatchesPerRun 最大批次数
+         */
+        public void setCleanupMaxBatchesPerRun(int cleanupMaxBatchesPerRun) {
+            this.cleanupMaxBatchesPerRun = cleanupMaxBatchesPerRun;
         }
     }
 }

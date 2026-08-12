@@ -60,6 +60,12 @@ susumonitor:
     record-cleanup-enabled: ${ALERT_RECORD_CLEANUP_ENABLED:true}
     record-cleanup-batch-size: ${ALERT_RECORD_CLEANUP_BATCH_SIZE:1000}
     record-cleanup-max-batches-per-run: ${ALERT_RECORD_CLEANUP_MAX_BATCHES_PER_RUN:100}
+  ssh-test-history:
+    retention-days: ${SSH_TEST_HISTORY_RETENTION_DAYS:90}
+    cleanup-cron: ${SSH_TEST_HISTORY_CLEANUP_CRON:0 0 3 * * ?}
+    cleanup-enabled: ${SSH_TEST_HISTORY_CLEANUP_ENABLED:true}
+    cleanup-batch-size: ${SSH_TEST_HISTORY_CLEANUP_BATCH_SIZE:1000}
+    cleanup-max-batches-per-run: ${SSH_TEST_HISTORY_CLEANUP_MAX_BATCHES_PER_RUN:100}
   security:
     aes-gcm-key: ${AES_GCM_KEY:}
   agent:

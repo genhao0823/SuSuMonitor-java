@@ -3,6 +3,7 @@ package com.susumonitor.server.module.server.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.susumonitor.server.module.server.entity.SshTestHistoryEntity;
 import java.sql.Connection;
@@ -120,6 +121,37 @@ class SshTestHistoryMapperMybatisTests {
             SshTestHistoryEntity failed = records.stream().filter(r -> !r.getConnected()).findFirst().orElseThrow();
             assertEquals(50002, failed.getErrorCode());
             assertNull(failed.getHostKeyAlgorithm());
+        }
+    }
+
+    /** 保留期清理应按 cutoff 删除过期记录、保留新记录，并应用批次上限。 */
+    @Test
+    void deleteExpiredBatchShouldRemoveOnlyOlderThanCutoffWithLimit() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(30);
+        insertEntity(newSuccessEntity(cutoff.minusDays(60)));
+        insertEntity(newSuccessEntity(cutoff.minusDays(50)));
+        insertEntity(newSuccessEntity(cutoff.minusDays(40)));
+        insertEntity(newSuccessEntity(cutoff.plusDays(10)));
+        insertEntity(newSuccessEntity(cutoff.plusDays(1)));
+
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            SshTestHistoryMapper mapper = session.getMapper(SshTestHistoryMapper.class);
+            // 3 条早于 cutoff，批次上限 2 → 只删 2 条
+            assertEquals(2, mapper.deleteExpiredBatch(cutoff, 2));
+        }
+
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            SshTestHistoryMapper mapper = session.getMapper(SshTestHistoryMapper.class);
+            assertEquals(3, mapper.selectRecentByServerId(1L, 10).size());
+            // 剩余 1 条过期记录可被后续批次清理
+            assertEquals(1, mapper.deleteExpiredBatch(cutoff, 10));
+        }
+
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            SshTestHistoryMapper mapper = session.getMapper(SshTestHistoryMapper.class);
+            List<SshTestHistoryEntity> records = mapper.selectRecentByServerId(1L, 10);
+            assertEquals(2, records.size());
+            assertTrue(records.stream().allMatch(r -> r.getTestedAt().isAfter(cutoff)));
         }
     }
 

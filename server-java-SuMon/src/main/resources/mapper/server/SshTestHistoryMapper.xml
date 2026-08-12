@@ -31,4 +31,18 @@
         ORDER BY tested_at DESC, id DESC
         LIMIT #{limit}
     </select>
+
+    <delete id="deleteExpiredBatch">
+        DELETE FROM ssh_test_history
+        WHERE id IN (
+            SELECT expired_records.id
+            FROM (
+                SELECT id
+                FROM ssh_test_history
+                WHERE tested_at &lt; #{cutoffTime}
+                ORDER BY tested_at, id
+                LIMIT #{batchSize}
+            ) expired_records
+        )
+    </delete>
 </mapper>
