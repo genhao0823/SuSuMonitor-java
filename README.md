@@ -7,18 +7,17 @@
 [![Status](https://img.shields.io/badge/Polish--6%20%E5%AE%8C%E6%88%90-brightgreen)](#%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6)
 [![Docs](https://img.shields.io/badge/docs--alignment-2026--07--25-blue)](docs-SuMon/Bug-fix/2026-07-25-文档对齐性修复.md)
 
-## 🚀 当前进度快照（2026-08-07）
+## 🚀 当前进度快照（2026-08-12）
 
 | 项 | 状态 / 值 |
 |---|---|
 | GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-jvav-> |
-| 本次 tag | [`v0.5.0-cloud`](https://github.com/genhao0823/SuSuMonitor-jvav-/releases/tag/v0.5.0-cloud) |
-| 当前基线 | `main` HEAD(`b721c3b`，Polish-6 javadoc + android spec sync) |
+| 当前基线 | `main` HEAD（Polish-7 收口，2026-08-12） |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
-| 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/增长表保留期清理（幂等接收记录 7 天、消费记录 30 天、告警记录 90 天，Flyway V22）/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
-| Android App | **阶段一+阶段二已完整实现（Polish-6，2026-08-07）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情/排序、实时指标（WS + OkHttp pingInterval 心跳）、告警记录（通知深链到告警 Tab）、DataStore 通知开关持久化、前台服务告警通知、SSH 终端（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl）；`gradlew assembleDebug` + 45 单测全绿；云端全链路手测待真机 |
+| 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/增长表保留期清理（幂等接收记录 7 天、消费记录 30 天、告警记录 90 天、SSH 测试历史 90 天，Flyway V22/V24）/告警消费多消费者并发（V15 唯一键幂等，本地 broker 验收并发 4 消费 100 条零重复）/Agent nack 有限重试（retriable_server_error + snapshot v3 持久化预算）/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
+| Android App | **阶段一+阶段二+Polish-7 已完整实现（2026-08-12）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情/排序、实时指标（WS + OkHttp pingInterval 心跳）、告警记录（通知深链到告警 Tab）、DataStore 通知开关持久化、前台服务告警通知、SSH 终端（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl + **自研 ANSI 终端模拟器**：增量 CSI 解析/双屏/滚动回退/256 色/备用屏，支持 top/htop 类 TUI + **断线自动重连**：指数退避自动重开）；`gradlew assembleDebug` + 85 单测全绿；云端全链路手测待真机 |
 | 首次上云端部署 | 腾讯云 OpenCloudOS 公网明文 HTTP 已跑通(2026-07-31,前端 5173 + 后端 18080 + Agent 8089 + RabbitMQ 5672,端到端联调 PASS),详见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md` |
-| 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；多实例并发验证、Docker 镜像实机构建、Android App 云端全链路手测（待设备）、数据库异地备份定时调度（crontab）仍属后续阶段 |
+| 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；Android App 云端全链路手测（待设备）、数据库异地备份定时调度（crontab）、Docker 镜像实机构建、多 JVM 实例仍属后续阶段；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接为自研模拟器边界外 |
 
 > 本节反映 2026-08-05 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录。
 
@@ -290,6 +289,7 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - **Agent 可靠投递**（**M1-M4 已完成 2026-08-05**）：M1 Server `metrics.ack` 入口确认 + M2 Agent 完整帧持久化 FIFO + M3 同 UUID 断线/ACK 超时重传、指数退避/equal jitter、积压重放节流 + **M4** Server 永久拒绝分类 `metrics.nack`（invalid_metrics_payload / stale_collected_at / server_not_found）、Agent 本地持久化死信（snapshot v2，v1 自动迁移）、心跳投递遥测（pending/bytes、oldest、drop、dead-letter）→ Flyway V19 → 状态接口 → 服务器详情页展示；loopback fixture 15 项 PASS，真实 Agent + Java/MySQL 独立 schema 场景待 DB 管理员凭据运行；队列字节上限仍属后续独立模块，见 `Develop-log/20260805-Agent指标可靠投递（NACK死信与投递遥测）.md`
 - **协作**:在 GitHub 上创建 PR / 提 issue
 - **Polish-6 三端收尾**（**已完成 2026-08-07**，commit `75b41e5`→`29effc0`）：HTTPS 迁移后 agent 配置核对与全库明文 URL 清扫；Android 告警通知深链到告警 Tab / 通知开关 DataStore 持久化（前台服务联动）/ 服务器列表排序选择器 / WS 半开连接检测（OkHttp pingInterval）/ 终端基础增强（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl）；数据库异地备份脚本 `scripts/remote-backup.sh`（云端备份→拉回→AES-256 加密落盘，含 backup.sh CRLF 修复）；Web 告警通知投递历史详情弹窗（新增 `GET /api/alerts/records/{id}/notifications`，OpenAPI alert 6→7 端点）；顺带恢复 Web lint 零警告基线。详见 `docs-SuMon/Develop-plans/20260807-Polish-6-三端全面收尾.md` 与各模块 Dev-log（`20260807-Polish6-M*.md`）
+- **Polish-7 遗留收尾**（**已完成 2026-08-12**，commit `c2672c8`→收口）：20260810 WIP checkpoint（SSH 测试历史 V23 / 主机密钥一键信任 / 超时分类 50400 / Swagger 放行）；SSH 测试历史保留期清理（V24 + CleanupService/Scheduler）；Android 自研 ANSI 终端模拟器（增量 CSI 解析/双屏/滚动回退/256 色/备用屏 + 逐格渲染）；Android 终端断线自动重连（指数退避重开 + UI 提示）；Agent metrics.nack 有限重试（retriable_server_error + snapshot v3 持久化预算）；告警消费多消费者并发（本地 broker 验收：并发 4 消费 100 条零重复 + DLQ 分类正确）。详见 `docs-SuMon/Develop-plans/20260812-Polish-7-遗留收尾.md` 与各模块 Dev-log（`20260812-Polish7-M*.md`）
 
 ## 协议 / 工具
 
@@ -308,3 +308,4 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - ~~`openapi-system.json` 缺 `info.title` 字段~~（已补齐 2026-07-29，B-037 关闭；pre-commit 钩子相关 dirty 处理见上一条）
 - 详细文档对齐性检查与修正记录:见 `docs-SuMon/Bug-fix/2026-07-25-文档对齐性修复.md`
 - **Polish-6 之后仍遗留（2026-08-07）**：真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需凭据/设备，脚本已备）；Android 终端 ANSI 光标/滚屏/TUI（top/vi）仍为简化渲染；多消费者并发消费、Docker 镜像实机构建、数据库异地备份的定时调度（crontab）未配置
+- **Polish-7 之后仍遗留（2026-08-12）**：真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需凭据/设备，脚本已备）；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接（自研模拟器边界外）；Agent 掉线期间服务端不向 monitor 推送 terminal.closed（中继增强方向）；多 JVM 实例部署、Docker 镜像实机构建、数据库异地备份定时调度（crontab）未配置
