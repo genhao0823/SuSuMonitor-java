@@ -21,6 +21,7 @@ data class TerminalUiState(
     val shell: String? = null,
     val errorMessage: String? = null,
     val ready: Boolean = false,
+    val reconnectAttempts: Int = 0,
 )
 
 /**
@@ -118,5 +119,6 @@ class TerminalViewModel @Inject constructor(
         shell = state.shell,
         errorMessage = state.errorMessage,
         ready = _uiState.value.ready,
+        reconnectAttempts = state.reconnectAttempts,
     )
 }

@@ -43,6 +43,11 @@ android {
         buildConfig = true
     }
 
+    // JVM 单测不加载 Android 框架：Log 等调用返回默认值（0/null），避免 not mocked 异常
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

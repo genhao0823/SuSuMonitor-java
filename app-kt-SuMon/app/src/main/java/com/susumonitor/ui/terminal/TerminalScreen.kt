@@ -76,6 +76,14 @@ fun TerminalScreen(
         buffer.reportOutput = { report -> viewModel.sendInput(report.toByteArray(Charsets.UTF_8)) }
     }
 
+    // 新会话建立（首开/断线重连/手动重试）时清空旧缓冲
+    LaunchedEffect(uiState.phase) {
+        if (uiState.phase == TerminalPhase.AWAITING_OPEN) {
+            buffer.clear()
+            bufferVersion++
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -146,10 +154,17 @@ fun TerminalScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                // 错误/未连接提示覆盖层
-                if (uiState.errorMessage != null || uiState.phase == TerminalPhase.IDLE) {
+                // 错误/未连接/重连中提示覆盖层
+                val overlayMessage = when {
+                    uiState.phase == TerminalPhase.RECONNECTING ->
+                        "连接断开，正在重连…（第 ${uiState.reconnectAttempts} 次）"
+                    uiState.phase == TerminalPhase.IDLE -> "正在连接…"
+                    else -> null
+                }
+                val showOverlay = uiState.errorMessage != null || overlayMessage != null
+                if (showOverlay) {
                     ColumnOverlay(
-                        message = uiState.errorMessage ?: "正在连接…",
+                        message = uiState.errorMessage ?: overlayMessage.orEmpty(),
                         showRetry = uiState.errorMessage != null,
                         onRetry = { viewModel.retry(cols = cols, rows = rows) },
                     )
