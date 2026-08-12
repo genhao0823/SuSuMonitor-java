@@ -61,9 +61,11 @@ rabbitmqctl clear_permissions -p susumonitor <用户名>
 | Topic Exchange | `susumonitor.dlx` | durable, non-auto-delete |
 | Queue | `susumonitor.alert.metrics` | durable；`x-dead-letter-exchange=susumonitor.dlx`、`x-dead-letter-routing-key=metrics.reported.v1` |
 | Queue | `susumonitor.alert.metrics.dlq` | durable，不自动回投业务队列 |
+| Queue | `susumonitor.alert.triggered` | durable；`x-dead-letter-exchange=susumonitor.dlx`、`x-dead-letter-routing-key=alert.triggered.v1`；出站告警事件，当前无消费者，消息按需堆积 |
+| Queue | `susumonitor.alert.triggered.dlq` | durable，不自动回投业务队列 |
 
 - 由 `RabbitMqTopologyConfig` 声明式创建，**broker 重启/升级后自动重建**，无需手工声明。
-- 绑定：`susumonitor.events -- metrics.reported.v1 --> susumonitor.alert.metrics`；DLX → DLQ 同理。
+- 绑定：`susumonitor.events -- metrics.reported.v1 --> susumonitor.alert.metrics`；`susumonitor.events -- alert.triggered.v1 --> susumonitor.alert.triggered`；DLX → DLQ 同理。
 
 ```bash
 rabbitmqctl list_queues -p susumonitor name durable arguments

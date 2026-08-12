@@ -75,9 +75,12 @@
 - `temperature` 和 `load_avg` 允许 `null`，表示采集平台不提供该值。
 - 指标字段应保持与已冻结的 `metrics.report` 数据语义一致。
 
-## 四、`alert.triggered.v1`（预留，尚未实现 Broker 发布）
+## 四、`alert.triggered.v1`（已实现 Broker 发布；消费者待接入）
 
-该事件预留给未来 Alert 生成新告警记录后的 Broker 出站通知。当前告警通知通过 `alert.push` Monitor WebSocket 帧发送，不会发布本节事件。持续越界不重复生成该事件；恢复语义需由后续明确的事件类型或查询状态表达，不能复用本事件伪装成恢复事件。
+该事件表示 Alert 生成新告警记录后的出站通知，由 Outbox 发布器按行 `routing_key`（V25）
+路由到 `susumonitor.alert.triggered` 业务队列（2026-08-12 落地）。当前告警通知仍通过
+`alert.push` Monitor WebSocket 帧发送，二者并存；持续越界不重复生成该事件；恢复语义
+需由后续明确的事件类型或查询状态表达，不能复用本事件伪装成恢复事件。
 
 ```json
 {
@@ -119,7 +122,7 @@
 
 ## 六、当前实现边界
 
-已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布及其消费者仍未实现，不能把本节示例作为当前可订阅的运行时事件。
+已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布已实现（2026-08-12），其消费者仍未实现——不能把本节示例作为当前可订阅的运行时事件。
 
 ---
 
@@ -149,3 +152,19 @@
 - 失败留痕（2026-08-02）：被拒消息（不可重试零重试 / 重试耗尽）在 reject 前写 failed 行（attempts 1 或 max-attempts、last_error 截断 500、best-effort 不阻断 reject）；非法 JSON 无可解析 event_id 不留痕。幂等查询仅认 consumed 行——failed 行不阻塞 DLQ 重放，重放成功后 upsert 翻转回 consumed。
 - 时间口径：`occurred_at`/`collected_at` 解析沿用 UTC 秒级格式，消费记录 `consumed_at` 写入 UTC（应用时钟）。
 - JSON Schema 运行校验仍未引入；已实现无外部依赖的字段级运行校验，确保畸形载荷在进入幂等查询和告警评估前直接拒绝进 DLQ。
+
+## 九、实现确认（2026-08-12，alert.triggered.v1 发布侧落地）
+
+本文档 §四 的 `alert.triggered.v1` 信封已由 `AlertTriggeredEnvelopeFactory` 实现
+（见 `Develop-log/20260812-告警事件RabbitMQ发布.md`）：
+
+- 信封字段与示例完全一致（snake_case、`event_type=alert.triggered`、`schema_version=1`、`producer=alert-service`）。
+- 时间格式固定为 UTC ISO-8601 秒级（`yyyy-MM-dd'T'HH:mm:ss'Z'`，与契约示例一致）。
+- payload 仅携带契约冻结字段（server_id/rule_id/record_id/metric/current_value/threshold_value/level/status/triggered_at），
+  不携带 message 等展示字段——载荷为独立消息对象，不直接复用 HTTP VO 全量字段。
+- 契约常量（EVENT_TYPE/ROUTING_KEY/SCHEMA_VERSION）由工厂公开，与 `OutboxEnvelopeFactory` 同模式，
+  杜绝硬编码漂移。
+- 发布时机：评估事务内与告警记录同事务登记 outbox 行（`message_outbox.routing_key=alert.triggered.v1`，V25）。
+- 验证：`AlertTriggeredEnvelopeFactoryTests` 与契约示例逐字段断言，Maven 全量 486 tests 全绿。
+
+仍属后续：`alert.triggered.v1` 的消费者（含消费幂等记录与 DLQ 分类执行）待接入。

@@ -16,8 +16,10 @@ RabbitMQ 用于解耦 Metrics 与 Alert，不替代 Agent/Monitor WebSocket、My
 | Dead-letter Exchange | `susumonitor.dlx` | 重试耗尽或不可重试消息的死信交换器。 |
 | Queue | `susumonitor.alert.metrics` | Alert 消费 `metrics.reported.v1` 的业务队列。 |
 | Dead-letter Queue | `susumonitor.alert.metrics.dlq` | Alert 指标事件死信队列，不自动回投业务队列。 |
+| Queue | `susumonitor.alert.triggered` | Alert 出站触发事件业务队列，待未来消费者/外部系统接入。 |
+| Dead-letter Queue | `susumonitor.alert.triggered.dlq` | Alert 出站触发事件死信队列，不自动回投业务队列。 |
 | Routing Key | `metrics.reported.v1` | Metrics 已落库指标事件。 |
-| Routing Key | `alert.triggered.v1` | **预留，尚未实现 Broker 发布**；当前告警通知使用 `alert.push` Monitor WebSocket 帧。 |
+| Routing Key | `alert.triggered.v1` | **已实现发布（2026-08-12）**：Alert 触发新告警记录后经 Outbox 发布的出站事件；当前无消费者，消息堆积在业务队列等待接入。 |
 
 Exchange、业务队列和 DLQ 均要求 durable、non-auto-delete；队列名称不包含实例 ID，不创建临时消费者队列。
 
@@ -29,21 +31,42 @@ metrics-service
        routing key: metrics.reported.v1
        message: metrics.reported.v1
 
+alert-service
+    -> susumonitor.events
+       routing key: alert.triggered.v1
+       message: alert.triggered.v1（经 Outbox 同事务登记后发布）
+
 susumonitor.events
     -> susumonitor.alert.metrics
        binding key: metrics.reported.v1
        consumer: alert-service
 
+susumonitor.events
+    -> susumonitor.alert.triggered
+       binding key: alert.triggered.v1
+       consumer: 待接入（未来外部系统/后续内部改造）
+
 susumonitor.alert.metrics
+    -> retry exhausted / non-retryable error
+       dead-letter-exchange: susumonitor.dlx
+
+susumonitor.alert.triggered
     -> retry exhausted / non-retryable error
        dead-letter-exchange: susumonitor.dlx
 
 susumonitor.dlx
     -> susumonitor.alert.metrics.dlq
        dead-letter routing key: metrics.reported.v1
+
+susumonitor.dlx
+    -> susumonitor.alert.triggered.dlq
+       dead-letter routing key: alert.triggered.v1
 ```
 
-`alert.triggered.v1` 只保留为未来版本化事件命名，当前没有 Alert Broker 发布器；不能把现有 `AlertPushPublisher`（Monitor WebSocket 推送）误称为该消息发布器。
+`alert.triggered.v1` 由 Outbox 发布器按行 `routing_key`（V25）路由到
+`susumonitor.alert.triggered` 业务队列；当前没有消费者，消息堆积在业务队列等待接入，
+不视为丢失（与 MVP-10 发布先行先例一致）。不能把现有 `AlertPushPublisher`
+（Monitor WebSocket 推送）误称为该消息发布器。
 
 ## 四、至少一次投递
 
@@ -127,3 +150,17 @@ MVP-11 已完成 `susumonitor.alert.metrics` 消费者、幂等消费、重试�
 | DLQ 受控重放 | **已落地（2026-08-01）**：`api-test/replay-dlq.mjs`（--replay 重放 + 防循环提示 / --purge 清空）；合法信封重放幂等命中零业务效果，数据错误消息重放仍回 DLQ |
 
 仍属后续：多消费者并发消费（单消费者当前）。
+
+## 十、实现确认（2026-08-12，alert.triggered.v1 发布侧落地）
+
+本文档 §二/§三 的 `alert.triggered.v1` 发布侧已落地（见 `Develop-log/20260812-告警事件RabbitMQ发布.md`）：
+
+| 冻结项 | 实现 |
+|---|---|
+| Outbox 多事件类型 | `message_outbox` 新增 `routing_key` 列（V25），发布器按行路由；`OutboxService.enqueue(eventType, routingKey, payload, eventId)` 泛化 |
+| 发布时机 | `AlertEvaluationServiceImpl.handleTrigger` 评估事务内与告警记录同事务登记 outbox 行；事务回滚时一并回滚，保证"已入库告警记录必有待发布事件" |
+| 信封契约 | `AlertTriggeredEnvelopeFactory` 按 `message-contracts-v1` §四 构建（event_type=alert.triggered、producer=alert-service、schema_version=1、payload 冻结字段）；契约常量单点公开 |
+| 拓扑声明 | `susumonitor.alert.triggered` 业务队列（DLX 参数）+ `susumonitor.alert.triggered.dlq` + 两条绑定，全部 durable/non-auto-delete |
+| 消费者 | **未实现**（契约 §四 定义为出站事件，面向未来外部系统）；消息堆积在业务队列等待接入，不视为丢失 |
+
+验证：Maven 全量 486 tests 全绿（含新 `AlertTriggeredEnvelopeFactoryTests` 契约断言）。
