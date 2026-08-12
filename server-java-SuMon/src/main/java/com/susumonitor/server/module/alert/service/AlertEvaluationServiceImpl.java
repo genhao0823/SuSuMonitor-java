@@ -7,12 +7,15 @@ import com.susumonitor.server.module.alert.enums.AlertRecordStatus;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
+import com.susumonitor.server.module.alert.outbox.AlertTriggeredEnvelopeFactory;
 import com.susumonitor.server.module.alert.vo.AlertRecordVo;
+import com.susumonitor.server.module.metrics.outbox.OutboxService;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -38,6 +41,8 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
     private final AlertRecordMapper recordMapper;
     private final AlertStateMachine stateMachine;
     private final ApplicationEventPublisher eventPublisher;
+    private final OutboxService outboxService;
+    private final AlertTriggeredEnvelopeFactory envelopeFactory;
     private final Clock clock;
 
     /**
@@ -123,9 +128,17 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
             }
         }
 
-        // 发布告警触发事件供 WS 推送。
+        // 发布告警触发事件供 WS 推送与外部通知（AFTER_COMMIT 生效）。
         AlertRecordVo recordVo = toVo(record);
         eventPublisher.publishEvent(new AlertTriggeredEvent(serverId, recordVo));
+
+        // 与告警记录同事务登记 Outbox 待发布事件（alert.triggered.v1 契约落地）：
+        // eventId 由本处生成并写入信封，保证行内 event_id 与 payload 中 event_id 一致；
+        // 事务回滚时 outbox 行一并回滚，保证"已入库告警记录必有待发布事件"。
+        String eventId = UUID.randomUUID().toString();
+        String envelope = envelopeFactory.build(recordVo, eventId);
+        outboxService.enqueue(AlertTriggeredEnvelopeFactory.EVENT_TYPE,
+                AlertTriggeredEnvelopeFactory.ROUTING_KEY, envelope, eventId);
     }
 
     /** 逃逸窗口计数开始：创建 active=false 计数状态行（连续越界计数为 1）。 */
