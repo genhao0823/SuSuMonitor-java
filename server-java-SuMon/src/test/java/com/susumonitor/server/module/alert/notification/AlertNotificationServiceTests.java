@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.susumonitor.server.config.AppProperties;
@@ -19,6 +20,8 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import com.susumonitor.server.module.alert.entity.AlertNotificationEntity;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -197,5 +200,52 @@ class AlertNotificationServiceTests {
         service.retry(notification, rule(null, "https://dingtalk", null), record());
         verify(restTemplate).postForObject(eq("https://dingtalk"), any(), eq(String.class));
         verify(notificationMapper).markAttempt(eq(55L), eq("sent"), eq(2), isNull(), isNull());
+    }
+
+    /** scheduleNotifications 只排程（调用方事务内插 pending 行），不发送不回写。 */
+    @Test
+    void scheduleNotificationsOnlyInsertsPendingRows() {
+        List<AlertNotificationEntity> rows = service.scheduleNotifications(
+                rule("ops@example.com", "https://dingtalk", null), record());
+
+        assertEquals(2, rows.size());
+        assertEquals("email", rows.get(0).getChannel());
+        assertEquals("dingtalk", rows.get(1).getChannel());
+        verify(notificationMapper, times(2)).insert(any());
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+        verify(recordMapper, never()).updateNotifiedInfo(any(), any(), anyString());
+    }
+
+    /** sendScheduled 对已排程行逐渠道发送并回写成功渠道（消息驱动链路分离可再用性）。 */
+    @Test
+    void sendScheduledSendsScheduledRowsAndWritesBack() {
+        var email = new com.susumonitor.server.module.alert.entity.AlertNotificationEntity();
+        email.setId(1L);
+        email.setChannel("email");
+        var webhook = new com.susumonitor.server.module.alert.entity.AlertNotificationEntity();
+        webhook.setId(2L);
+        webhook.setChannel("webhook");
+        List<AlertNotificationEntity> rows = List.of(email, webhook);
+
+        service.sendScheduled(100L, rows, rule("ops@example.com", null, "https://hooks.example.com/alert"), record());
+
+        verify(mailSender).send(any(SimpleMailMessage.class));
+        verify(restTemplate).postForObject(eq("https://hooks.example.com/alert"), eq(record()), eq(String.class));
+        verify(recordMapper).updateNotifiedInfo(eq(100L), any(), eq("email,webhook"));
+    }
+
+    /** sendScheduled 全部渠道失败时一律不回写通知时间（与 notify 组合入口语义一致）。 */
+    @Test
+    void sendScheduledAllFailedDoesNotWriteBack() {
+        var email = new com.susumonitor.server.module.alert.entity.AlertNotificationEntity();
+        email.setId(1L);
+        email.setChannel("email");
+        org.mockito.Mockito.doThrow(new RuntimeException("smtp down")).when(mailSender)
+                .send(any(SimpleMailMessage.class));
+
+        service.sendScheduled(100L, List.of(email), rule("ops@example.com", null, null), record());
+
+        verify(recordMapper, never()).updateNotifiedInfo(any(), any(), anyString());
+        verify(notificationMapper).markAttempt(any(), eq("pending"), eq(1), any(), anyString());
     }
 }
