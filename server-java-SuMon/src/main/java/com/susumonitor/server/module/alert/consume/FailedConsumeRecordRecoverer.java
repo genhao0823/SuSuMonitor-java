@@ -9,11 +9,14 @@ import org.springframework.amqp.rabbit.retry.MessageRecoverer;
 import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
 
 /**
- * 消费失败留痕 recoverer（MVP-11 加固）：容器重试耗尽/不可重试拒绝时，
- * 在 reject 进 DLQ 之前尽力写入一条 failed 消费记录。
+ * 消费失败留痕 recoverer（MVP-11 加固，2026-08-12 支持多消费者）：容器重试耗尽/
+ * 不可重试拒绝时，在 reject 进 DLQ 之前尽力写入一条 failed 消费记录。
  *
  * <p>与 {@link ConsumeRecordMapper#upsertFailed} 配套，补齐"失败留痕"语义
- * （V15 枚举注释声明但此前从未落库）。语义约定：</p>
+ * （V15 枚举注释声明但此前从未落库）。consumer 名从消息的消费队列
+ * （{@code MessageProperties.consumerQueue}）映射，两个监听器（metrics 评估 /
+ * alert 出站通知）共用同一 recoverer bean，各自按队列落对应 consumer 名与
+ * 信封类型。语义约定：</p>
  * <ul>
  *   <li>可解析出 event_id 才留痕——非法 JSON 无法定位事件，仅告警日志；</li>
  *   <li>不可重试数据错误（{@link AmqpRejectAndDontRequeueException} 链）记录
@@ -28,6 +31,14 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
 
     /** 与 V15 表定义一致：last_error VARCHAR(500)，不落敏感信息。 */
     static final int MAX_ERROR_LENGTH = 500;
+
+    /** 队列 → 消费者名映射（与两个 @RabbitListener 消费的队列一一对应）。 */
+    private static final java.util.Map<String, String> QUEUE_CONSUMER = java.util.Map.of(
+            AlertMessageConsumer.QUEUE, AlertMessageConsumer.CONSUMER_NAME,
+            AlertTriggeredConsumer.QUEUE, AlertTriggeredConsumer.CONSUMER_NAME);
+
+    /** 缺省消费者名：队列信息缺失时回退 metrics 评估消费（兼容旧行为）。 */
+    private static final String DEFAULT_CONSUMER = AlertMessageConsumer.CONSUMER_NAME;
 
     private final ConsumeRecordMapper consumeRecordMapper;
 
@@ -44,7 +55,6 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
         this(consumeRecordMapper, objectMapper, maxAttempts, new RejectAndDontRequeueRecoverer());
     }
 
-    /** 包私有：测试注入 mock 委托以断言 reject 委托行为。 */
     /** 包私有构造：测试注入 mock 委托以断言 reject 行为。 */
     FailedConsumeRecordRecoverer(ConsumeRecordMapper consumeRecordMapper, ObjectMapper objectMapper,
             int maxAttempts, MessageRecoverer delegate) {
@@ -69,23 +79,40 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
             return;
         }
         try {
-            consumeRecordMapper.upsertFailed(AlertMessageConsumer.CONSUMER_NAME, eventId,
+            consumeRecordMapper.upsertFailed(consumerFor(message), eventId,
                     isNonRetryable(cause) ? 1 : maxAttempts, truncate(rootMessage(cause)));
         } catch (Exception exception) {
             log.warn("consume failure record write failed, eventId={}", eventId, exception);
         }
     }
 
-    /** 尽力从消息体解析 event_id；解析失败返回 null（非法 JSON 无事件可定位）。 */
-    /** 从消息体解析 event_id，解析失败返回 null。 */
+    /** 从消息体按队列对应的信封类型解析 event_id；解析失败返回 null（非法 JSON 无事件可定位）。 */
     private String extractEventId(Message message) {
         try {
+            if (isAlertTriggeredQueue(message)) {
+                AlertTriggeredMessage envelope = objectMapper.readValue(
+                        new String(message.getBody(), StandardCharsets.UTF_8), AlertTriggeredMessage.class);
+                return envelope.eventId();
+            }
             MetricsReportedMessage envelope = objectMapper.readValue(
                     new String(message.getBody(), StandardCharsets.UTF_8), MetricsReportedMessage.class);
             return envelope.eventId();
         } catch (Exception exception) {
             return null;
         }
+    }
+
+    /** 按消息的消费队列解析消费者名；队列信息缺失时回退缺省名。 */
+    private String consumerFor(Message message) {
+        String queue = message.getMessageProperties() == null ? null : message.getMessageProperties().getConsumerQueue();
+        String consumer = queue == null ? null : QUEUE_CONSUMER.get(queue);
+        return consumer == null ? DEFAULT_CONSUMER : consumer;
+    }
+
+    /** 判断消息是否来自 alert.triggered 队列（决定反序列化信封类型）。 */
+    private boolean isAlertTriggeredQueue(Message message) {
+        String queue = message.getMessageProperties() == null ? null : message.getMessageProperties().getConsumerQueue();
+        return AlertTriggeredConsumer.QUEUE.equals(queue);
     }
 
     /** 与 AlertRabbitConfig 错误分类一致：cause 链含 AmqpRejectAndDontRequeueException 视为不可重试。 */
