@@ -78,7 +78,7 @@ rabbitmqctl list_exchanges -p susumonitor name type durable
 |---|---|---|
 | 后端视角 | `GET /api/ready` | DB + RabbitMQ 双检查；Broker 不可达返回 **HTTP 503 / 50301 "rabbitmq unavailable"**（存活但未就绪，应用不退出） |
 | 积压监控 | `rabbitmqctl list_queues -p susumonitor name messages` | `susumonitor.alert.metrics` / `susumonitor.alert.triggered` 正常应接近 0（消费即 ACK）；**持续增长**说明消费者未运行或评估/通知排程失败（查后端日志与 DLQ）；对应 DLQ 增长 = 数据错误或重试耗尽，需人工介入 |
-| 死信处置 | 管理台/管理 API 查看 `susumonitor.alert.metrics.dlq`；先运行 `node api-test/replay-mvp11-dlq.mjs`（默认 dry-run、最多 10 条）审查摘要。仅在**本机隔离验证环境**、根因已修复且消息契约有效时，设置 `SUSUMONITOR_VALIDATION_CONFIRM=I_UNDERSTAND_DLQ_REPLAY` 后追加 `--execute --limit=N`（N≤50）。工具只将合规 `metrics.reported.v1` 原样发布回 `susumonitor.events`，绝不直接写业务队列、不输出 payload；非法 JSON/schema/type 等消息拒绝重放。生产死信仍须按变更流程人工审查与重放，禁止将本工具指向生产 Management API。 |
+| 死信处置 | 管理台/管理 API 查看两个 DLQ（`susumonitor.alert.metrics.dlq` / `susumonitor.alert.triggered.dlq`）；先运行 `node api-test/replay-mvp11-dlq.mjs [--event metrics\|alert]`（默认 dry-run、最多 10 条）审查摘要。仅在**本机隔离验证环境**、根因已修复且消息契约有效时，设置 `SUSUMONITOR_VALIDATION_CONFIRM=I_UNDERSTAND_DLQ_REPLAY` 后追加 `--execute --limit=N`（N≤50）。工具只将合规信封（对应事件的契约）原样发布回 `susumonitor.events`，绝不直接写业务队列、不输出 payload；非法 JSON/schema/type 等消息拒绝重放。全量处理（含 --purge 清空）用 `node api-test/replay-dlq.mjs [--event metrics\|alert] [--replay\|--purge]`。生产死信仍须按变更流程人工审查与重放，禁止将本工具指向生产 Management API。 |
 | 管理台 | http://127.0.0.1:15672（仅内网） | 队列/连接/节点监控 |
 | Broker 状态 | `rabbitmqctl status` | 节点/版本/Erlang 版本 |
 
