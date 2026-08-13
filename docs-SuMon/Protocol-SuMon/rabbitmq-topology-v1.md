@@ -162,7 +162,7 @@ MVP-11 已完成 `susumonitor.alert.metrics` 消费者、幂等消费、重试�
 | 发布时机 | `AlertEvaluationServiceImpl.handleTrigger` 评估事务内与告警记录同事务登记 outbox 行；事务回滚时一并回滚，保证"已入库告警记录必有待发布事件" |
 | 信封契约 | `AlertTriggeredEnvelopeFactory` 按 `message-contracts-v1` §四 构建（event_type=alert.triggered、producer=alert-service、schema_version=1、payload 冻结字段）；契约常量单点公开 |
 | 拓扑声明 | `susumonitor.alert.triggered` 业务队列（DLX 参数）+ `susumonitor.alert.triggered.dlq` + 两条绑定，全部 durable/non-auto-delete |
-| 消费者 | **未实现**（契约 §四 定义为出站事件，面向未来外部系统）；消息堆积在业务队列等待接入，不视为丢失 |
+| 消费者 | **已接入（2026-08-12，见 §十一）**：`alert-notifier` 消费事务内排程外部通知并异步发送，消息驱动外部通知链路已闭环。 |
 
 验证：Maven 全量 486 tests 全绿（含新 `AlertTriggeredEnvelopeFactoryTests` 契约断言）。
 

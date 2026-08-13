@@ -26,10 +26,10 @@
 | 字段 | 必填 | 规则 |
 |---|---:|---|
 | `event_id` | 是 | UUID；同一事件重试、补发必须保持不变；消费幂等主键。 |
-| `event_type` | 是 | 逻辑事件名，不因路由实现变化；当前已实现 `metrics.reported`；`alert.triggered` 仅为预留契约。 |
+| `event_type` | 是 | 逻辑事件名，不因路由实现变化；当前已实现 `metrics.reported` 与 `alert.triggered`。 |
 | `schema_version` | 是 | 当前为整数 `1`；不支持的版本不可按旧版本猜测解析。 |
 | `occurred_at` | 是 | UTC ISO-8601；表示事件产生时间，不使用本地时区。 |
-| `producer` | 是 | 生产模块标识；当前已实现 `metrics-service`；`alert-service` 仅对应预留事件。 |
+| `producer` | 是 | 生产模块标识；当前已实现 `metrics-service` 与 `alert-service`。 |
 | `trace_id` | 否 | 链路关联标识，不得携带凭据。 |
 | `correlation_id` | 否 | 业务关联标识，不得携带凭据。 |
 | `payload` | 是 | 独立消息对象；不直接复用 HTTP VO、Entity 或数据库行。 |
