@@ -1,9 +1,12 @@
 package com.susumonitor.server.websocket;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +17,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -96,16 +100,89 @@ class TerminalRelayLifecycleServiceTests {
         org.junit.jupiter.api.Assertions.assertNull(registry.get(sessionId));
     }
 
+    /** 当前 Agent 断开应向发起会话的浏览器推送服务端生成的 terminal.closed 帧。 */
+    @Test
+    void closeAgentSessionsShouldNotifyMonitorWithClosedFrame() throws Exception {
+        TerminalSessionService sessions = mock(TerminalSessionService.class);
+        AgentConnectionRegistry agents = mock(AgentConnectionRegistry.class);
+        TerminalOutputRateLimiter limiter = mock(TerminalOutputRateLimiter.class);
+        TerminalRelayRegistry registry = new TerminalRelayRegistry();
+        String sessionId = "c4c942a2-8584-433f-8397-6aef8ea79391";
+        WebSocketSession socket = openSocket("monitor-1");
+        registry.bind(sessionId, 9L, monitor(socket));
+        AgentWebSocketSession currentAgent = agent(9L, "agent-current");
+        when(agents.isCurrent(currentAgent)).thenReturn(true);
+
+        service(sessions, registry, agents, limiter).closeAgentSessions(currentAgent);
+
+        ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);
+        verify(socket).sendMessage(captor.capture());
+        String body = captor.getValue().getPayload();
+        assertTrue(body.contains("\"type\":\"terminal.closed\""));
+        assertTrue(body.contains("\"reason\":\"agent_disconnected\""));
+        assertTrue(body.contains(sessionId));
+        verify(sessions).closeSession(sessionId, TerminalSessionStatus.ERROR.value(), "agent_disconnected");
+        verify(limiter).release(sessionId);
+    }
+
+    /** 已被新连接替换的旧 Agent 断开时不得向浏览器推送关闭帧。 */
+    @Test
+    void closeAgentSessionsShouldSkipNotificationForReplacedConnection() throws Exception {
+        TerminalSessionService sessions = mock(TerminalSessionService.class);
+        AgentConnectionRegistry agents = mock(AgentConnectionRegistry.class);
+        TerminalOutputRateLimiter limiter = mock(TerminalOutputRateLimiter.class);
+        TerminalRelayRegistry registry = new TerminalRelayRegistry();
+        WebSocketSession socket = openSocket("monitor-1");
+        registry.bind("c4c942a2-8584-433f-8397-6aef8ea79391", 9L, monitor(socket));
+        AgentWebSocketSession oldAgent = agent(9L, "agent-old");
+        when(agents.isCurrent(oldAgent)).thenReturn(false);
+
+        service(sessions, registry, agents, limiter).closeAgentSessions(oldAgent);
+
+        verify(socket, never()).sendMessage(any(TextMessage.class));
+        org.mockito.Mockito.verifyNoInteractions(sessions);
+    }
+
+    /** Monitor 推送失败不得阻断会话元数据收口。 */
+    @Test
+    void closeAgentSessionsShouldNotBreakCleanupWhenMonitorSendFails() throws Exception {
+        TerminalSessionService sessions = mock(TerminalSessionService.class);
+        AgentConnectionRegistry agents = mock(AgentConnectionRegistry.class);
+        TerminalOutputRateLimiter limiter = mock(TerminalOutputRateLimiter.class);
+        TerminalRelayRegistry registry = new TerminalRelayRegistry();
+        String sessionId = "c4c942a2-8584-433f-8397-6aef8ea79391";
+        WebSocketSession socket = openSocket("monitor-1");
+        doThrow(new java.io.IOException("send failed")).when(socket).sendMessage(any(TextMessage.class));
+        registry.bind(sessionId, 9L, monitor(socket));
+        AgentWebSocketSession currentAgent = agent(9L, "agent-current");
+        when(agents.isCurrent(currentAgent)).thenReturn(true);
+
+        service(sessions, registry, agents, limiter).closeAgentSessions(currentAgent);
+
+        verify(sessions).closeSession(sessionId, TerminalSessionStatus.ERROR.value(), "agent_disconnected");
+        verify(limiter).release(sessionId);
+        org.junit.jupiter.api.Assertions.assertNull(registry.get(sessionId));
+    }
+
     private TerminalRelayLifecycleService service(TerminalSessionService sessions, TerminalRelayRegistry registry,
             AgentConnectionRegistry agents, TerminalOutputRateLimiter limiter) {
         return new TerminalRelayLifecycleService(sessions, registry, agents, limiter, new ObjectMapper(), Clock.systemUTC());
     }
 
     private MonitorWebSocketSession monitor(String id) {
-        WebSocketSession socket = mock(WebSocketSession.class);
-        when(socket.getId()).thenReturn(id);
+        return monitor(mock(WebSocketSession.class));
+    }
+
+    private MonitorWebSocketSession monitor(WebSocketSession socket) {
         return new MonitorWebSocketSession(socket, new com.susumonitor.server.security.AuthenticatedUser(
                 1L, "user", "user", "approved", null, OffsetDateTime.now(ZoneOffset.UTC)));
+    }
+
+    private WebSocketSession openSocket(String id) {
+        WebSocketSession socket = mock(WebSocketSession.class);
+        when(socket.getId()).thenReturn(id);
+        when(socket.isOpen()).thenReturn(true);
+        return socket;
     }
 
     private AgentWebSocketSession agent(Long serverId, String id) {
