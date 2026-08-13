@@ -75,12 +75,15 @@
 - `temperature` 和 `load_avg` 允许 `null`，表示采集平台不提供该值。
 - 指标字段应保持与已冻结的 `metrics.report` 数据语义一致。
 
-## 四、`alert.triggered.v1`（已实现 Broker 发布；消费者待接入）
+## 四、`alert.triggered.v1`（已实现 Broker 发布 + 消费者接入）
 
 该事件表示 Alert 生成新告警记录后的出站通知，由 Outbox 发布器按行 `routing_key`（V25）
-路由到 `susumonitor.alert.triggered` 业务队列（2026-08-12 落地）。当前告警通知仍通过
-`alert.push` Monitor WebSocket 帧发送，二者并存；持续越界不重复生成该事件；恢复语义
-需由后续明确的事件类型或查询状态表达，不能复用本事件伪装成恢复事件。
+路由到 `susumonitor.alert.triggered` 业务队列（2026-08-12 发布落地）；
+消费者 `alert-notifier` 已接入（同日），在消费事务内为规则配置的渠道排程外部通知
+（邮件/钉钉/Webhook），提交后异步发送——外部通知触发源由此从本地 AFTER_COMMIT 直呼
+切换为 Broker 消息驱动，Broker 中断恢复后 outbox 补发也能重新触发通知。`alert.push`
+Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越界不重复生成该事件；恢复
+语义需由后续明确的事件类型或查询状态表达，不能复用本事件伪装成恢复事件。
 
 ```json
 {
@@ -122,7 +125,7 @@
 
 ## 六、当前实现边界
 
-已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布已实现（2026-08-12），其消费者仍未实现——不能把本节示例作为当前可订阅的运行时事件。
+已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布与消费者均已实现（2026-08-12）——本契约已可实际订阅。
 
 ---
 
@@ -167,4 +170,23 @@
 - 发布时机：评估事务内与告警记录同事务登记 outbox 行（`message_outbox.routing_key=alert.triggered.v1`，V25）。
 - 验证：`AlertTriggeredEnvelopeFactoryTests` 与契约示例逐字段断言，Maven 全量 486 tests 全绿。
 
-仍属后续：`alert.triggered.v1` 的消费者（含消费幂等记录与 DLQ 分类执行）待接入。
+消费者侧（`alert-notifier` 幂等消费 + 通知排程 + DLQ 分类）已于同日接入，见 §十。
+
+## 十、实现确认（2026-08-12，alert.triggered.v1 消费者接入）
+
+本文档 §四 的消费者侧已实现（见 `Develop-log/20260812-alert.triggered消费者接入.md`）：
+
+- 消费者 `alert-notifier` 幂等消费 `susumonitor.alert.triggered`：消费事务内先查
+  `message_consume_records`（V15 唯一键，consumer=`alert-notifier`），命中即无第二次业务效果。
+- 业务事务：`selectActiveRuleById` → `selectRecordById` → `AlertNotificationService.scheduleNotifications`
+  （为规则配置的渠道插 `alert_notifications` pending 行，同事务）→ `upsertConsumed` 幂等记录；
+  事务提交后 `@Async sendScheduled` 逐渠道首次尝试发送并回写通知时间。
+  规则禁用/软删除/无渠道/记录缺失时跳过排程，仅落幂等记录（重试无意义）。
+- 错误分类：JSON 无法解析、schema_version≠1、event_type 不符、字段契约校验失败
+  （UUID/UTC 时间/三 ID/冻结指标集/数值非空）→ `AmqpRejectAndDontRequeueException` 零重试进 DLQ。
+- 失败留痕：`FailedConsumeRecordRecoverer` 按消费队列映射 consumer 名
+  （`susumonitor.alert.metrics`→alert-evaluator / `susumonitor.alert.triggered`→alert-notifier），
+  两个监听器共用同一 recoverer bean。
+- 通知触发源切换：原 `AlertNotificationPublisher`（AFTER_COMMIT 直呼 notify）已删除，
+  外部通知完全由本消费者驱动——同一 record 只触发一次通知，避免双发。
+- 验证：Maven 全量 506 tests 全绿（新增消费者/消息/校验器 3+8+9 用例与 recovered 映射断言）。

@@ -16,10 +16,10 @@ RabbitMQ 用于解耦 Metrics 与 Alert，不替代 Agent/Monitor WebSocket、My
 | Dead-letter Exchange | `susumonitor.dlx` | 重试耗尽或不可重试消息的死信交换器。 |
 | Queue | `susumonitor.alert.metrics` | Alert 消费 `metrics.reported.v1` 的业务队列。 |
 | Dead-letter Queue | `susumonitor.alert.metrics.dlq` | Alert 指标事件死信队列，不自动回投业务队列。 |
-| Queue | `susumonitor.alert.triggered` | Alert 出站触发事件业务队列，待未来消费者/外部系统接入。 |
+| Queue | `susumonitor.alert.triggered` | Alert 出站触发事件业务队列；消费者 `alert-notifier` 已接入（2026-08-12），驱动外部通知排程。 |
 | Dead-letter Queue | `susumonitor.alert.triggered.dlq` | Alert 出站触发事件死信队列，不自动回投业务队列。 |
 | Routing Key | `metrics.reported.v1` | Metrics 已落库指标事件。 |
-| Routing Key | `alert.triggered.v1` | **已实现发布（2026-08-12）**：Alert 触发新告警记录后经 Outbox 发布的出站事件；当前无消费者，消息堆积在业务队列等待接入。 |
+| Routing Key | `alert.triggered.v1` | **已实现发布 + 消费（2026-08-12）**：Alert 触发新告警记录后经 Outbox 发布的出站事件，由 `alert-notifier` 幂等消费并驱动外部通知。 |
 
 Exchange、业务队列和 DLQ 均要求 durable、non-auto-delete；队列名称不包含实例 ID，不创建临时消费者队列。
 
@@ -44,7 +44,7 @@ susumonitor.events
 susumonitor.events
     -> susumonitor.alert.triggered
        binding key: alert.triggered.v1
-       consumer: 待接入（未来外部系统/后续内部改造）
+       consumer: alert-notifier（通知排程驱动）
 
 susumonitor.alert.metrics
     -> retry exhausted / non-retryable error
@@ -64,9 +64,10 @@ susumonitor.dlx
 ```
 
 `alert.triggered.v1` 由 Outbox 发布器按行 `routing_key`（V25）路由到
-`susumonitor.alert.triggered` 业务队列；当前没有消费者，消息堆积在业务队列等待接入，
-不视为丢失（与 MVP-10 发布先行先例一致）。不能把现有 `AlertPushPublisher`
-（Monitor WebSocket 推送）误称为该消息发布器。
+`susumonitor.alert.triggered` 业务队列，由 `alert-notifier` 消费者在消费事务内
+排程外部通知（邮件/钉钉/Webhook）并异步发送——通知触发源已从本地 AFTER_COMMIT
+直呼切换为 Broker 消息驱动（Broker 中断恢复后 outbox 补发也能重新触发通知）。
+不能把现有 `AlertPushPublisher`（Monitor WebSocket 推送）误称为该消息发布器。
 
 ## 四、至少一次投递
 
@@ -164,3 +165,18 @@ MVP-11 已完成 `susumonitor.alert.metrics` 消费者、幂等消费、重试�
 | 消费者 | **未实现**（契约 §四 定义为出站事件，面向未来外部系统）；消息堆积在业务队列等待接入，不视为丢失 |
 
 验证：Maven 全量 486 tests 全绿（含新 `AlertTriggeredEnvelopeFactoryTests` 契约断言）。
+
+## 十一、实现确认（2026-08-12，alert.triggered.v1 消费者接入）
+
+本文档 §二/§三 的 `alert.triggered.v1` 消费侧已落地（见 `Develop-log/20260812-alert.triggered消费者接入.md`）：
+
+| 冻结项 | 实现 |
+|---|---|
+| 消费者 | `AlertTriggeredConsumer`（consumer=`alert-notifier`）幂等消费 `susumonitor.alert.triggered`，AUTO 确认（业务事务提交后 ACK），复用全局容器工厂重试/并发配置 |
+| 消费幂等 | `message_consume_records`（V15 唯一键，consumer=`alert-notifier`）先查后插；重投幂等命中零业务效果 |
+| 业务事务 | 消费事务内：规则校验（有效+有渠道）+ 记录校验 → `scheduleNotifications` 插 `alert_notifications` pending 行 + `upsertConsumed`；提交后 `@Async sendScheduled` 异步发送 |
+| 通知触发源切换 | 原 `AlertNotificationPublisher`（AFTER_COMMIT 直呼）已删除，避免同一 record 双发通知 |
+| 失败留痕 | `FailedConsumeRecordRecoverer` 按消费队列映射 consumer 名（metrics→alert-evaluator / triggered→alert-notifier），两个监听共用同一 recoverer bean |
+| DLQ 分类 | 数据错误（JSON/schema/字段契约）零重试进 `susumonitor.alert.triggered.dlq` |
+
+验证：Maven 全量 506 tests 全绿（新增消费者 9 例、契约反序列化 1 例、校验器 8 例、recoverer 队列映射 3 例、通知拆分 3 例）。
