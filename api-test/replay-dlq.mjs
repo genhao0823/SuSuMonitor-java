@@ -1,11 +1,14 @@
 /**
  * MVP-11 收口：DLQ 受控重放 / 清理工具（运维手册"死信处置"落地）。
+ * 2026-08-12 泛化：支持 metrics（默认）与 alert 两类事件的 DLQ。
  *
  * 用法：
  *   RABBITMQ_MANAGEMENT_URL=http://127.0.0.1:15672 RABBITMQ_MANAGEMENT_USER=xxx \
- *   RABBITMQ_MANAGEMENT_PASSWORD=xxx node replay-dlq.mjs [--replay|--purge]
+ *   RABBITMQ_MANAGEMENT_PASSWORD=xxx node replay-dlq.mjs [--event metrics|alert] [--replay|--purge]
  *
  * 参数：
+ *   --event    处理哪个事件的 DLQ：metrics（default）→ susumonitor.alert.metrics.dlq；
+ *              alert → susumonitor.alert.triggered.dlq
  *   --replay   从 DLQ 取出全部消息并重新发布到 susumonitor.events，
  *              验证：合法信封被消费（event_id 幂等命中零业务效果）、
  *              不可重试数据错误再次进 DLQ（防循环提示）
@@ -14,7 +17,6 @@
  * 说明：重放不产生重复业务效果——消费侧以 event_id 幂等（message_consume_records）。
  * 数据错误消息重放会再次进 DLQ，需先修数据（构造合法信封）或人工丢弃。
  */
-import crypto from 'node:crypto'
 
 const managementUrl = process.env.RABBITMQ_MANAGEMENT_URL ?? 'http://127.0.0.1:15672'
 const managementUser = process.env.RABBITMQ_MANAGEMENT_USER ?? 'guest'
@@ -22,11 +24,21 @@ const managementPassword = process.env.RABBITMQ_MANAGEMENT_PASSWORD ?? 'guest'
 
 const args = process.argv.slice(2)
 const MODE = args.includes('--purge') ? 'purge' : 'replay'
+const EVENT = args.includes('--event') ? args[args.indexOf('--event') + 1] : 'metrics'
 
 const VHOST = 'susumonitor'
 const EXCHANGE = 'susumonitor.events'
-const QUEUE_DLQ = 'susumonitor.alert.metrics.dlq'
-const ROUTING_KEY = 'metrics.reported.v1'
+/** 事件类型 → DLQ/路由键 二元组（冻结拓扑 rabbitmq-topology-v1.md §二）。 */
+const EVENTS = {
+  metrics: { dlq: 'susumonitor.alert.metrics.dlq', routingKey: 'metrics.reported.v1' },
+  alert: { dlq: 'susumonitor.alert.triggered.dlq', routingKey: 'alert.triggered.v1' }
+}
+if (!EVENTS[EVENT]) {
+  console.error(`不支持的 --event=${EVENT}（可选 metrics|alert）`)
+  process.exit(2)
+}
+const QUEUE_DLQ = EVENTS[EVENT].dlq
+const ROUTING_KEY = EVENTS[EVENT].routingKey
 const waitTimeoutMs = 20000
 
 const checks = []
@@ -96,7 +108,7 @@ async function waitForCondition(condition, description, timeoutMs = waitTimeoutM
 
 // ---- 执行 ----
 const before = await dlqMessages()
-console.log(`[replay-dlq] mode=${MODE} DLQ 消息数=${before}`)
+console.log(`[replay-dlq] mode=${MODE} event=${EVENT} DLQ=${QUEUE_DLQ} 消息数=${before}`)
 
 if (MODE === 'purge') {
   const purge = await management(`${dlqPath}/contents`, { method: 'DELETE' })
@@ -144,7 +156,7 @@ check('R4', after <= before, `DLQ 未异常膨胀（${after} <= ${before}）`)
 const replayableBack = after - dataError
 if (dataError > 0) {
   console.log(`\n⚠ 提示：${dataError} 条数据错误消息（非法 JSON/schema）重放后再次进 DLQ。`)
-  console.log('  处置：构造合法信封（契约 §三）后重放，或人工确认后 --purge 丢弃。')
+  console.log('  处置：构造合法信封（对应事件契约）后重放，或人工确认后 --purge 丢弃。')
 }
 if (replayableBack > 0) {
   console.log(`\n⚠ 提示：${replayableBack} 条可重放消息重放后仍回到 DLQ（可能因评估侧异常重试耗尽），请查后端日志后重试。`)
