@@ -28,8 +28,8 @@ public class AlertTriggeredEnvelopeFactory {
     /** 契约路由键（版本化名，发布器按行路由复用）。 */
     public static final String ROUTING_KEY = "alert.triggered.v1";
 
-    /** 契约生产模块标识（rabbitmq-topology-v1.md §二）。 */
-    static final String PRODUCER = "alert-service";
+    /** 契约生产模块标识（rabbitmq-topology-v1.md §二，消费侧校验复用）。 */
+    public static final String PRODUCER = "alert-service";
 
     /** 契约 schema 版本（消费侧校验复用）。 */
     public static final int SCHEMA_VERSION = 1;
