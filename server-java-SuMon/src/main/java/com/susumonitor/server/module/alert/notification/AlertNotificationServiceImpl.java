@@ -49,20 +49,38 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
     private final Optional<JavaMailSender> mailSender;
     private final Clock clock;
 
-    /** 首次发送：为每个配置渠道建 pending 行并立即尝试一次。 */
+    /** 首次发送：为每个配置渠道建 pending 行并立即尝试一次（内部串行：自调用不经代理）。 */
     @Async
     @Override
     public void notify(AlertRuleEntity rule, AlertRecordVo record) {
-        List<String> sentChannels = new ArrayList<>();
+        List<AlertNotificationEntity> notifications = scheduleNotifications(rule, record);
+        sendScheduled(record.getId(), notifications, rule, record);
+    }
+
+    /** 在调用方事务内为每个配置渠道登记 pending 行；返回排程结果供提交后发送。 */
+    @Override
+    public List<AlertNotificationEntity> scheduleNotifications(AlertRuleEntity rule, AlertRecordVo record) {
+        List<AlertNotificationEntity> notifications = new ArrayList<>();
         for (String channel : configuredChannels(rule)) {
-            AlertNotificationEntity notification = insertPending(record.getId(), channel);
-            if (attemptChannel(notification.getId(), channel, rule, record, 1)) {
-                sentChannels.add(channel);
+            notifications.add(insertPending(record.getId(), channel));
+        }
+        return notifications;
+    }
+
+    /** 异步尝试发送已排程的通知：逐渠道首次尝试，至少一个渠道送达后回写通知时间。 */
+    @Async
+    @Override
+    public void sendScheduled(Long recordId, List<AlertNotificationEntity> notifications,
+            AlertRuleEntity rule, AlertRecordVo record) {
+        List<String> sentChannels = new ArrayList<>();
+        for (AlertNotificationEntity notification : notifications) {
+            if (attemptChannel(notification.getId(), notification.getChannel(), rule, record, 1)) {
+                sentChannels.add(notification.getChannel());
             }
         }
         // 仅在至少一个渠道送达后回写通知时间与成功渠道。
         if (!sentChannels.isEmpty()) {
-            recordMapper.updateNotifiedInfo(record.getId(), LocalDateTime.now(clock),
+            recordMapper.updateNotifiedInfo(recordId, LocalDateTime.now(clock),
                     String.join(",", sentChannels));
         }
     }
