@@ -104,6 +104,8 @@ func main() {
 		err = runner.runJavaOutputRate(ctx, agentToken)
 	case "monitor-backpressure":
 		err = runner.runMonitorBackpressure(ctx, agentToken)
+	case "agent-disconnect-closed":
+		err = runner.runAgentDisconnectClosed(ctx, agentToken)
 	default:
 		err = fmt.Errorf("unsupported SUSUMONITOR_FLOW_SCENARIO")
 	}
@@ -266,6 +268,22 @@ func (r *flowRunner) verifyAgentDisconnect(ctx context.Context) error {
 	return expectErrorCode(ctx, connection, 40903)
 }
 
+// runAgentDisconnectClosed proves the server-generated terminal.closed frame with reason
+// agent_disconnected reaches the originating Monitor connection after an Agent socket loss
+// (20260813 M1 relay enhancement, end-to-end acceptance).
+func (r *flowRunner) runAgentDisconnectClosed(ctx context.Context, agentToken string) error {
+	if err := r.startAgent(ctx, agentToken, "1048576", "1048576"); err != nil {
+		return err
+	}
+	connection, sessionID, err := r.openTerminal(ctx)
+	if err != nil {
+		return err
+	}
+	defer connection.Close(websocket.StatusNormalClosure, "flow_control_complete")
+	r.stopAgent()
+	return expectAgentDisconnectedClose(ctx, connection, r.serverID, sessionID)
+}
+
 // verifyMonitorDisconnect closes the owner socket, then confirms the Agent remains reachable.
 // Persisted monitor_disconnected state cannot be queried because no terminal metadata endpoint exists.
 func (r *flowRunner) verifyMonitorDisconnect(ctx context.Context) error {
@@ -392,6 +410,50 @@ func expectCloseReason(ctx context.Context, connection *websocket.Conn, expected
 		return errors.New("unexpected terminal close reason")
 	}
 	return nil
+}
+
+// expectAgentDisconnectedClose asserts the full server-generated terminal.closed envelope for an
+// Agent socket loss: UUID message_id, UTC ISO-8601 timestamp, and the fixed agent_disconnected
+// payload matching the exact session that was opened.
+func expectAgentDisconnectedClose(ctx context.Context, connection *websocket.Conn, serverID int64, sessionID string) error {
+	message, err := readType(ctx, connection, "terminal.closed")
+	if err != nil {
+		return err
+	}
+	if !isUUIDv4(message.MessageID) {
+		return errors.New("terminal.closed message_id is not a UUID v4")
+	}
+	if _, err := time.Parse(time.RFC3339, message.Timestamp); err != nil || !strings.HasSuffix(message.Timestamp, "Z") {
+		return errors.New("terminal.closed timestamp is not UTC ISO-8601")
+	}
+	var payload struct {
+		ServerID  int64  `json:"server_id"`
+		SessionID string `json:"session_id"`
+		Reason    string `json:"reason"`
+	}
+	if err := json.Unmarshal(message.Payload, &payload); err != nil {
+		return errors.New("terminal.closed payload was invalid")
+	}
+	if payload.ServerID != serverID || payload.SessionID != sessionID || payload.Reason != "agent_disconnected" {
+		return errors.New("terminal.closed payload does not match the agent_disconnected contract")
+	}
+	return nil
+}
+
+// isUUIDv4 reports whether the value is a canonical lower-case UUID v4 string.
+func isUUIDv4(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' || value[14] != '4' {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			continue
+		}
+		if !((value[index] >= '0' && value[index] <= '9') || (value[index] >= 'a' && value[index] <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 // readType ignores terminal data and does not decode or print it.
