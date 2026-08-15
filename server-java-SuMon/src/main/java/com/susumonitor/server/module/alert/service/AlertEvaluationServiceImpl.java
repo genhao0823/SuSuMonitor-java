@@ -7,6 +7,7 @@ import com.susumonitor.server.module.alert.enums.AlertRecordStatus;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
+import com.susumonitor.server.module.alert.outbox.AlertResolvedEnvelopeFactory;
 import com.susumonitor.server.module.alert.outbox.AlertTriggeredEnvelopeFactory;
 import com.susumonitor.server.module.alert.vo.AlertRecordVo;
 import com.susumonitor.server.module.metrics.outbox.OutboxService;
@@ -43,6 +44,7 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
     private final ApplicationEventPublisher eventPublisher;
     private final OutboxService outboxService;
     private final AlertTriggeredEnvelopeFactory envelopeFactory;
+    private final AlertResolvedEnvelopeFactory resolvedEnvelopeFactory;
     private final Clock clock;
 
     /**
@@ -187,16 +189,40 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
     }
 
     /**
-     * 恢复：标记 record resolved + 删除 state 行（恢复后下次评估 state 为 null，可再次触发）。
+     * 恢复：标记 record resolved（V26 起落库 resolved_at）+ 删除 state 行，并发布恢复事件。
+     *
+     * <p>与触发对称：同事务发布本地 {@link AlertResolvedEvent}（AFTER_COMMIT 推 WS）
+     * 并登记 Outbox 事件 {@code alert.resolved.v1}（供消费者驱动恢复通知）。
+     * 记录未实际转为 resolved（缺失/已恢复）时不发事件，避免重复恢复语义。</p>
      */
     private void handleResolve(AlertStateEntity state) {
         LocalDateTime now = LocalDateTime.now(clock);
-        recordMapper.updateStatusToResolved(state.getAlertRecordId(), now);
+        int updated = recordMapper.updateStatusToResolved(state.getAlertRecordId(), now);
+        if (updated == 0) {
+            log.warn("alert resolve skipped: record already resolved or missing, recordId={}",
+                    state.getAlertRecordId());
+            return;
+        }
         int deleted = stateMapper.deleteState(state.getId(), state.getVersion());
         if (deleted == 0) {
             log.warn("alert state optimistic lock conflict during resolve, stateId={}, version={}",
                     state.getId(), state.getVersion());
         }
+        AlertRecordEntity record = recordMapper.selectRecordById(state.getAlertRecordId());
+        if (record == null) {
+            log.warn("alert resolve event skipped: record missing after resolve, recordId={}",
+                    state.getAlertRecordId());
+            return;
+        }
+        AlertRecordVo recordVo = toVo(record);
+        // 发布恢复事件供 WS 推送（AFTER_COMMIT 生效）。
+        eventPublisher.publishEvent(new AlertResolvedEvent(record.getServerId(), recordVo));
+        // 与恢复同事务登记 Outbox 待发布事件（alert.resolved.v1 契约落地）：
+        // eventId 由本处生成并写入信封，保证行内 event_id 与 payload 中 event_id 一致。
+        String eventId = UUID.randomUUID().toString();
+        String envelope = resolvedEnvelopeFactory.build(recordVo, eventId);
+        outboxService.enqueue(AlertResolvedEnvelopeFactory.EVENT_TYPE,
+                AlertResolvedEnvelopeFactory.ROUTING_KEY, envelope, eventId);
     }
 
     /** 构建告警消息文本。 */

@@ -1,6 +1,7 @@
 package com.susumonitor.server.module.alert.service;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -15,6 +16,7 @@ import com.susumonitor.server.module.alert.entity.AlertStateEntity;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
+import com.susumonitor.server.module.alert.outbox.AlertResolvedEnvelopeFactory;
 import com.susumonitor.server.module.alert.outbox.AlertTriggeredEnvelopeFactory;
 import com.susumonitor.server.module.metrics.outbox.OutboxService;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
@@ -54,6 +56,8 @@ class AlertEvaluationServiceTests {
     private OutboxService outboxService;
     @Mock
     private AlertTriggeredEnvelopeFactory envelopeFactory;
+    @Mock
+    private AlertResolvedEnvelopeFactory resolvedEnvelopeFactory;
     private final AlertStateMachine stateMachine = new AlertStateMachine();
 
     private AlertEvaluationService service;
@@ -95,7 +99,7 @@ class AlertEvaluationServiceTests {
         verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
-    /** 恢复应标记 record resolved 并删除 state 行（恢复后 state 为 null 才能再次触发）。 */
+    /** 恢复应标记 record resolved 并删除 state 行，同时发布恢复事件与 Outbox 登记（与触发对称）。 */
     @Test
     void recoveryShouldMarkResolved() {
         setupService();
@@ -104,12 +108,34 @@ class AlertEvaluationServiceTests {
         AlertStateEntity state = activeState(1L, 1L, 1L);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
         when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(recordMapper.updateStatusToResolved(eq(1L), any(LocalDateTime.class))).thenReturn(1);
         when(stateMapper.deleteState(eq(1L), eq(0))).thenReturn(1);
+        AlertRecordEntity record = resolvedRecord(1L);
+        when(recordMapper.selectRecordById(1L)).thenReturn(record);
 
         service.evaluate(metrics);
 
         verify(recordMapper).updateStatusToResolved(eq(1L), any(LocalDateTime.class));
         verify(stateMapper).deleteState(eq(1L), eq(0));
+        verify(eventPublisher).publishEvent(any(AlertResolvedEvent.class));
+        verify(outboxService).enqueue(eq(AlertResolvedEnvelopeFactory.EVENT_TYPE),
+                eq(AlertResolvedEnvelopeFactory.ROUTING_KEY), any(), any());
+    }
+
+    /** 记录未实际转为 resolved（已恢复/缺失）时不发恢复事件，避免重复恢复语义。 */
+    @Test
+    void resolveSkippedWhenRecordAlreadyResolved() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        MetricsLatestVo metrics = metrics(bd("50"));
+        AlertStateEntity state = activeState(1L, 1L, 1L);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(recordMapper.updateStatusToResolved(eq(1L), any(LocalDateTime.class))).thenReturn(0);
+
+        service.evaluate(metrics);
+
+        verify(stateMapper, never()).deleteState(anyLong(), anyInt());
         verify(eventPublisher, never()).publishEvent(any());
         verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
@@ -206,7 +232,7 @@ class AlertEvaluationServiceTests {
 
     private void setupService() {
         service = new AlertEvaluationServiceImpl(ruleMapper, stateMapper, recordMapper,
-                stateMachine, eventPublisher, outboxService, envelopeFactory, CLOCK);
+                stateMachine, eventPublisher, outboxService, envelopeFactory, resolvedEnvelopeFactory, CLOCK);
     }
 
     // ---- 逃逸窗口（confirm_count > 1）----
@@ -335,6 +361,19 @@ class AlertEvaluationServiceTests {
         state.setLastTriggeredAt(LocalDateTime.now(CLOCK));
         state.setVersion(0);
         return state;
+    }
+
+    private AlertRecordEntity resolvedRecord(Long id) {
+        AlertRecordEntity record = new AlertRecordEntity();
+        record.setId(id);
+        record.setRuleId(1L);
+        record.setServerId(1L);
+        record.setMetric("cpu");
+        record.setLevel("warning");
+        record.setStatus("resolved");
+        record.setTriggeredAt(LocalDateTime.now(CLOCK));
+        record.setResolvedAt(LocalDateTime.now(CLOCK));
+        return record;
     }
 
     private BigDecimal bd(String value) {
