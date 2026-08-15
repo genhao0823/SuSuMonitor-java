@@ -26,7 +26,7 @@
 | 字段 | 必填 | 规则 |
 |---|---:|---|
 | `event_id` | 是 | UUID；同一事件重试、补发必须保持不变；消费幂等主键。 |
-| `event_type` | 是 | 逻辑事件名，不因路由实现变化；当前已实现 `metrics.reported` 与 `alert.triggered`。 |
+| `event_type` | 是 | 逻辑事件名，不因路由实现变化；当前已实现 `metrics.reported`、`alert.triggered` 与 `alert.resolved`。 |
 | `schema_version` | 是 | 当前为整数 `1`；不支持的版本不可按旧版本猜测解析。 |
 | `occurred_at` | 是 | UTC ISO-8601；表示事件产生时间，不使用本地时区。 |
 | `producer` | 是 | 生产模块标识；当前已实现 `metrics-service` 与 `alert-service`。 |
@@ -115,7 +115,48 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - `current_value`、`threshold_value` 的单位由 `metric` 决定，必须与规则评估语义一致。
 - `triggered_at` 使用 UTC ISO-8601。
 
-## 五、兼容性与失败处理
+## 五、`alert.resolved.v1`（已实现 Broker 发布 + 消费者接入）
+
+该事件表示告警记录由评估器自动恢复（`status=resolved`）后的出站恢复事件，与
+`alert.triggered.v1` 对称：评估器 Resolve 时同事务登记 Outbox，发布器按行
+`routing_key`（V25）路由到 `susumonitor.alert.resolved` 业务队列（2026-08-15 落地）；
+消费者 `alert-resolved-notifier` 已接入（同日），在消费事务内为规则配置的渠道排程
+"恢复通知"（邮件/钉钉/Webhook），提交后异步发送；`alert.push` Monitor WebSocket 帧
+仍为本地事件实时推送（`payload.alert.status=resolved`）。恢复事件不得复用
+`alert.triggered.v1` 伪装恢复；记录未实际转为 `resolved` 时不生成该事件。
+
+```json
+{
+  "event_id": "ce4cb5a4-ff5c-4514-a7b9-1ab5cc7e81b0",
+  "event_type": "alert.resolved",
+  "schema_version": 1,
+  "occurred_at": "2026-08-15T12:00:05Z",
+  "producer": "alert-service",
+  "payload": {
+    "server_id": 123,
+    "rule_id": 456,
+    "record_id": 789,
+    "metric": "cpu",
+    "level": "warning",
+    "status": "resolved",
+    "triggered_at": "2026-08-15T10:00:05Z",
+    "resolved_at": "2026-08-15T11:30:05Z"
+  }
+}
+```
+
+### 字段规则
+
+- `server_id`、`rule_id`、`record_id` 为正整数。
+- `metric` 使用已冻结指标名（与 `alert.triggered.v1` 一致）。
+- `level` 使用现有告警级别枚举。
+- `status` 固定为 `resolved`；非恢复状态不得发布本事件。
+- `triggered_at` 为原触发时刻；`resolved_at` 为恢复时刻（V26 起与
+  `alert_records.resolved_at` 一致），均使用 UTC ISO-8601。
+- 载荷不携带触发值（`current_value`/`threshold_value`）：记录中的触发值不是
+  恢复时刻的值，不得作为恢复载荷。
+
+## 六、兼容性与失败处理
 
 - 新增字段必须为可选，旧消费者应忽略未知字段。
 - 删除字段、改变字段类型、改变枚举含义或改变空值语义必须递增 `schema_version`，不得复用 `v1`。
@@ -123,13 +164,13 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - JSON 无法解析时不得用默认值猜测业务含义。
 - 同一 `event_id` 的重试和补发必须保持 payload 语义不变。
 
-## 六、当前实现边界
+## 七、当前实现边界
 
-已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布与消费者均已实现（2026-08-12）——本契约已可实际订阅。
+已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布与消费者均已实现（2026-08-12），`alert.resolved.v1` 的发布与消费者均已实现（2026-08-15）——本契约已可实际订阅。
 
 ---
 
-## 七、实现确认（2026-07-31，MVP-10 落地）
+## 八、实现确认（2026-07-31，MVP-10 落地）
 
 本文档 §二/§三 信封契约已由 MVP-10 的 `OutboxEnvelopeFactory` 实现（见 `Develop-log/20260731-MVP10-Metrics-Outbox.md`）：
 

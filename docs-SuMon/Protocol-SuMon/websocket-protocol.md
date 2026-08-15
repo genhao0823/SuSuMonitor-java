@@ -144,6 +144,8 @@ After an alert is triggered and the alert evaluation transaction commits, subscr
 
 `alert.push` reuses the `/ws/monitor` channel and `MonitorSubscriptionRegistry`. Only sessions subscribed to the affected `server_id` receive the push. The broadcast never contains Agent Token, SSH credentials, or database credentials.
 
+When an alert recovers (the evaluation transaction marks the record `resolved`), the same `alert.push` frame is sent with `payload.alert.status` set to `resolved` and `payload.alert.resolved_at` carrying the recovery time (2026-08-15); clients treat it as the same push signal (e.g. refresh the records list) rather than a new alert. Recovery is additionally published as the `alert.resolved.v1` broker event (see message-contracts-v1.md §五) for outbound recovery notifications.
+
 ## Terminal Messages
 
 Terminal messages use the common outer structure, require a UUID `message_id`, and use a UTC ISO-8601 `timestamp`. Java routes browser control frames to the matching authenticated Agent and routes Agent responses only to the browser connection that created the session.

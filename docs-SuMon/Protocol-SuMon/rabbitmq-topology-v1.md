@@ -18,8 +18,11 @@ RabbitMQ 用于解耦 Metrics 与 Alert，不替代 Agent/Monitor WebSocket、My
 | Dead-letter Queue | `susumonitor.alert.metrics.dlq` | Alert 指标事件死信队列，不自动回投业务队列。 |
 | Queue | `susumonitor.alert.triggered` | Alert 出站触发事件业务队列；消费者 `alert-notifier` 已接入（2026-08-12），驱动外部通知排程。 |
 | Dead-letter Queue | `susumonitor.alert.triggered.dlq` | Alert 出站触发事件死信队列，不自动回投业务队列。 |
+| Queue | `susumonitor.alert.resolved` | Alert 出站恢复事件业务队列；消费者 `alert-resolved-notifier` 已接入（2026-08-15），驱动"恢复通知"排程。 |
+| Dead-letter Queue | `susumonitor.alert.resolved.dlq` | Alert 出站恢复事件死信队列，不自动回投业务队列。 |
 | Routing Key | `metrics.reported.v1` | Metrics 已落库指标事件。 |
 | Routing Key | `alert.triggered.v1` | **已实现发布 + 消费（2026-08-12）**：Alert 触发新告警记录后经 Outbox 发布的出站事件，由 `alert-notifier` 幂等消费并驱动外部通知。 |
+| Routing Key | `alert.resolved.v1` | **已实现发布 + 消费（2026-08-15）**：Alert 记录恢复后经 Outbox 发布的出站恢复事件，由 `alert-resolved-notifier` 幂等消费并驱动"恢复通知"。 |
 
 Exchange、业务队列和 DLQ 均要求 durable、non-auto-delete；队列名称不包含实例 ID，不创建临时消费者队列。
 
@@ -36,6 +39,11 @@ alert-service
        routing key: alert.triggered.v1
        message: alert.triggered.v1（经 Outbox 同事务登记后发布）
 
+alert-service
+    -> susumonitor.events
+       routing key: alert.resolved.v1
+       message: alert.resolved.v1（经 Outbox 同事务登记后发布）
+
 susumonitor.events
     -> susumonitor.alert.metrics
        binding key: metrics.reported.v1
@@ -46,11 +54,20 @@ susumonitor.events
        binding key: alert.triggered.v1
        consumer: alert-notifier（通知排程驱动）
 
+susumonitor.events
+    -> susumonitor.alert.resolved
+       binding key: alert.resolved.v1
+       consumer: alert-resolved-notifier（恢复通知排程驱动）
+
 susumonitor.alert.metrics
     -> retry exhausted / non-retryable error
        dead-letter-exchange: susumonitor.dlx
 
 susumonitor.alert.triggered
+    -> retry exhausted / non-retryable error
+       dead-letter-exchange: susumonitor.dlx
+
+susumonitor.alert.resolved
     -> retry exhausted / non-retryable error
        dead-letter-exchange: susumonitor.dlx
 
@@ -61,13 +78,17 @@ susumonitor.dlx
 susumonitor.dlx
     -> susumonitor.alert.triggered.dlq
        dead-letter routing key: alert.triggered.v1
+
+susumonitor.dlx
+    -> susumonitor.alert.resolved.dlq
+       dead-letter routing key: alert.resolved.v1
 ```
 
-`alert.triggered.v1` 由 Outbox 发布器按行 `routing_key`（V25）路由到
-`susumonitor.alert.triggered` 业务队列，由 `alert-notifier` 消费者在消费事务内
-排程外部通知（邮件/钉钉/Webhook）并异步发送——通知触发源已从本地 AFTER_COMMIT
-直呼切换为 Broker 消息驱动（Broker 中断恢复后 outbox 补发也能重新触发通知）。
-不能把现有 `AlertPushPublisher`（Monitor WebSocket 推送）误称为该消息发布器。
+`alert.triggered.v1` 与 `alert.resolved.v1` 由 Outbox 发布器按行 `routing_key`（V25）
+路由到各自业务队列，分别由 `alert-notifier` / `alert-resolved-notifier` 消费者在消费
+事务内排程外部通知（邮件/钉钉/Webhook）并异步发送——通知触发源已从本地
+AFTER_COMMIT 直呼切换为 Broker 消息驱动（Broker 中断恢复后 outbox 补发也能重新
+触发通知）。不能把现有 `AlertPushPublisher`（Monitor WebSocket 推送）误称为消息发布器。
 
 ## 四、至少一次投递
 
