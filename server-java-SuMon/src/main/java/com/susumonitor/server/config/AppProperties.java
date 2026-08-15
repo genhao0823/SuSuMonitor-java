@@ -1150,8 +1150,8 @@ public class AppProperties {
         @Max(value = 86400, message = "Outbox max backoff must not exceed 86400 seconds")
         private int maxBackoffSeconds = 300;
 
-        /** 是否启用已发布 Outbox 记录的保留期清理，默认关闭以避免升级即删除历史证据。 */
-        private boolean outboxCleanupEnabled;
+        /** 是否启用已发布 Outbox 记录的保留期清理（只删 published 行，pending/失败行不受影响）。 */
+        private boolean outboxCleanupEnabled = true;
 
         /** 已发布 Outbox 记录的保留天数。 */
         @Min(value = 1, message = "Outbox retention days must be at least one")

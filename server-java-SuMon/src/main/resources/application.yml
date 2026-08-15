@@ -133,7 +133,7 @@ susumonitor:
     batch-size: ${OUTBOX_BATCH_SIZE:100}
     publish-timeout-ms: ${OUTBOX_PUBLISH_TIMEOUT_MS:5000}
     max-backoff-seconds: ${OUTBOX_MAX_BACKOFF_SECONDS:300}
-    outbox-cleanup-enabled: ${OUTBOX_CLEANUP_ENABLED:false}
+    outbox-cleanup-enabled: ${OUTBOX_CLEANUP_ENABLED:true}
     outbox-retention-days: ${OUTBOX_RETENTION_DAYS:30}
     outbox-cleanup-cron: ${OUTBOX_CLEANUP_CRON:0 30 3 * * ?}
     outbox-cleanup-batch-size: ${OUTBOX_CLEANUP_BATCH_SIZE:1000}

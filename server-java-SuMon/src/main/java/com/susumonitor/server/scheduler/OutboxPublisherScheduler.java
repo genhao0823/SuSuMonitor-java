@@ -24,7 +24,7 @@ public class OutboxPublisherScheduler {
     /**
      * 执行一轮发布；Broker 不可达时退避重试，异常只影响当前轮次。
      */
-    @Scheduled(fixedDelayString = "${susumonitor.rabbitmq.poll-interval-ms:1000}")
+    @Scheduled(fixedDelayString = "${susumonitor.rabbitmq.poll-interval-ms:200}")
     public void publishPendingEvents() {
         try {
             int published = outboxPublisherService.publishOnce();

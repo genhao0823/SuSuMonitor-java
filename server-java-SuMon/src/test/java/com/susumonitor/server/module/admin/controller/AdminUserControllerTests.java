@@ -17,6 +17,8 @@ import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsCleanupMapper;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationCleanupMapper;
+import com.susumonitor.server.module.metrics.outbox.OutboxCleanupMapper;
 import com.susumonitor.server.module.metrics.mapper.IngestionCleanupMapper;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
@@ -94,6 +96,14 @@ class AdminUserControllerTests {
     // 替代全局 Mapper 扫描注册的指标幂等接收记录清理 Mapper。
     @MockitoBean
     private IngestionCleanupMapper ingestionCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的 Outbox 清理 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private OutboxCleanupMapper outboxCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的通知投递清理 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private AlertNotificationCleanupMapper alertNotificationCleanupMapper;
 
     // 替代全局 Mapper 扫描注册的消费幂等记录清理 Mapper。
     @MockitoBean
