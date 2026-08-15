@@ -29,6 +29,9 @@ public class RabbitMqTopologyConfig {
     static final String ALERT_TRIGGERED_QUEUE = "susumonitor.alert.triggered";
     static final String ALERT_TRIGGERED_DLQ = "susumonitor.alert.triggered.dlq";
     static final String ALERT_TRIGGERED_KEY = "alert.triggered.v1";
+    static final String ALERT_RESOLVED_QUEUE = "susumonitor.alert.resolved";
+    static final String ALERT_RESOLVED_DLQ = "susumonitor.alert.resolved.dlq";
+    static final String ALERT_RESOLVED_KEY = "alert.resolved.v1";
 
     /** 业务事件交换器。 */
     @Bean
@@ -77,6 +80,24 @@ public class RabbitMqTopologyConfig {
         return QueueBuilder.durable(ALERT_TRIGGERED_DLQ).build();
     }
 
+    /**
+     * alert.resolved.v1 业务队列（出站恢复事件，消费者 alert-resolved-notifier 已接入，
+     * 驱动"恢复通知"排程；与 alert.triggered.v1 对称）。
+     */
+    @Bean
+    Queue susumonitorAlertResolvedQueue() {
+        return QueueBuilder.durable(ALERT_RESOLVED_QUEUE)
+                .deadLetterExchange(DLX_EXCHANGE)
+                .deadLetterRoutingKey(ALERT_RESOLVED_KEY)
+                .build();
+    }
+
+    /** alert.resolved.v1 死信队列，不自动回投业务队列。 */
+    @Bean
+    Queue susumonitorAlertResolvedDlq() {
+        return QueueBuilder.durable(ALERT_RESOLVED_DLQ).build();
+    }
+
     /** 业务队列绑定：susumonitor.events -- metrics.reported.v1 --> susumonitor.alert.metrics。 */
     @Bean
     Binding alertMetricsBinding() {
@@ -103,5 +124,19 @@ public class RabbitMqTopologyConfig {
     Binding alertTriggeredDlqBinding() {
         return BindingBuilder.bind(susumonitorAlertTriggeredDlq())
                 .to(susumonitorDlxExchange()).with(ALERT_TRIGGERED_KEY);
+    }
+
+    /** 业务队列绑定：susumonitor.events -- alert.resolved.v1 --> susumonitor.alert.resolved。 */
+    @Bean
+    Binding alertResolvedBinding() {
+        return BindingBuilder.bind(susumonitorAlertResolvedQueue())
+                .to(susumonitorEventsExchange()).with(ALERT_RESOLVED_KEY);
+    }
+
+    /** 死信队列绑定：susumonitor.dlx -- alert.resolved.v1 --> susumonitor.alert.resolved.dlq。 */
+    @Bean
+    Binding alertResolvedDlqBinding() {
+        return BindingBuilder.bind(susumonitorAlertResolvedDlq())
+                .to(susumonitorDlxExchange()).with(ALERT_RESOLVED_KEY);
     }
 }
