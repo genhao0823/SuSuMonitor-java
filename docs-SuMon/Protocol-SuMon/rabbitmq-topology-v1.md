@@ -154,7 +154,7 @@ AFTER_COMMIT 直呼切换为 Broker 消息驱动（Broker 中断恢复后 outbox
 | Broker 中断、恢复和 Outbox 补发 | 真实验收 PASS：停机期间指标照常落库 + outbox 保留 pending；恢复后自动补发，队列消息数与停机前上报数一致 |
 | 时间口径 | 写入 UTC（应用时钟），轮询比较 `UTC_TIMESTAMP()`（修复会话时区偏差，见 Develop-log §三） |
 
-MVP-11 已完成 `susumonitor.alert.metrics` 消费者、幂等消费、重试耗尽进 DLQ 与受控重放；当前仍属后续边界的是多消费者并发消费。
+MVP-11 已完成 `susumonitor.alert.metrics` 消费者、幂等消费、重试耗尽进 DLQ 与受控重放；多消费者并发消费已落地（2026-08-12 Polish-7 M6：本地 broker 验收并发 4 消费 100 条零重复，幂等由 V15 唯一键保障）。
 
 ## 九、实现确认（2026-07-31，MVP-11 消费侧落地）
 
@@ -171,7 +171,7 @@ MVP-11 已完成 `susumonitor.alert.metrics` 消费者、幂等消费、重试�
 | 消费者重启恢复 | **已验收（2026-08-01）**：Broker 停机期间后端存活（health 200 / ready 50301）、指标照常落库 outbox 堆积；恢复后发布器补发 + 消费者**自动重连补消费**（无需重启后端），业务队列归零、状态机正确（continue/resolve/trigger 无重复）；停机消息 6/6 消费无丢失（`verify-mvp11-broker-down.mjs`，见 `Develop-log/20260801-MVP11-收口.md` §三） |
 | DLQ 受控重放 | **已落地（2026-08-01）**：`api-test/replay-dlq.mjs`（--replay 重放 + 防循环提示 / --purge 清空）；合法信封重放幂等命中零业务效果，数据错误消息重放仍回 DLQ |
 
-仍属后续：多消费者并发消费（单消费者当前）。
+多消费者并发消费已落地（2026-08-12 Polish-7 M6，`ALERT_CONSUMER_CONCURRENCY` 可配，V15 幂等保障）。
 
 ## 十、实现确认（2026-08-12，alert.triggered.v1 发布侧落地）
 
