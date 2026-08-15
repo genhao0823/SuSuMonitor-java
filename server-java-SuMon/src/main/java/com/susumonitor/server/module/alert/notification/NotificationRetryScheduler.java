@@ -79,6 +79,7 @@ public class NotificationRetryScheduler {
         vo.setStatus(entity.getStatus());
         vo.setMessage(entity.getMessage());
         vo.setTriggeredAt(AlertRecordVo.toOffset(entity.getTriggeredAt()));
+        vo.setResolvedAt(AlertRecordVo.toOffset(entity.getResolvedAt()));
         return vo;
     }
 }

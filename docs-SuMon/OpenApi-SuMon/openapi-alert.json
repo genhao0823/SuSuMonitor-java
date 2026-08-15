@@ -859,6 +859,12 @@
             "type": "string",
             "format": "date-time"
           },
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "告警恢复时间；null=未恢复"
+          },
           "notified_at": {
             "type": "string",
             "format": "date-time",

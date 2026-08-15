@@ -217,6 +217,7 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
         vo.setStatus(entity.getStatus());
         vo.setMessage(entity.getMessage());
         vo.setTriggeredAt(AlertRecordVo.toOffset(entity.getTriggeredAt()));
+        vo.setResolvedAt(AlertRecordVo.toOffset(entity.getResolvedAt()));
         vo.setNotifiedAt(AlertRecordVo.toOffset(entity.getNotifiedAt()));
         vo.setNotifyChannels(entity.getNotifyChannels());
         vo.setCreatedAt(AlertRecordVo.toOffset(entity.getCreatedAt()));

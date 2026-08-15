@@ -49,6 +49,7 @@ class AlertRecordStateMapperMybatisTests {
                         read_by BIGINT,
                         read_at TIMESTAMP,
                         triggered_at TIMESTAMP NOT NULL,
+                        resolved_at TIMESTAMP,
                         notified_at TIMESTAMP,
                         notify_channels VARCHAR(100),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -119,6 +120,24 @@ class AlertRecordStateMapperMybatisTests {
             assertEquals(0, mapper.deleteState(state.getId(), 99));
             assertEquals(1, mapper.deleteState(state.getId(), state.getVersion()));
             assertEquals(null, mapper.selectByRuleAndServer(1L, 1L));
+        }
+    }
+
+    /** 恢复 UPDATE 应把 status 置为 resolved 并写入 resolved_at（V26）。 */
+    @Test
+    void updateStatusToResolvedShouldPersistResolvedAt() {
+        AlertRecordMapper mapper;
+        AlertRecordEntity record = newRecord();
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            mapper = session.getMapper(AlertRecordMapper.class);
+            assertEquals(1, mapper.insertRecord(record));
+            LocalDateTime resolvedAt = LocalDateTime.of(2026, 8, 15, 10, 0);
+            assertEquals(1, mapper.updateStatusToResolved(record.getId(), resolvedAt));
+            AlertRecordEntity loaded = mapper.selectRecordById(record.getId());
+            assertEquals("resolved", loaded.getStatus());
+            assertEquals(resolvedAt, loaded.getResolvedAt());
+            // 已 resolved 的记录再次恢复不更新（status != 'resolved' 守卫）。
+            assertEquals(0, mapper.updateStatusToResolved(record.getId(), resolvedAt.plusHours(1)));
         }
     }
 

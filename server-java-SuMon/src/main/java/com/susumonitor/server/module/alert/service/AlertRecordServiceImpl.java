@@ -86,6 +86,7 @@ public class AlertRecordServiceImpl implements AlertRecordService {
         vo.setReadBy(entity.getReadBy());
         vo.setReadAt(AlertRecordVo.toOffset(entity.getReadAt()));
         vo.setTriggeredAt(AlertRecordVo.toOffset(entity.getTriggeredAt()));
+        vo.setResolvedAt(AlertRecordVo.toOffset(entity.getResolvedAt()));
         vo.setNotifiedAt(AlertRecordVo.toOffset(entity.getNotifiedAt()));
         vo.setNotifyChannels(entity.getNotifyChannels());
         vo.setCreatedAt(AlertRecordVo.toOffset(entity.getCreatedAt()));
