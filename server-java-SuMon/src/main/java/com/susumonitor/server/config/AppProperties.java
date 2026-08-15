@@ -1608,6 +1608,28 @@ public class AppProperties {
         @Max(value = 1000, message = "Alert record cleanup max batches must not exceed 1000")
         private int recordCleanupMaxBatchesPerRun = 100;
 
+        /** 是否启用通知投递记录保留期清理（补齐 V21 通知表只增不删的增长风险）。 */
+        private boolean notificationCleanupEnabled = true;
+
+        /** 通知投递记录保留天数。 */
+        @Min(value = 1, message = "Alert notification retention days must be at least one")
+        @Max(value = 3650, message = "Alert notification retention days must not exceed 3650")
+        private int notificationRetentionDays = 90;
+
+        /** 通知投递记录清理 cron。 */
+        @NotBlank(message = "Alert notification cleanup cron must not be blank")
+        private String notificationCleanupCron = "0 0 3 * * ?";
+
+        /** 通知投递记录单批清理上限。 */
+        @Min(value = 1, message = "Alert notification cleanup batch size must be at least one")
+        @Max(value = 10000, message = "Alert notification cleanup batch size must not exceed 10000")
+        private int notificationCleanupBatchSize = 1000;
+
+        /** 单轮通知投递清理最多执行的批次数。 */
+        @Min(value = 1, message = "Alert notification cleanup max batches must be at least one")
+        @Max(value = 1000, message = "Alert notification cleanup max batches must not exceed 1000")
+        private int notificationCleanupMaxBatchesPerRun = 100;
+
         /**
          * 返回外部通知是否启用。
          *
@@ -1732,6 +1754,96 @@ public class AppProperties {
          */
         public void setRecordCleanupMaxBatchesPerRun(int recordCleanupMaxBatchesPerRun) {
             this.recordCleanupMaxBatchesPerRun = recordCleanupMaxBatchesPerRun;
+        }
+
+        /**
+         * 返回通知投递清理是否启用。
+         *
+         * @return 是否启用清理
+         */
+        public boolean isNotificationCleanupEnabled() {
+            return notificationCleanupEnabled;
+        }
+
+        /**
+         * 设置通知投递清理开关。
+         *
+         * @param notificationCleanupEnabled 是否启用清理
+         */
+        public void setNotificationCleanupEnabled(boolean notificationCleanupEnabled) {
+            this.notificationCleanupEnabled = notificationCleanupEnabled;
+        }
+
+        /**
+         * 获取通知投递记录保留天数。
+         *
+         * @return 保留天数
+         */
+        public int getNotificationRetentionDays() {
+            return notificationRetentionDays;
+        }
+
+        /**
+         * 设置通知投递记录保留天数。
+         *
+         * @param notificationRetentionDays 保留天数
+         */
+        public void setNotificationRetentionDays(int notificationRetentionDays) {
+            this.notificationRetentionDays = notificationRetentionDays;
+        }
+
+        /**
+         * 获取通知投递清理 cron。
+         *
+         * @return cron 表达式
+         */
+        public String getNotificationCleanupCron() {
+            return notificationCleanupCron;
+        }
+
+        /**
+         * 设置通知投递清理 cron。
+         *
+         * @param notificationCleanupCron cron 表达式
+         */
+        public void setNotificationCleanupCron(String notificationCleanupCron) {
+            this.notificationCleanupCron = notificationCleanupCron;
+        }
+
+        /**
+         * 获取通知投递单批清理上限。
+         *
+         * @return 单批上限
+         */
+        public int getNotificationCleanupBatchSize() {
+            return notificationCleanupBatchSize;
+        }
+
+        /**
+         * 设置通知投递单批清理上限。
+         *
+         * @param notificationCleanupBatchSize 单批上限
+         */
+        public void setNotificationCleanupBatchSize(int notificationCleanupBatchSize) {
+            this.notificationCleanupBatchSize = notificationCleanupBatchSize;
+        }
+
+        /**
+         * 获取单轮通知投递清理最多执行的批次数。
+         *
+         * @return 最大批次数
+         */
+        public int getNotificationCleanupMaxBatchesPerRun() {
+            return notificationCleanupMaxBatchesPerRun;
+        }
+
+        /**
+         * 设置单轮通知投递清理最多执行的批次数。
+         *
+         * @param notificationCleanupMaxBatchesPerRun 最大批次数
+         */
+        public void setNotificationCleanupMaxBatchesPerRun(int notificationCleanupMaxBatchesPerRun) {
+            this.notificationCleanupMaxBatchesPerRun = notificationCleanupMaxBatchesPerRun;
         }
     }
 

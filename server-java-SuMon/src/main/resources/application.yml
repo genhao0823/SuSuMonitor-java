@@ -61,6 +61,11 @@ susumonitor:
     record-retention-days: ${ALERT_RECORD_RETENTION_DAYS:90}
     record-cleanup-cron: ${ALERT_RECORD_CLEANUP_CRON:0 0 3 * * ?}
     record-cleanup-enabled: ${ALERT_RECORD_CLEANUP_ENABLED:true}
+    notification-cleanup-enabled: ${ALERT_NOTIFICATION_CLEANUP_ENABLED:true}
+    notification-retention-days: ${ALERT_NOTIFICATION_RETENTION_DAYS:90}
+    notification-cleanup-cron: ${ALERT_NOTIFICATION_CLEANUP_CRON:0 0 3 * * ?}
+    notification-cleanup-batch-size: ${ALERT_NOTIFICATION_CLEANUP_BATCH_SIZE:1000}
+    notification-cleanup-max-batches-per-run: ${ALERT_NOTIFICATION_CLEANUP_MAX_BATCHES_PER_RUN:100}
     record-cleanup-batch-size: ${ALERT_RECORD_CLEANUP_BATCH_SIZE:1000}
     record-cleanup-max-batches-per-run: ${ALERT_RECORD_CLEANUP_MAX_BATCHES_PER_RUN:100}
   ssh-test-history:
