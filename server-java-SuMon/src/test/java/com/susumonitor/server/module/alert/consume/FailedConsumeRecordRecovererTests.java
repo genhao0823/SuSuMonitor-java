@@ -138,6 +138,29 @@ class FailedConsumeRecordRecovererTests {
                 eq(3), argThat(error -> error != null && error.length() == FailedConsumeRecordRecoverer.MAX_ERROR_LENGTH));
     }
 
+    /** alert.resolved 队列（新消费者）失败留痕：consumer 名按队列映射为 alert-resolved-notifier。 */
+    @Test
+    void alertResolvedQueueWritesRecordUnderResolvedNotifierConsumer() {
+        Message message = alertResolvedEnvelopeMessage(EVENT_ID);
+
+        recoverer.recover(message, new AmqpRejectAndDontRequeueException("invalid alert resolved contract"));
+
+        verify(consumeRecordMapper).upsertFailed(eq(AlertResolvedConsumer.CONSUMER_NAME), eq(EVENT_ID),
+                eq(1), argThat(error -> error != null && error.contains("invalid alert resolved contract")));
+        verify(delegate).recover(eq(message), any());
+    }
+
+    /** alert.resolved 队列消息的 event_id 从恢复信封解析（与 metrics/triggered 信封区分）。 */
+    @Test
+    void alertResolvedQueueExtractsEventIdFromResolvedEnvelope() {
+        Message message = alertResolvedEnvelopeMessage(EVENT_ID);
+
+        recoverer.recover(message, new RuntimeException("boom"));
+
+        verify(consumeRecordMapper).upsertFailed(eq(AlertResolvedConsumer.CONSUMER_NAME), eq(EVENT_ID),
+                eq(3), any());
+    }
+
     private Message envelopeMessage(String eventId) {
         MessageProperties properties = new MessageProperties();
         properties.setConsumerQueue(AlertMessageConsumer.QUEUE);
@@ -148,6 +171,37 @@ class FailedConsumeRecordRecovererTests {
         MessageProperties properties = new MessageProperties();
         properties.setConsumerQueue(AlertTriggeredConsumer.QUEUE);
         return new Message(alertTriggeredEnvelopeJson(eventId).getBytes(StandardCharsets.UTF_8), properties);
+    }
+
+    private Message alertResolvedEnvelopeMessage(String eventId) {
+        MessageProperties properties = new MessageProperties();
+        properties.setConsumerQueue(AlertResolvedConsumer.QUEUE);
+        return new Message(alertResolvedEnvelopeJson(eventId).getBytes(StandardCharsets.UTF_8), properties);
+    }
+
+    /** 构造符合冻结契约 §五 的 alert.resolved.v1 信封 JSON（snake_case）。 */
+    private String alertResolvedEnvelopeJson(String eventId) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("server_id", 123L);
+        payload.put("rule_id", 456L);
+        payload.put("record_id", 789L);
+        payload.put("metric", "cpu");
+        payload.put("level", "warning");
+        payload.put("status", "resolved");
+        payload.put("triggered_at", "2026-08-15T10:00:05Z");
+        payload.put("resolved_at", "2026-08-15T11:30:05Z");
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("event_id", eventId);
+        envelope.put("event_type", "alert.resolved");
+        envelope.put("schema_version", 1);
+        envelope.put("occurred_at", "2026-08-15T12:00:06Z");
+        envelope.put("producer", "alert-service");
+        envelope.put("payload", payload);
+        try {
+            return objectMapper.writeValueAsString(envelope);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     /** 构造符合冻结契约 §四 的 alert.triggered.v1 信封 JSON（snake_case）。 */

@@ -32,10 +32,11 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
     /** 与 V15 表定义一致：last_error VARCHAR(500)，不落敏感信息。 */
     static final int MAX_ERROR_LENGTH = 500;
 
-    /** 队列 → 消费者名映射（与两个 @RabbitListener 消费的队列一一对应）。 */
+    /** 队列 → 消费者名映射（与 @RabbitListener 消费的队列一一对应）。 */
     private static final java.util.Map<String, String> QUEUE_CONSUMER = java.util.Map.of(
             AlertMessageConsumer.QUEUE, AlertMessageConsumer.CONSUMER_NAME,
-            AlertTriggeredConsumer.QUEUE, AlertTriggeredConsumer.CONSUMER_NAME);
+            AlertTriggeredConsumer.QUEUE, AlertTriggeredConsumer.CONSUMER_NAME,
+            AlertResolvedConsumer.QUEUE, AlertResolvedConsumer.CONSUMER_NAME);
 
     /** 缺省消费者名：队列信息缺失时回退 metrics 评估消费（兼容旧行为）。 */
     private static final String DEFAULT_CONSUMER = AlertMessageConsumer.CONSUMER_NAME;
@@ -94,6 +95,11 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
                         new String(message.getBody(), StandardCharsets.UTF_8), AlertTriggeredMessage.class);
                 return envelope.eventId();
             }
+            if (isAlertResolvedQueue(message)) {
+                AlertResolvedMessage envelope = objectMapper.readValue(
+                        new String(message.getBody(), StandardCharsets.UTF_8), AlertResolvedMessage.class);
+                return envelope.eventId();
+            }
             MetricsReportedMessage envelope = objectMapper.readValue(
                     new String(message.getBody(), StandardCharsets.UTF_8), MetricsReportedMessage.class);
             return envelope.eventId();
@@ -113,6 +119,12 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
     private boolean isAlertTriggeredQueue(Message message) {
         String queue = message.getMessageProperties() == null ? null : message.getMessageProperties().getConsumerQueue();
         return AlertTriggeredConsumer.QUEUE.equals(queue);
+    }
+
+    /** 判断消息是否来自 alert.resolved 队列（决定反序列化信封类型）。 */
+    private boolean isAlertResolvedQueue(Message message) {
+        String queue = message.getMessageProperties() == null ? null : message.getMessageProperties().getConsumerQueue();
+        return AlertResolvedConsumer.QUEUE.equals(queue);
     }
 
     /** 与 AlertRabbitConfig 错误分类一致：cause 链含 AmqpRejectAndDontRequeueException 视为不可重试。 */
