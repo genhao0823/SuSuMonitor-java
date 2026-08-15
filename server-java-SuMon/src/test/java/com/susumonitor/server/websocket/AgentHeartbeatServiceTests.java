@@ -1,6 +1,7 @@
 package com.susumonitor.server.websocket;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -30,13 +32,14 @@ class AgentHeartbeatServiceTests {
         MutableClock clock = new MutableClock(HEARTBEAT_AT.plusSeconds(89));
         ServerMapper serverMapper = mock(ServerMapper.class);
         AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        TerminalRelayLifecycleService relay = mock(TerminalRelayLifecycleService.class);
         WebSocketSession socket = mock(WebSocketSession.class);
         when(socket.getId()).thenReturn("heartbeat-session");
         when(socket.isOpen()).thenReturn(true);
         AgentWebSocketSession session = new AgentWebSocketSession(socket, clock);
         session.authenticate(SERVER_ID, LocalDateTime.ofInstant(HEARTBEAT_AT, ZoneOffset.UTC));
         when(registry.sessions()).thenReturn(List.of(session));
-        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, clock);
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, null, clock, relay);
 
         service.markExpiredSessionsOffline();
         verify(serverMapper, never()).markAgentOffline(SERVER_ID, session.lastHeartbeatAt());
@@ -46,6 +49,47 @@ class AgentHeartbeatServiceTests {
         verify(serverMapper).markAgentOffline(SERVER_ID, session.lastHeartbeatAt());
         verify(registry).remove(session);
         verify(socket).close(CloseStatus.SESSION_NOT_RELIABLE);
+    }
+
+    /** 验证心跳超时路径先收口中继会话再移除注册表，浏览器会话能收到关闭帧。 */
+    @Test
+    void shouldCloseAgentRelaySessionsBeforeRemovingExpiredSession() throws Exception {
+        MutableClock clock = new MutableClock(HEARTBEAT_AT.plusSeconds(91));
+        ServerMapper serverMapper = mock(ServerMapper.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        TerminalRelayLifecycleService relay = mock(TerminalRelayLifecycleService.class);
+        WebSocketSession socket = mock(WebSocketSession.class);
+        when(socket.getId()).thenReturn("heartbeat-relay-session");
+        AgentWebSocketSession session = new AgentWebSocketSession(socket, clock);
+        session.authenticate(SERVER_ID, LocalDateTime.ofInstant(HEARTBEAT_AT, ZoneOffset.UTC));
+        when(registry.sessions()).thenReturn(List.of(session));
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, null, clock, relay);
+
+        service.markExpiredSessionsOffline();
+
+        InOrder inOrder = inOrder(relay, registry);
+        inOrder.verify(relay).closeAgentSessions(session);
+        inOrder.verify(registry).remove(session);
+    }
+
+    /** 验证未过期会话不触发终端中继收口。 */
+    @Test
+    void shouldNotCloseRelaySessionsBeforeHeartbeatTimeout() {
+        MutableClock clock = new MutableClock(HEARTBEAT_AT.plusSeconds(89));
+        ServerMapper serverMapper = mock(ServerMapper.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        TerminalRelayLifecycleService relay = mock(TerminalRelayLifecycleService.class);
+        WebSocketSession socket = mock(WebSocketSession.class);
+        when(socket.getId()).thenReturn("heartbeat-early-session");
+        AgentWebSocketSession session = new AgentWebSocketSession(socket, clock);
+        session.authenticate(SERVER_ID, LocalDateTime.ofInstant(HEARTBEAT_AT, ZoneOffset.UTC));
+        when(registry.sessions()).thenReturn(List.of(session));
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, null, clock, relay);
+
+        service.markExpiredSessionsOffline();
+
+        verify(relay, never()).closeAgentSessions(any());
+        verify(registry, never()).remove(session);
     }
 
     /** 验证当前连接断开时仅在离线 CAS 成功后发布离线状态。 */
@@ -62,7 +106,8 @@ class AgentHeartbeatServiceTests {
         session.authenticate(SERVER_ID, heartbeatAt);
         session.heartbeat(heartbeatAt);
         when(serverMapper.markAgentOffline(SERVER_ID, heartbeatAt)).thenReturn(1);
-        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, statusPublisher, clock);
+        TerminalRelayLifecycleService relay = mock(TerminalRelayLifecycleService.class);
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, statusPublisher, clock, relay);
 
         service.markOfflineOnDisconnect(session);
 
@@ -82,7 +127,8 @@ class AgentHeartbeatServiceTests {
         when(socket.getId()).thenReturn("stats-session");
         AgentWebSocketSession session = new AgentWebSocketSession(socket, clock);
         session.authenticate(SERVER_ID, heartbeatAt);
-        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, clock);
+        TerminalRelayLifecycleService relay = mock(TerminalRelayLifecycleService.class);
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, null, clock, relay);
 
         service.heartbeat(session, new AgentHeartbeatPayload(3L, 456L,
                 OffsetDateTime.parse("2026-08-03T00:00:00Z"), 2L, 1L, 789L));
@@ -104,7 +150,8 @@ class AgentHeartbeatServiceTests {
         when(socket.getId()).thenReturn("stats-empty-session");
         AgentWebSocketSession session = new AgentWebSocketSession(socket, clock);
         session.authenticate(SERVER_ID, heartbeatAt);
-        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, clock);
+        TerminalRelayLifecycleService relay = mock(TerminalRelayLifecycleService.class);
+        AgentHeartbeatService service = new AgentHeartbeatServiceImpl(serverMapper, registry, null, clock, relay);
 
         service.heartbeat(session, new AgentHeartbeatPayload(null, null, null, null, null, null));
 

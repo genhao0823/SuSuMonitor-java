@@ -255,6 +255,11 @@ public class AppProperties {
         @Max(value = 10000, message = "Agent heartbeat burst must not exceed 10000")
         private int heartbeatBurst = 3;
 
+        /** Agent 心跳超时秒数，超过后判定离线并收口其终端会话。 */
+        @Min(value = 1, message = "Agent heartbeat timeout must be at least one second")
+        @Max(value = 3600, message = "Agent heartbeat timeout must not exceed 3600 seconds")
+        private int heartbeatTimeoutSeconds = 90;
+
         /** 限制每个已认证会话每分钟可发送的指标消息数。 */
         @Min(value = 1, message = "Agent metrics rate must be at least one per minute")
         @Max(value = 10000, message = "Agent metrics rate must not exceed 10000 per minute")
@@ -392,6 +397,24 @@ public class AppProperties {
          */
         public void setHeartbeatBurst(int heartbeatBurst) {
             this.heartbeatBurst = heartbeatBurst;
+        }
+
+        /**
+         * 获取心跳超时秒数。
+         *
+         * @return 心跳超时秒数
+         */
+        public int getHeartbeatTimeoutSeconds() {
+            return heartbeatTimeoutSeconds;
+        }
+
+        /**
+         * 设置心跳超时秒数。
+         *
+         * @param heartbeatTimeoutSeconds 心跳超时秒数
+         */
+        public void setHeartbeatTimeoutSeconds(int heartbeatTimeoutSeconds) {
+            this.heartbeatTimeoutSeconds = heartbeatTimeoutSeconds;
         }
 
         /**

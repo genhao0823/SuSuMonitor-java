@@ -79,6 +79,7 @@ susumonitor:
     handshake-rate-per-minute: ${AGENT_HANDSHAKE_RATE_PER_MINUTE:10}
     heartbeat-rate-per-minute: ${AGENT_HEARTBEAT_RATE_PER_MINUTE:12}
     heartbeat-burst: ${AGENT_HEARTBEAT_BURST:3}
+    heartbeat-timeout-seconds: ${AGENT_HEARTBEAT_TIMEOUT_SECONDS:90}
     metrics-rate-per-minute: ${AGENT_METRICS_RATE_PER_MINUTE:24}
     metrics-burst: ${AGENT_METRICS_BURST:6}
     trusted-proxy-cidrs: ${AGENT_TRUSTED_PROXY_CIDRS:}
