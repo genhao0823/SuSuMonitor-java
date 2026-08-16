@@ -4,22 +4,22 @@
 
 [![Branch](https://img.shields.io/badge/branch-main-blue)](https://github.com/genhao0823/SuSuMonitor-jvav-)
 [![Tag](https://img.shields.io/badge/tag-v0.5.0--cloud-green)](https://github.com/genhao0823/SuSuMonitor-jvav-/releases/tag/v0.5.0-cloud)
-[![Status](https://img.shields.io/badge/Polish--6%20%E5%AE%8C%E6%88%90-brightgreen)](#%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6)
+[![Status](https://img.shields.io/badge/Polish--7%20%2B%20%E8%BF%90%E7%BB%B4%E6%94%B6%E5%8F%A3%E5%AE%8C%E6%88%90-brightgreen)](#%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6)
 [![Docs](https://img.shields.io/badge/docs--alignment-2026--07--25-blue)](docs-SuMon/Bug-fix/2026-07-25-文档对齐性修复.md)
 
-## 🚀 当前进度快照（2026-08-12）
+## 🚀 当前进度快照（2026-08-16）
 
 | 项 | 状态 / 值 |
 |---|---|
 | GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-jvav-> |
-| 当前基线 | `main` HEAD（Polish-7 收口，2026-08-12） |
+| 当前基线 | `main` HEAD（2026-08-16，V27 运维收口后） |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
-| 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/增长表保留期清理（幂等接收记录 7 天、消费记录 30 天、告警记录 90 天、SSH 测试历史 90 天，Flyway V22/V24）/告警消费多消费者并发（V15 唯一键幂等，本地 broker 验收并发 4 消费 100 条零重复）/Agent nack 有限重试（retriable_server_error + snapshot v3 持久化预算）/告警事件 Broker 发布+消费（alert.triggered.v1：Outbox 按行路由 V25 发布，alert-notifier 幂等消费并驱动外部通知，Broker 中断恢复可补发触发）/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
+| 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/增长表保留期清理（幂等接收记录 7 天、消费记录 30 天、告警记录 90 天、SSH 测试历史 90 天、**通知投递记录 90 天（V27）**、**Outbox 已发布 30 天（默认开启）**，Flyway V22/V24/V27）/告警消费多消费者并发（V15 唯一键幂等，本地 broker 验收并发 4 消费 100 条零重复）/Agent nack 有限重试（retriable_server_error + snapshot v3 持久化预算）/告警事件 Broker 发布+消费（alert.triggered.v1：Outbox 按行路由 V25 发布，alert-notifier 幂等消费并驱动外部通知，Broker 中断恢复可补发触发）/**告警恢复事件链路（alert.resolved.v1：评估器恢复时同事务登记 V26 resolved_at 落库 + Outbox 发布，alert-resolved-notifier 幂等消费驱动恢复通知，真实 broker 验收 11/11）**/**终端断线中继（Agent 断开时服务端推送 terminal.closed(agent_disconnected)，20260814 WSL E2E 真实验收）**/**心跳超时路径终端收口修复（90s 心跳超时同样收口，AGENT_HEARTBEAT_TIMEOUT_SECONDS 参数化）**/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
 | Android App | **阶段一+阶段二+Polish-7 已完整实现（2026-08-12）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情/排序、实时指标（WS + OkHttp pingInterval 心跳）、告警记录（通知深链到告警 Tab）、DataStore 通知开关持久化、前台服务告警通知、SSH 终端（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl + **自研 ANSI 终端模拟器**：增量 CSI 解析/双屏/滚动回退/256 色/备用屏，支持 top/htop 类 TUI + **断线自动重连**：指数退避自动重开）；`gradlew assembleDebug` + 85 单测全绿；云端全链路手测待真机 |
 | 首次上云端部署 | 腾讯云 OpenCloudOS 公网明文 HTTP 已跑通(2026-07-31,前端 5173 + 后端 18080 + Agent 8089 + RabbitMQ 5672,端到端联调 PASS),详见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md` |
 | 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；Android App 云端全链路手测（待设备）、数据库异地备份定时调度（crontab）、Docker 镜像实机构建、多 JVM 实例仍属后续阶段；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接为自研模拟器边界外 |
 
-> 本节反映 2026-08-05 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录。
+> 本节反映 2026-08-16 的当前仓库基线；下方带日期的”对齐说明”和”收口”段落均为历史记录（原文保留，当前值以本快照为准）。
 
 > **文档进度对齐说明（2026-07-25 修订，仅文档层）**
 >
@@ -34,7 +34,7 @@
 > | **计划中** | 仅出现在 plan 文档，未进入开发 |
 > | **outdated** | 文档陈旧但保留作历史快照 |
 >
-> **总体状态（2026-08-01 文档对齐修订，仅文档层，逐项核对代码事实）**：
+> **总体状态（2026-08-01 文档对齐修订，仅文档层，逐项核对代码事实；2026-08-16 注：本段为历史修订记录，数字已被顶部快照取代——当前实际值为 OpenAPI 5 文件 29 路径/34 端点操作、WS 协议 v1.3、dev-log 134 篇、Flyway V1-V27）**：
 > 本次修订把"仓库结构/启动指南/协议工具"等历史段与代码事实对齐：OpenAPI 5 文件 31 端点（含 `openapi-alert.json`）、WS 协议 v1.2、views 13 个页面组件、dev-log 90+、Flyway V1-V18、JWT 默认 72h；Agent 启动改为纯环境变量方式（无 `--config` 命令行参数）；MVP-10/MVP-11 已合入 `main` 跟踪。
 >
 > **总体状态（2026-07-31 对齐说明，详见 `docs-SuMon/Use-manual/README.md`）**：
@@ -64,7 +64,7 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 
 ## 当前进度(2026-07-22 收口)
 
-> 本节是对齐修订保留的原文表格，未做删改。
+> 本节是对齐修订保留的原文表格，未做删改。**2026-08-16 注：以下为 2026-07-22 历史快照；当前值：354 commits / 134 dev-log / Vitest 129 测试（22 spec 文件）/ api:e2e 19 项 / ui:e2e 18 场景。**
 
 | 阶段 | 状态 | 内容 |
 |---|---|---|
@@ -76,6 +76,8 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 | **总计** | **65+ commits / 67 dev-log / 37 单元测试 / 4 道防线** | |
 
 ### 4 道测试防线
+
+> 2026-08-16 注：下表为历史快照（Vitest 现为 129 测试 / 22 文件；api:e2e 19 项；ui:e2e 18 场景；audit:catchup 仍 11 条规则）。
 
 | 工具 | 命令 | 数量 |
 |---|---|---|
@@ -94,7 +96,7 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 
 - Java 工程骨架、统一响应、错误码、异常处理、`X-Request-ID`、`X-Correlation-ID`（`项目需求与规范.md`、本仓库 `Develop-log`）。
 - 认证（注册/登录/me/logout）+ 管理员审核 + 服务器 CRUD + SSH 凭据 AES-256-GCM 加密。
-- Flyway V1-V9 + MySQL 8.4 隔离库迁移。
+- Flyway V1-V9 + MySQL 8.4 隔离库迁移（历史快照；现为 V1-V27）。
 - Go Agent 配置加载、WebSocket 鉴权、心跳、断线重连。
 - Metrics 接收/存储/最新/历史查询、Metrics 过期清理（独立 MySQL 已验证）。
 - Monitor Ticket + 实时指标推送（事务提交后 AFTER_COMMIT 推送）。
@@ -115,13 +117,13 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 
 1. _(已补齐：`server-java-SuMon/mvnw` + `mvnw.cmd`，2026-07-27 T5，`mvnw test` 326 全过)_
 2. _(已补齐：`server-java-SuMon/src/main/resources/application-prod.yml`，2026-07-27 T5)_
-3. **Dockerfile / docker-compose** — 全仓 0 命中。
+3. ~~**Dockerfile / docker-compose** — 全仓 0 命中。~~（**已补齐 2026-08-05**：三端 Dockerfile + 根 `docker-compose.yml`；镜像实机构建仍待 Docker 环境）
 4. _(已补齐：`server-java-SuMon/deploy/susumonitor-server.service`，2026-07-27 T5)_
 5. _(已补齐：`server-java-SuMon/deploy/nginx-susumonitor.conf.example` + `susumonitor-vhost.conf`，2026-07-27 T5，云端已生效)_
-6. **数据库备份脚本** — `scripts/` 仅本地开发脚本。
+6. ~~**数据库备份脚本** — `scripts/` 仅本地开发脚本。~~（**已补齐**：`server-java-SuMon/deploy/backup.sh`+`restore.sh`（2026-07-31）、`scripts/remote-backup.sh` 异地加密备份（2026-08-07）；crontab 定时调度仍未配置）
 7. _(已实现：2026-07-27 Sprint 0-7 收口，告警记录页 `/alerts/records`、告警规则页 `/alerts/rules`、菜单挂载、`alert.push` WS 消费；真实端到端链路 2026-07-28 验收通过)_
 8. _(已实现：T4 xterm.js 前端最小可用版本 2026-07-28，路由 `/terminal/:serverId`；T5 云端部署已验证（明文 HTTP）、T6 家庭 Linux 主机部署仍待验)_
-9. _(MVP-9 已于 2026-07-31 收口：性能基线 7 场景 PASS + 数据所有权收口 + RabbitMQ 契约冻结；MVP-10~14 仍规划中)_
+9. _(MVP-9 已于 2026-07-31 收口：性能基线 7 场景 PASS + 数据所有权收口 + RabbitMQ 契约冻结；MVP-10（2026-07-31）/MVP-11（2026-08-01）已收口；MVP-12~14 的微服务拆分仍规划中（对应能力已在单体内实现）)_
 10. _(已实现：**Android App 核心监控版 MVP** 2026-08-05，`app-kt-SuMon/`——登录/注册、服务器列表/详情、实时指标（WS）、告警记录、前台服务告警通知；`gradlew assembleDebug` + 18 单测全绿；云端全链路手测待设备，见 `Develop-log/20260805-Android-App-核心监控版MVP.md`)_
 11. _(限流 / CORS 已实现：`AgentConnectionLimiter` / `AgentMessageRateLimiter` / Monitor 背压 + `config/CorsConfig.java`；WebSocket Origin 白名单策略仍待评估)_
 
@@ -133,10 +135,10 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 |---|---|---|
 | Maven Wrapper | ~~缺失~~ → **已补齐**（2026-07-27 T5，`server-java-SuMon/mvnw`） | CI / 跨机器构建可复现（`mvnw test` 326 全过） |
 | `application-prod.yml` | ~~缺失~~ → **已补齐**（2026-07-27 T5，`src/main/resources/application-prod.yml`） | 生产配置已就绪 |
-| Dockerfile + docker-compose | 缺失 | 没有容器化交付路径 |
+| Dockerfile + docker-compose | ~~缺失~~ → **已补齐**（2026-08-05，三端 Dockerfile + 根 compose；实机构建待验） | 镜像实机构建与 compose 首跑调优待 Docker 环境 |
 | Java systemd Unit | ~~缺失~~ → **已补齐**（2026-07-27 T5，`server-java-SuMon/deploy/susumonitor-server.service`） | 进程监管和优雅停机已就绪 |
 | 完整宝塔 Nginx 站点配置 | ~~缺失~~ → **已补齐**（2026-07-27 T5，`deploy/nginx-susumonitor.conf.example` + `susumonitor-vhost.conf`） | 云端明文 HTTP 已跑通；TLS 待域名备案 |
-| 数据库备份脚本 | 缺失 | 没有任何异地归档策略 |
+| 数据库备份脚本 | ~~缺失~~ → **已补齐**（`deploy/backup.sh`+`restore.sh`、`scripts/remote-backup.sh`） | crontab 定时调度未配置 |
 | `agent-go-SuMon/Makefile:build-linux` target | ~~缺失（B-007）~~ → **已补齐**（`Makefile:6`；`bin/susumonitor-agent-linux-amd64` 已实测 + 云端真实运行） | Linux 二进制可构建 |
 | `ssh_host_key_fingerprint` 自动化 | V8 字段 + `PUT /api/servers/{id}/ssh/host-key` 接口已实现并通过 Apifox 9 用例 27 断言（2026-07-20）+ 前端真实浏览器联调（2026-07-29） | SSH 测试已闭环；终端已接入 xterm.js（T4，2026-07-28） |
 
@@ -179,11 +181,11 @@ SuSuMonitor(Jvav)/
 ├── web-vue-SuMon/          # 前端 SPA(5173 端口 dev server)
 │   ├── src/
 │   │   ├── views/         # 13 个页面组件(含 AuthLayout / Login / Register / Dashboard / ServerList / ServerDetail / Metrics / AdminUsers / Forbidden / NotFound / AlertRecords / AlertRules / Terminal)
-│   │   ├── components/    # 15+ 个 SFC(含 PageHeader / ServerSparkLine / ServerFormDialog / Dashboard* 系列等)
+│   │   ├── components/    # 30 个 SFC(含 PageHeader / ServerSparkLine / ServerFormDialog / Dashboard* / MetricsLineChart 系列等)
 │   │   ├── api/           # 9 个 HTTP 模块(auth / system / server / agent-token / metrics / alert / admin / websocket 等)
-│   │   ├── stores/        # Pinia stores + 2 个 spec
+│   │   ├── stores/        # Pinia stores + 3 个 spec
 │   │   ├── services/      # WebSocket 客户端(Monitor 通道 + 终端复用)
-│   │   ├── composables/   # useRouterLoading + 1 spec
+│   │   ├── composables/   # useRouterLoading / useDebouncedRef + 2 spec
 │   │   ├── utils/         # format + animate + 2 spec
 │   │   ├── types/         # API 类型 + error-code + metrics
 │   │   └── router/        # index + guards
@@ -191,12 +193,17 @@ SuSuMonitor(Jvav)/
 │   └── vitest.config.ts
 ├── server-java-SuMon/       # Java 后端(18080 端口)
 │   └── src/main/java/com/susumonitor/server/
+│       ├── common/            # 统一响应/错误码/异常/请求链路
+│       ├── config/            # AppProperties / RabbitMQ 拓扑 / 时钟 / CORS
+│       ├── scheduler/         # 9 个清理与发布定时任务
 │       ├── module/auth/         # register / login / me / logout
-│       ├── module/server/       # CRUD + SSH test + status
-│       ├── module/metrics/      # latest + history
+│       ├── module/server/       # CRUD + SSH test + status + Agent Token
+│       ├── module/metrics/      # latest + history + Outbox
+│       ├── module/alert/        # 评估/规则/记录/通知/消费(triggered+resolved)
 │       ├── module/admin/        # users page/search / batch approve-reject / single approve-reject
 │       ├── module/system/       # health / ready
-│       ├── websocket/           # Agent / Monitor / Ticket
+│       ├── module/terminal/     # 终端会话元数据与配额
+│       ├── websocket/           # Agent / Monitor / Ticket / 终端中继
 │       ├── security/           # JWT + AES-GCM + SSH outbound
 │       └── ssh/                # SSH connection tester
 ├── agent-go-SuMon/          # Go Agent(独立进程,部署到目标服务器)
@@ -212,18 +219,24 @@ SuSuMonitor(Jvav)/
 │       ├── data/           # DTO + Repository + SessionStore + 帧解析
 │       ├── di/             # Hilt 模块
 │       ├── service/        # 前台监控服务 + 通知
-│       ├── ui/             # Compose 页面(login/dashboard/servers/alerts)
+│       ├── ui/             # Compose 页面(login/dashboard/servers/alerts/terminal)
 │       └── util/           # 格式化/错误码/常量
 ├── docs-SuMon/              # 项目文档
-│   ├── Develop-log/         # 110+ dev-log(实施记录)
-│   ├── Develop-plans/       # 16 plan(规划)
-│   ├── OpenApi-SuMon/       # 5 个 OpenAPI 契约 JSON(auth / server / system / admin / alert),共 32 个 endpoint
-│   ├── Protocol-SuMon/     # WebSocket 协议(v1.3)
+│   ├── Develop-log/         # 134 篇 dev-log(实施记录)
+│   ├── Develop-plans/       # 24 plan(规划)
+│   ├── OpenApi-SuMon/       # 5 个 OpenAPI 契约 JSON(auth / server / system / admin / alert),共 29 路径 / 34 端点操作
+│   ├── Protocol-SuMon/     # WebSocket 协议(v1.3) + 消息契约 + RabbitMQ 拓扑
 │   ├── Bug-fix/             # 9 篇 bug 修复记录 + README 索引
+│   ├── Difficulty-log/      # 9 篇故障排查记录
+│   ├── Handoff-SuMon/       # 3 篇交接文档
+│   ├── Introduction/        # 项目解读系列(00-07)
+│   ├── Use-manual/          # 运维手册系列(7 本)
 │   ├── 本机开发环境配置.md   # 本机开发约定(JWT/AES/SSH/Metrics/Outbox 环境变量)
 │   └── Summary-Technology/  # 项目架构总览
-├── api-test/                # API 集成测试(Apifox + curl + WS 验证)
-├── scripts/                 # PowerShell 脚本(初始化 / 测试 / 数据库)
+├── api-test/                # API 集成测试(Apifox + curl + WS 验证,20 个 mjs + 4 个 ps1)
+├── scripts/                 # 脚本(初始化 / 数据库 / WSL 集成 / 异地备份)
+├── local/                   # 本机工具(rabbitmq/erlang)与各批次备份(不入库)
+├── docker-compose.yml       # mysql + rabbitmq + server + web (+agent profile)
 ├── server-java-SuMon/pom.xml
 └── package.json
 ```
@@ -234,9 +247,9 @@ SuSuMonitor(Jvav)/
 
 - Node.js >= 18.18
 - npm >= 9
-- JDK 17+(server)
+- JDK 21(server)
 - Go 1.23+(agent，`go.mod` 要求 1.23)
-- MySQL 8.0(server)
+- MySQL 8.4(server)
 
 ### 前端(`web-vue-SuMon/`)
 
@@ -290,10 +303,15 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - **协作**:在 GitHub 上创建 PR / 提 issue
 - **Polish-6 三端收尾**（**已完成 2026-08-07**，commit `75b41e5`→`29effc0`）：HTTPS 迁移后 agent 配置核对与全库明文 URL 清扫；Android 告警通知深链到告警 Tab / 通知开关 DataStore 持久化（前台服务联动）/ 服务器列表排序选择器 / WS 半开连接检测（OkHttp pingInterval）/ 终端基础增强（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl）；数据库异地备份脚本 `scripts/remote-backup.sh`（云端备份→拉回→AES-256 加密落盘，含 backup.sh CRLF 修复）；Web 告警通知投递历史详情弹窗（新增 `GET /api/alerts/records/{id}/notifications`，OpenAPI alert 6→7 端点）；顺带恢复 Web lint 零警告基线。详见 `docs-SuMon/Develop-plans/20260807-Polish-6-三端全面收尾.md` 与各模块 Dev-log（`20260807-Polish6-M*.md`）
 - **Polish-7 遗留收尾**（**已完成 2026-08-12**，commit `c2672c8`→收口）：20260810 WIP checkpoint（SSH 测试历史 V23 / 主机密钥一键信任 / 超时分类 50400 / Swagger 放行）；SSH 测试历史保留期清理（V24 + CleanupService/Scheduler）；Android 自研 ANSI 终端模拟器（增量 CSI 解析/双屏/滚动回退/256 色/备用屏 + 逐格渲染）；Android 终端断线自动重连（指数退避重开 + UI 提示）；Agent metrics.nack 有限重试（retriable_server_error + snapshot v3 持久化预算）；告警消费多消费者并发（本地 broker 验收：并发 4 消费 100 条零重复 + DLQ 分类正确）。详见 `docs-SuMon/Develop-plans/20260812-Polish-7-遗留收尾.md` 与各模块 Dev-log（`20260812-Polish7-M*.md`）
+- **RabbitMQ 告警事件全链路 + 终端断线中继 + 运维收口**（**已完成 2026-08-13~16**）：
+  - 终端断线中继增强（08-13/14）：Agent 断开时 Java 中继推送服务端生成的 `terminal.closed(agent_disconnected)`；WSL 真实 E2E 验收 `TERMINAL_FLOW_CONTROL_INTEGRATION_OK`（`20260813-M1-终端断线中继增强.md`、`20260814-终端断线中继E2E验收.md`）
+  - 心跳超时终端收口修复（08-15）：90s 心跳超时路径同样收口中继（先收口再移除注册表），`AGENT_HEARTBEAT_TIMEOUT_SECONDS` 参数化，WSL E2E 验收（`20260815-心跳超时终端收口修复.md`）
+  - alert.resolved.v1 恢复事件链路（08-15）：V26 `resolved_at` 落库 + Outbox 发布 + `alert-resolved-notifier` 幂等消费驱动恢复通知 + WS 推送，真实 broker 验收 11/11（`20260815-alert.resolved恢复事件链路.md`）
+  - 运维收口（08-15/16）：V27 通知投递保留期清理（默认开启 90 天）+ Outbox 已发布清理默认开启 + poll 默认对齐 200ms，550/550 单测 + 19/19 真实 MySQL IT（`20260815-运维收口-通知清理与配置一致性.md`）
 
 ## 协议 / 工具
 
-- **OpenAPI 契约**:`docs-SuMon/OpenApi-SuMon/{openapi-auth,server,system,admin,alert}.json`(5 个文件 / 32 个 endpoint)
+- **OpenAPI 契约**:`docs-SuMon/OpenApi-SuMon/{openapi-auth,server,system,admin,alert}.json`(5 个文件 / 29 路径 / 34 端点操作)
 - **WebSocket 协议**:`docs-SuMon/Protocol-SuMon/websocket-protocol.md`(v1.3)
 - **后端 OpenAPI 自动化**:`web-vue-SuMon/scripts/check-openapi.mjs`(pre-commit 钩子)
 - **代码质量门**:`web-vue-SuMon/scripts/audit-catchup.mjs`(11 条规则)
@@ -307,6 +325,7 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - 3 个 LONG_FILE 实际超 500 行(525-565)但 INFO 严重度,阈值 600
 - ~~`openapi-system.json` 缺 `info.title` 字段~~（已补齐 2026-07-29，B-037 关闭；pre-commit 钩子相关 dirty 处理见上一条）
 - 详细文档对齐性检查与修正记录:见 `docs-SuMon/Bug-fix/2026-07-25-文档对齐性修复.md`
-- **Polish-6 之后仍遗留（2026-08-07）**：真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需凭据/设备，脚本已备）；Android 终端 ANSI 光标/滚屏/TUI（top/vi）仍为简化渲染；多消费者并发消费、Docker 镜像实机构建、数据库异地备份的定时调度（crontab）未配置
+- **Polish-6 之后仍遗留（2026-08-07）**：真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需凭据/设备，脚本已备）；Android 终端 ANSI 光标/滚屏/TUI（top/vi）仍为简化渲染（后由自研 ANSI 模拟器增强）；~~多消费者并发消费~~（已实现 2026-08-12 Polish-7 M6）、Docker 镜像实机构建、数据库异地备份的定时调度（crontab）未配置
 - **Polish-7 之后仍遗留（2026-08-12）**：真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需凭据/设备，脚本已备）；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接（自研模拟器边界外）；~~Agent 掉线期间服务端不向 monitor 推送 terminal.closed~~（**已完成 2026-08-13，E2E 真实验收 2026-08-14**：Agent 断开时 Java 中继向发起浏览器推送服务端生成的 `terminal.closed(agent_disconnected)` 帧，Web 立即提示、Android 触发自动重连，见 `docs-SuMon/Develop-log/20260813-M1-终端断线中继增强.md`；真实"Agent 断线→浏览器收到 closed"端到端链路 2026-08-14 WSL 真实验收 PASS——`agent-disconnect-closed` 场景 `TERMINAL_FLOW_CONTROL_INTEGRATION_OK` + DB `terminal_sessions` 收口落库复核，见 `docs-SuMon/Develop-log/20260814-终端断线中继E2E验收.md`；**90s 心跳超时路径收口缺陷已修复**（2026-08-15：`markExpiredSessionsOffline` 先收口中继再移除注册表，心跳超时同样推 closed 帧并落库 `error/agent_disconnected`，WSL E2E 真实验收 PASS；心跳超时秒数参数化为 `AGENT_HEARTBEAT_TIMEOUT_SECONDS` 默认 90，见 `docs-SuMon/Develop-log/20260815-心跳超时终端收口修复.md`））；多 JVM 实例部署、Docker 镜像实机构建、数据库异地备份定时调度（crontab）未配置
 - **告警事件发布之后仍遗留（2026-08-12）**：~~`alert.triggered.v1` 消费者待接入~~（已实现：`alert-notifier` 消费事务内排程外部通知 + 幂等记录 + DLQ 分类，见 `20260812-alert.triggered消费者接入.md`）；~~replay 工具仅支持 metrics DLQ~~（已泛化 `--event metrics|alert`）；~~alert.triggered 无真实链路验收~~（2026-08-13 `verify-alert-triggered-chain.mjs` 11/11 PASS，见 `20260812-RabbitMQ全链路收口.md`）；~~`alert.resolved.v1`（恢复事件）仍为勘察项~~（**已完成 2026-08-15**：评估器恢复时同事务登记 Outbox 事件 + 本地事件推 WS（`alert.push` status=resolved）+ `alert-resolved-notifier` 幂等消费驱动"恢复通知"，V26 落库 `resolved_at`，真实 broker 验收 `verify-alert-resolved-chain.mjs` 11/11 PASS，见 `docs-SuMon/Develop-log/20260815-alert.resolved恢复事件链路.md`）；真实 SMTP 发送验收仍待外部凭据
+- **运维收口之后仍遗留（2026-08-16 快照）**：真实 SMTP 发送验收、真实 Agent→Server 断网/重启联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需外部凭据/设备，脚本已备）；Docker 镜像实机构建、数据库异地备份定时调度（crontab）、多 JVM 实例部署未配置；孤儿表 `commands`/`ssh_sessions` 保持暂缓清理（20260802 决策延续）；`alert_notifications` 保留期清理与 Outbox 已发布清理均已默认开启（V27 / `OUTBOX_CLEANUP_ENABLED:true`）
