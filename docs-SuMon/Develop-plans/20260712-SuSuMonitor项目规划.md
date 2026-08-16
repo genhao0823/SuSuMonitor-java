@@ -2,10 +2,10 @@
 
 **日期**: 2026-07-12  
 **依据**: 根目录 `项目需求与规范.md`  
-**最后核对日期**: 2026-08-05
-**当前实施阶段**: **MVP-11 收口完成（2026-08-01 + 2026-08-02 加固）**；Agent 指标可靠投递 M1-M4 已完成（NACK 死信 + 投递遥测），下一阶段按矩阵推进
+**最后核对日期**: 2026-08-16
+**当前实施阶段**: **2026-08-16 全仓文档对齐后**；2026-08-13~16 已收口：终端断线中继、心跳超时收口修复、alert.resolved.v1 恢复事件链路、运维收口（V27 通知清理 + outbox 清理默认开启）。（下文 08-01/08-05 行保留作历史快照）
 **最新进度**（2026-08-05 补充）：**Agent 指标可靠投递 M1-M4 已完成**——M1 Server `metrics.ack` 入口确认（`773fc4d`）+ M2 Agent 有界持久化 FIFO、同 UUID 断线重放与单条 in-flight 保序（`7db29b6`）+ M3 ACK deadline 重传、指数退避/equal jitter 和积压重放节流（`d2a9311`、`a41d07c`、`0933872`）+ **M4** Server 永久拒绝分类 `metrics.nack`（`bcbffd0`）、Agent 本地持久化死信 snapshot v2 与 v1 自动迁移（`616e531`）、心跳投递遥测 → Flyway V19 → 状态接口 → 服务器详情页展示（`98c1115`/`dc32918`/`dcb4382`）；loopback fixture 15 项 PASS，真实 Agent→Java/MySQL 独立 schema 场景待 DB 管理员凭据运行；Server 418 tests、Go test/race/vet/build 全通过。队列字节上限仍属后续独立模块（详见 `Develop-log/20260805-Agent指标可靠投递（NACK死信与投递遥测）.md`）。
-**当前状态**（2026-08-03 对齐）：MVP-1 核心 + MVP-2 Go Agent + MVP-3 实时监控 + MVP-5A Web 主页面 + MVP-6 告警业务闭环 + MVP-7 终端（T1-T4） 已完成；**MVP-9 微服务化准备收口完成**（性能基线 7 场景、数据所有权审计、契约冻结）；**MVP-10 Metrics Outbox 收口完成**（发布侧真实 Broker 三阶段验收 PASS）；**MVP-11 告警消费侧收口完成**：消息通道幂等消费 + 评估切换 + DLQ 分类，`verify-alert-ws` 24/24 + `verify-mvp11` 17 项验收 PASS；**MVP-11 收口（2026-08-01）**：outbox 轮询 1000→200ms（告警推送延迟 -71%）、DLQ 受控重放工具、Broker 停机消费侧重连验收 PASS；**2026-08-02 加固收口**：消费失败留痕落地（`FailedConsumeRecordRecoverer` + `upsertFailed`）+ 告警逃逸窗口（`confirm_count` 连续越界确认，V18），401 测试全绿。仍属"未验证"：首管理员独立空库真实并发、公网部署环境、M1/M2 Agent 真实断网/重启联合验收、多实例及跨 JVM 事件推送、Monitor 1012 真实背压、多消费者并发消费（验收脚本已备，`verify-mvp11-concurrency.mjs` 保留为扩容前资产）。
+**当前状态**（2026-08-03 对齐）：MVP-1 核心 + MVP-2 Go Agent + MVP-3 实时监控 + MVP-5A Web 主页面 + MVP-6 告警业务闭环 + MVP-7 终端（T1-T4） 已完成；**MVP-9 微服务化准备收口完成**（性能基线 7 场景、数据所有权审计、契约冻结）；**MVP-10 Metrics Outbox 收口完成**（发布侧真实 Broker 三阶段验收 PASS）；**MVP-11 告警消费侧收口完成**：消息通道幂等消费 + 评估切换 + DLQ 分类，`verify-alert-ws` 24/24 + `verify-mvp11` 17 项验收 PASS；**MVP-11 收口（2026-08-01）**：outbox 轮询 1000→200ms（告警推送延迟 -71%）、DLQ 受控重放工具、Broker 停机消费侧重连验收 PASS；**2026-08-02 加固收口**：消费失败留痕落地（`FailedConsumeRecordRecoverer` + `upsertFailed`）+ 告警逃逸窗口（`confirm_count` 连续越界确认，V18），401 测试全绿。仍属"未验证"：首管理员独立空库真实并发、M1/M2 Agent 真实断网/重启联合验收、多实例及跨 JVM 事件推送、Monitor 1011 真实背压（历史行"1012"为笔误）。（2026-08-16 注：公网部署环境已验证——明文 HTTP 2026-07-31、HTTPS/WSS 2026-08-07；多消费者并发消费已落地 2026-08-12 Polish-7 M6，`verify-mvp11-concurrency.mjs` 保留为扩容前资产。）
 
 当前状态以本节矩阵和最新开发日志为准，后文历史实施顺序不代表当前完成状态。
 
@@ -136,9 +136,9 @@ SuSuMonitor/
 | MVP-9 | 微服务化准备：模块依赖、数据所有权、RabbitMQ 异步边界与版本化消息契约、统一日志和性能基线 | 已收口（2026-07-31）：性能基线 7 场景实测 + 数据所有权收口 + 契约冻结评审；RabbitMQ 运行时属 MVP-10/11 |
 | MVP-10 | `metrics-service`：Agent 指标处理、Outbox 可靠事件发布、指标存储、最新/历史查询和清理 | 已收口（2026-07-31）：V14 outbox 表 + 同事务写入 + 发布器（Confirm/Return/指数退避）+ 拓扑声明 + ready 检查；真实 Broker 三阶段验收 PASS（见 `Develop-log/20260731-MVP10-Metrics-Outbox.md`）；消费侧属 MVP-11 |
 | MVP-11 | `alert-service`：通过 RabbitMQ 幂等消费指标事件，完成告警检测、状态迁移、记录和推送 | 已收口（2026-07-31 + 2026-08-01 收口）：V15 消费幂等表 + `MetricsReportedMessage` 契约解析 + `AlertMessageConsumer`（AUTO 确认 + 幂等 + 有限重试）+ DLQ 分类；`verify-alert-ws` 24/24、`verify-mvp11` 17 项验收 PASS；收口：轮询 1000→200ms（延迟 -71%）、DLQ 重放工具、Broker 停机重连验收（见 `Develop-log/20260731-MVP11-Alert-消费侧.md`、`20260801-MVP11-收口.md`） |
-| MVP-12 | `ssh-service`：SSH 连接测试、SSH 会话、PTY、输入输出和超时 | 否 |
+| MVP-12 | `ssh-service`：SSH 连接测试、SSH 会话、PTY、输入输出和超时 | 否（拆分未做；2026-08-16 注：所列能力均已在单体实现——SSH 测试+历史 V23/V24+50400 超时分类、PTY 中继、终端会话收口含断线中继/心跳超时修复、20 分钟 idle 超时） |
 | MVP-13 | Gateway 与服务治理：统一入口、路由、配置管理、服务发现和服务间鉴权 | 否 |
-| MVP-14 | 分布式运行保障：独立部署、链路追踪、集中日志、RabbitMQ 重试/死信/积压治理和回滚 | 否 |
+| MVP-14 | 分布式运行保障：独立部署、链路追踪、集中日志、RabbitMQ 重试/死信/积压治理和回滚 | 否（2026-08-16 注：RabbitMQ 部分已在单体落地——消费 3 次指数退避重试、3 个 DLQ、DLQ 受控重放 `replay-dlq.mjs --event metrics|alert`、Broker 停机恢复验收 B1-B7；分布式部署/链路追踪/滚动升级回滚未做） |
 
 微服务阶段的服务边界初步规划如下：
 

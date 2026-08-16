@@ -1,7 +1,7 @@
 # Metrics、Agent 与 Web 监控闭环详细开发计划
 
 **计划日期**：2026-07-21  
-**计划状态**：主要闭环已执行。Metrics 清理、Agent Token、Agent/Monitor WebSocket、真实 Agent 采集上报和隔离 MySQL 验收均已完成；多实例与部署环境未验证。详见 20260723-Agent-Go运行时验收.md 和最新后端验收日志。
+**计划状态**：主要闭环已执行。Metrics 清理、Agent Token、Agent/Monitor WebSocket、真实 Agent 采集上报和隔离 MySQL 验收均已完成；多实例与部署环境未验证。（2026-08-16 注：部署环境已验——云端明文 HTTP 2026-07-31、HTTPS/WSS 2026-08-07；仍未验证的仅多实例。）详见 20260723-Agent-Go运行时验收.md 和最新后端验收日志。
 **适用项目**：SuSuMonitor  
 **当前主线**：MVP-1 收口后进入监控核心数据闭环  
 **执行原则**：先调查、先备份、最小修改、分阶段验证、完整留痕
