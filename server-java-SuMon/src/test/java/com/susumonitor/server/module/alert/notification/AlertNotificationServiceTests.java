@@ -103,6 +103,36 @@ class AlertNotificationServiceTests {
         verify(recordMapper, never()).updateNotifiedInfo(any(), any(), anyString());
     }
 
+    /** 总开关关闭时钉钉渠道同样被抑制（全渠道门控，不只邮件）。 */
+    @Test
+    void shouldNotSendDingtalkWhenDisabledGlobally() {
+        appProperties.getAlert().setNotificationEnabled(false);
+        service.notify(rule(null, "https://dingtalk", null), record());
+        verify(restTemplate, never()).postForObject(anyString(), any(), eq(String.class));
+        verify(notificationMapper, never()).insert(any());
+        verify(recordMapper, never()).updateNotifiedInfo(any(), any(), anyString());
+    }
+
+    /** 总开关关闭时 Webhook 渠道同样被抑制。 */
+    @Test
+    void shouldNotSendWebhookWhenDisabledGlobally() {
+        appProperties.getAlert().setNotificationEnabled(false);
+        service.notify(rule(null, null, "https://webhook"), record());
+        verify(restTemplate, never()).postForObject(anyString(), any(), eq(String.class));
+        verify(notificationMapper, never()).insert(any());
+        verify(recordMapper, never()).updateNotifiedInfo(any(), any(), anyString());
+    }
+
+    /** 总开关关闭时不为任何渠道排程（三渠道都配置时返回空列表）。 */
+    @Test
+    void shouldScheduleNoChannelsWhenDisabled() {
+        appProperties.getAlert().setNotificationEnabled(false);
+        List<AlertNotificationEntity> rows = service.scheduleNotifications(
+                rule("ops@example.com", "https://dingtalk", "https://webhook"), record());
+        assertTrue(rows.isEmpty());
+        verify(notificationMapper, never()).insert(any());
+    }
+
     /** 未配置收件人时不发送邮件，也不回写通知状态。 */
     @Test
     void shouldNotSendEmailWithoutRecipient() {

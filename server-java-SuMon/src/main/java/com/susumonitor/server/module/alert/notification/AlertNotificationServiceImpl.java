@@ -25,8 +25,8 @@ import org.springframework.web.client.RestTemplate;
 /**
  * 告警外部通知服务实现。
  *
- * <p>按规则配置的渠道逐一发送：邮件（需启用总开关且配置 SMTP）、钉钉机器人、
- * 自定义 Webhook。每个渠道在 alert_notifications 表记一行（V21），首次立即尝试；
+ * <p>按规则配置的渠道逐一发送：邮件（另需 SMTP 配置）、钉钉机器人、
+ * 自定义 Webhook（均受总开关约束）。每个渠道在 alert_notifications 表记一行（V21），首次立即尝试；
  * 失败按 2^attempts 秒（上限 60s）退避并记录 last_error，达重试上限置 failed。
  * 至少一个渠道送达后回写记录的通知时间与成功渠道；全部失败不回写，前端可识别"发送失败"。</p>
  */
@@ -92,11 +92,13 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
         attemptChannel(notification.getId(), notification.getChannel(), rule, record, attempt);
     }
 
-    /** 规则配置的非空渠道（邮件受总开关与 SMTP 配置约束）。 */
+    /** 规则配置的非空渠道（总开关关闭时不发送任何渠道；邮件另需 SMTP 配置）。 */
     private List<String> configuredChannels(AlertRuleEntity rule) {
         List<String> channels = new ArrayList<>();
-        if (appProperties.getAlert().isNotificationEnabled()
-                && mailSender.isPresent() && StringUtils.hasText(rule.getNotifyEmail())) {
+        if (!appProperties.getAlert().isNotificationEnabled()) {
+            return channels;
+        }
+        if (mailSender.isPresent() && StringUtils.hasText(rule.getNotifyEmail())) {
             channels.add("email");
         }
         if (StringUtils.hasText(rule.getNotifyDingtalk())) {

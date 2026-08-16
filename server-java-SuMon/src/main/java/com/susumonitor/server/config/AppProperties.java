@@ -1670,7 +1670,7 @@ public class AppProperties {
 
     public static class Alert {
 
-        /** 外部通知总开关；关闭时不发送任何渠道（默认关闭，兼容旧部署）。 */
+        /** 外部通知总开关；关闭时不为任何渠道排程发送（默认关闭，兼容旧部署）。 */
         private boolean notificationEnabled = false;
 
         /** 邮件发件人地址，仅在启用邮件通知时使用。 */
