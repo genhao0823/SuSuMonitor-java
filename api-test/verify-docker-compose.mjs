@@ -5,9 +5,10 @@
  * 检查项：
  *   P0  空库首管理员 bootstrap（register 自动 ADMIN/approved → login 拿 token）
  *   C1  /api/health 与 /api/ready 经 nginx 反代 200
- *   C2  /ws/monitor ticket 握手 + metrics.subscribe（无 error 帧）
- *   C3  创建 server + agent/register 取 token（打印 AGENT_READY 行供编排器拉起 agent 容器）
- *   C4  agent 容器上报后：monitor 收到 metrics.update 帧 + API 查询 metrics 可见（120s 轮询）
+ *   C2  创建 server（WS 订阅与 agent 注册都依赖真实 serverId）
+ *   C3  /ws/monitor ticket 握手 + metrics.subscribe 真实 server（无 error 帧）
+ *   C4  agent/register 取 token（打印 AGENT_READY 行供编排器拉起 agent 容器）
+ *   C5  agent 容器上报后：monitor 收到 metrics.update 帧 + API 查询 metrics 可见（120s 轮询）
  *
  * 用法：
  *   SUSUMONITOR_DOCKER_BASE_URL=http://localhost:8080 node verify-docker-compose.mjs
@@ -120,31 +121,32 @@ async function main() {
   assert(ready.status === 200 && ready.body.data?.status === 'UP', `C1 ready failed: ${ready.status}`)
   checks.C1 = 'health + ready via nginx OK'
 
-  // C2：WS 握手 + 订阅（无 error 帧）
-  const ticket = await api('/api/ws/monitor-ticket', { method: 'POST', token: adminToken })
-  assert(ticket.status === 200 && ticket.body.data?.ticket, `C2 ticket failed: ${ticket.body.code} ${ticket.body.message}`)
-  const monitor = await openSocket(`${wsUrl}/ws/monitor?ticket=${encodeURIComponent(ticket.body.data.ticket)}`)
-  monitor.send(JSON.stringify(message('metrics.subscribe', { server_id: 0 })))
-  await assertNoMessage(monitor, 'error', 1500)
-  checks.C2 = 'monitor WS handshake + subscribe via nginx OK'
-
-  // C3：创建 server + agent 注册（token 供编排器拉起 agent 容器）
+  // C2：创建 server（WS 订阅与 agent 注册都依赖真实 serverId）
   const created = await api('/api/servers', {
     method: 'POST', token: adminToken,
     body: { name: `docker_e2e_${Date.now()}`, host: '127.0.0.2', description: 'docker compose e2e', ssh_host: '127.0.0.2', ssh_port: 22, ssh_user: 'e2e', ssh_auth_type: 'password', ssh_password: 'e2e-placeholder' }
   })
-  assert(created.status === 200, `C3 server create failed: ${created.body.code} ${created.body.message}`)
+  assert(created.status === 200, `C2 server create failed: ${created.body.code} ${created.body.message}`)
   const serverId = created.body.data.id
+  checks.C2 = `server ${serverId} created via nginx`
+
+  // C3：WS 握手 + 订阅真实 server（无 error 帧）
+  const ticket = await api('/api/ws/monitor-ticket', { method: 'POST', token: adminToken })
+  assert(ticket.status === 200 && ticket.body.data?.ticket, `C3 ticket failed: ${ticket.body.code} ${ticket.body.message}`)
+  const monitor = await openSocket(`${wsUrl}/ws/monitor?ticket=${encodeURIComponent(ticket.body.data.ticket)}`)
+  monitor.send(JSON.stringify(message('metrics.subscribe', { server_id: serverId })))
+  await assertNoMessage(monitor, 'error', 1500)
+  checks.C3 = 'monitor WS handshake + subscribe via nginx OK'
+
+  // C4：agent 注册（token 供编排器拉起 agent 容器）
   const registeredAgent = await api(`/api/servers/${serverId}/agent/register`, { method: 'POST', token: adminToken })
-  assert(registeredAgent.status === 200 && registeredAgent.body.data?.agent_token, `C3 agent register failed: ${registeredAgent.body.code} ${registeredAgent.body.message}`)
-  checks.C3 = `server ${serverId} created, agent token issued`
+  assert(registeredAgent.status === 200 && registeredAgent.body.data?.agent_token, `C4 agent register failed: ${registeredAgent.body.code} ${registeredAgent.body.message}`)
+  checks.C4 = `agent token issued for server ${serverId}`
 
   // 编排器协议：读到该行后拉起 agent 容器。
   console.log(`AGENT_READY ${serverId} ${registeredAgent.body.data.agent_token}`)
 
-  // C4：agent 容器上报后，monitor 收到 metrics.update 且 API 可查（120s 轮询）。
-  // 重新订阅到真实 serverId（C2 用 0 只验证协议路径）。
-  monitor.send(JSON.stringify(message('metrics.subscribe', { server_id: serverId })))
+  // C5：agent 容器上报后，monitor 收到 metrics.update 且 API 可查（120s 轮询）。
   const deadline = Date.now() + 120000
   let pushed = false
   const pushPromise = new Promise((resolve) => {
@@ -167,10 +169,10 @@ async function main() {
     }
     await sleep(2000)
   }
-  assert(latest, 'C4 timed out waiting for agent metrics via API')
+  assert(latest, 'C5 timed out waiting for agent metrics via API')
   await Promise.race([pushPromise, sleep(3000)])
-  checks.C4 = `agent metrics visible via API (server ${serverId})`
-  checks.C4push = pushed ? 'metrics.update frame received by monitor' : 'metrics.update not observed within window (API path verified)'
+  checks.C5 = `agent metrics visible via API (server ${serverId})`
+  checks.C5push = pushed ? 'metrics.update frame received by monitor' : 'metrics.update not observed within window (API path verified)'
 
   console.log(JSON.stringify({ status: 'PASS', checks }, null, 2))
   process.exit(0)
