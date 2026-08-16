@@ -22,13 +22,13 @@
 | Agent 真实 metrics 上报 | 已实现（B-005/B-006 已闭环，2026-07-31 更新） | `cmd/susumonitor-agent/main.go:70-71` 已接入 collector/reporter，本机 + 云端端到端验证 |
 | Linux 构建目标 `build-linux` | 已实现（B-007 已闭环，2026-07-31 更新） | `agent-go-SuMon/Makefile:6` 已含 `build-linux` target；`bin/susumonitor-agent-linux-amd64` 已实测 |
 | 完整 Nginx 站点配置 / Java systemd / Maven Wrapper / `application-prod.yml` | 已实现（2026-07-27 T5 补齐） | `server-java-SuMon/deploy/*` + `mvnw`，云端明文 HTTP 已跑通 |
-| Dockerfile + docker-compose / DB 备份脚本 | 已实现（2026-08-05；**镜像实机构建仍待验**） | 三端 `Dockerfile` + 根 `docker-compose.yml`；备份脚本 `server-java-SuMon/deploy/backup.sh`/`restore.sh`、`scripts/remote-backup.sh` |
+| Dockerfile + docker-compose / DB 备份脚本 | 已实现（2026-08-05）→ **实机构建完成（2026-08-16）** | 三端 `Dockerfile` + 根 `docker-compose.yml`（WSL2 Docker 三镜像构建 + compose 全栈实跑 PASS，见 `Develop-log/20260816-Docker镜像实机构建.md`）；备份脚本 `server-java-SuMon/deploy/backup.sh`/`restore.sh`、`scripts/remote-backup.sh` |
 | ECharts 集成 | 已使用（2026-08-16 更新） | `web-vue-SuMon/src/components/MetricsLineChart.vue` 指标折线图（含 `MetricsLineChart.spec.ts` 单测） |
 | openapi-typescript 类型生成 | 当前**未使用** | devDep 已声明，无生成脚本 |
 | MVP-6 告警后端业务 | 当前可用 | `module/alert/` 25 个 .java、`V10__create_alert_states_and_soft_delete_rules.sql`、`AlertPushPublisher` 推送 `alert.push`、MockMvc 完整 |
 | MVP-6 告警前端 | 已实现（2026-07-27 Sprint 0-7 收口，2026-07-31 更新） | `views/AlertRecordsView.vue` + `AlertRulesView.vue` + `alert.push` WS 消费；真实端到端链路 2026-07-28 验收通过 |
 | MVP-7 Web SSH 终端 | 已实现 T1-T4（T4 xterm.js 前端 2026-07-28，2026-07-31 更新） | `views/TerminalView.vue` + 路由 `/terminal/:serverId`；T5 云端部署已验证（明文 HTTP）、T6 家庭 Linux 主机部署待验 |
-| Docker / Android | 已落地（2026-08-16 更新） | Docker：三端 Dockerfile + 根 docker-compose.yml（2026-08-05，镜像实机构建待验）；Android：`app-kt-SuMon` 阶段一+二+Polish-7 |
+| Docker / Android | 已落地（2026-08-16 更新） | Docker：三端 Dockerfile + 根 docker-compose.yml（2026-08-05）→ 三镜像实机构建 + compose 全栈实跑 PASS（2026-08-16）；Android：`app-kt-SuMon` 阶段一+二+Polish-7 |
 | Redis / Prometheus / k8s / GitHub Actions | 计划中 | 均属增强阶段 |
 
 ---
@@ -418,9 +418,9 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 
 - Spring Data Redis：指标缓存、JWT 黑名单、限流、Agent 在线状态缓存
 - Micrometer + Prometheus + Grafana：应用指标采集与监控
-- Testcontainers：Docker 可用后的 MySQL/Redis 集成测试
+- Testcontainers：Docker 可用后的 MySQL/Redis 集成测试（2026-08-16 起本机 WSL2 Docker 引擎已可用，可作为后续集成测试底座）
 - Quartz：复杂调度（若 Spring Scheduling 不足）
-- Kubernetes / Helm：容器编排（~~Docker / Docker Compose~~ 已落地 2026-08-05：三端 Dockerfile + 根 docker-compose.yml，镜像实机构建仍待验）
+- Kubernetes / Helm：容器编排（~~Docker / Docker Compose~~ 已落地 2026-08-05 → **镜像实机构建完成 2026-08-16**）
 - GitHub Actions：CI/CD
 - ~~Android App：Kotlin + Jetpack Compose + Retrofit + OkHttp + 前台 Service~~（已落地 2026-08：阶段一+二+Polish-7，自研 ANSI 终端模拟器 + 断线自动重连 + 85 单测）
 - ~~前端 ECharts 集成、xterm.js Web SSH 终端（MVP-7）~~（**已落地 2026-07-28**：MetricsView ECharts 图表、TerminalView xterm.js 终端）
@@ -462,7 +462,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 
 1. ~~**ECharts**：`package.json` 已声明依赖，前端无任何实际调用代码。当前图表用 SVG/表格替代。~~（2026-08-16 更新：已实际使用，`web-vue-SuMon/src/components/MetricsLineChart.vue` 指标折线图）
 2. **openapi-typescript**：devDep 已声明，未配置生成脚本，`api.d.ts` 为手写。
-3. **Redis / Prometheus / k8s / GitHub Actions**：均属增强阶段规划，代码未实现。（2026-08-16 更新：Docker 与 Android 已移出本清单——Docker 资产 2026-08-05 落地，Android App 阶段一+二+Polish-7 完整实现）
+3. **Redis / Prometheus / k8s / GitHub Actions**：均属增强阶段规划，代码未实现。（2026-08-16 更新：Docker 与 Android 已移出本清单——Docker 资产 2026-08-05 落地、三镜像实机构建 2026-08-16 完成，Android App 阶段一+二+Polish-7 完整实现）
 4. ~~**xterm.js Web SSH 终端**~~：~~属 MVP-7，尚未实现~~（2026-07-31 更新：T4 前端已于 2026-07-28 实现最小可用版本，`views/TerminalView.vue` + 路由 `/terminal/:serverId`；T5 云端部署已验证、T6 家庭主机部署待验）。
 5. ~~**Alert 告警系统前端**~~：~~前端告警页面未实现~~（2026-07-31 更新：MVP-6 告警前端已于 2026-07-27 收口，记录页 + 规则页 + `alert.push` WS 消费，2026-07-28 真实端到端链路验收通过）。
 

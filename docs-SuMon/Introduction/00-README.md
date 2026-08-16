@@ -40,7 +40,7 @@
 ### 已实现(可以放心声称做过)
 
 - **HTTPS / WSS** ✅ 已完成(2026-08-07,域名 genhaosan.online,Polish-6 M1)
-- **Docker / docker-compose** ✅ 已实现(三端 Dockerfile + docker-compose.yml,Polish-6 N6;Docker 镜像实机构建仍待执行)
+- **Docker / docker-compose** ✅ 已实现(三端 Dockerfile + docker-compose.yml,Polish-6 N6;**镜像实机构建 2026-08-16 完成**:WSL2 Docker 三镜像构建 + compose 全栈实跑 PASS)
 - **数据库异地备份脚本** ✅ 已实现(`scripts/remote-backup.sh`,云端备份→拉回→AES-256 加密落盘,Polish-6 M7)
 - **Android App** ✅ 已完整实现(`app-kt-SuMon/`,Kotlin + Compose;阶段一 Web 完整移植 + 阶段二 SSH 终端(自研 ANSI 终端模拟器),85 单测全绿;云端全链路手测待真机)
 - **告警外部通知渠道** ✅ 已实现(邮件 + 钉钉 + Webhook,V20,含退避重试,Polish-6 N1-N5;真实 SMTP 发送待邮箱凭据验收)
@@ -52,5 +52,5 @@
 
 - 多 JVM 实例部署 / 跨实例事件推送(当前为单 JVM 内存态设计)
 - Redis / 分布式锁 / 微服务拆分(仅规划,Outbox 模式已为拆分做准备)
-- Docker 镜像实机构建(资产已建,未执行 docker build)
+- Docker 镜像实机构建(2026-08-16 已完成:三镜像构建 + compose 全栈实跑 PASS;未推 registry、未做多架构 buildx)
 - 真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发(脚本已备,待凭据/设备)

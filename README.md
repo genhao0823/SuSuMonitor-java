@@ -117,7 +117,7 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 
 1. _(已补齐：`server-java-SuMon/mvnw` + `mvnw.cmd`，2026-07-27 T5，`mvnw test` 326 全过)_
 2. _(已补齐：`server-java-SuMon/src/main/resources/application-prod.yml`，2026-07-27 T5)_
-3. ~~**Dockerfile / docker-compose** — 全仓 0 命中。~~（**已补齐 2026-08-05**：三端 Dockerfile + 根 `docker-compose.yml`；镜像实机构建仍待 Docker 环境）
+3. ~~**Dockerfile / docker-compose** — 全仓 0 命中。~~（**已补齐 2026-08-05**：三端 Dockerfile + 根 `docker-compose.yml`；**镜像实机构建 2026-08-16 完成**：本机 WSL2 Docker 三镜像构建 + compose 全栈实跑验收 PASS，见 `docs-SuMon/Develop-log/20260816-Docker镜像实机构建.md`）
 4. _(已补齐：`server-java-SuMon/deploy/susumonitor-server.service`，2026-07-27 T5)_
 5. _(已补齐：`server-java-SuMon/deploy/nginx-susumonitor.conf.example` + `susumonitor-vhost.conf`，2026-07-27 T5，云端已生效)_
 6. ~~**数据库备份脚本** — `scripts/` 仅本地开发脚本。~~（**已补齐**：`server-java-SuMon/deploy/backup.sh`+`restore.sh`（2026-07-31）、`scripts/remote-backup.sh` 异地加密备份（2026-08-07）；crontab 定时调度仍未配置）
@@ -135,7 +135,7 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 |---|---|---|
 | Maven Wrapper | ~~缺失~~ → **已补齐**（2026-07-27 T5，`server-java-SuMon/mvnw`） | CI / 跨机器构建可复现（`mvnw test` 326 全过） |
 | `application-prod.yml` | ~~缺失~~ → **已补齐**（2026-07-27 T5，`src/main/resources/application-prod.yml`） | 生产配置已就绪 |
-| Dockerfile + docker-compose | ~~缺失~~ → **已补齐**（2026-08-05，三端 Dockerfile + 根 compose；实机构建待验） | 镜像实机构建与 compose 首跑调优待 Docker 环境 |
+| Dockerfile + docker-compose | ~~缺失~~ → **已补齐**（2026-08-05）→ **实机构建完成**（2026-08-16，三镜像构建 + compose 全栈实跑 PASS） | compose 首跑调优已落地（healthcheck/TZ/JVM 内存/根 `.env.example`） |
 | Java systemd Unit | ~~缺失~~ → **已补齐**（2026-07-27 T5，`server-java-SuMon/deploy/susumonitor-server.service`） | 进程监管和优雅停机已就绪 |
 | 完整宝塔 Nginx 站点配置 | ~~缺失~~ → **已补齐**（2026-07-27 T5，`deploy/nginx-susumonitor.conf.example` + `susumonitor-vhost.conf`） | 云端明文 HTTP 已跑通；TLS 待域名备案 |
 | 数据库备份脚本 | ~~缺失~~ → **已补齐**（`deploy/backup.sh`+`restore.sh`、`scripts/remote-backup.sh`） | crontab 定时调度未配置 |
@@ -236,7 +236,7 @@ SuSuMonitor(Jvav)/
 ├── api-test/                # API 集成测试(Apifox + curl + WS 验证,20 个 mjs + 4 个 ps1)
 ├── scripts/                 # 脚本(初始化 / 数据库 / WSL 集成 / 异地备份)
 ├── local/                   # 本机工具(rabbitmq/erlang)与各批次备份(不入库)
-├── docker-compose.yml       # mysql + rabbitmq + server + web (+agent profile)
+├── docker-compose.yml       # mysql + rabbitmq + server + web (+agent profile，2026-08-16 实机构建通过)
 ├── server-java-SuMon/pom.xml
 └── package.json
 ```
@@ -328,4 +328,4 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - **Polish-6 之后仍遗留（2026-08-07）**：真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需凭据/设备，脚本已备）；Android 终端 ANSI 光标/滚屏/TUI（top/vi）仍为简化渲染（后由自研 ANSI 模拟器增强）；~~多消费者并发消费~~（已实现 2026-08-12 Polish-7 M6）、Docker 镜像实机构建、数据库异地备份的定时调度（crontab）未配置
 - **Polish-7 之后仍遗留（2026-08-12）**：真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需凭据/设备，脚本已备）；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接（自研模拟器边界外）；~~Agent 掉线期间服务端不向 monitor 推送 terminal.closed~~（**已完成 2026-08-13，E2E 真实验收 2026-08-14**：Agent 断开时 Java 中继向发起浏览器推送服务端生成的 `terminal.closed(agent_disconnected)` 帧，Web 立即提示、Android 触发自动重连，见 `docs-SuMon/Develop-log/20260813-M1-终端断线中继增强.md`；真实"Agent 断线→浏览器收到 closed"端到端链路 2026-08-14 WSL 真实验收 PASS——`agent-disconnect-closed` 场景 `TERMINAL_FLOW_CONTROL_INTEGRATION_OK` + DB `terminal_sessions` 收口落库复核，见 `docs-SuMon/Develop-log/20260814-终端断线中继E2E验收.md`；**90s 心跳超时路径收口缺陷已修复**（2026-08-15：`markExpiredSessionsOffline` 先收口中继再移除注册表，心跳超时同样推 closed 帧并落库 `error/agent_disconnected`，WSL E2E 真实验收 PASS；心跳超时秒数参数化为 `AGENT_HEARTBEAT_TIMEOUT_SECONDS` 默认 90，见 `docs-SuMon/Develop-log/20260815-心跳超时终端收口修复.md`））；多 JVM 实例部署、Docker 镜像实机构建、数据库异地备份定时调度（crontab）未配置
 - **告警事件发布之后仍遗留（2026-08-12）**：~~`alert.triggered.v1` 消费者待接入~~（已实现：`alert-notifier` 消费事务内排程外部通知 + 幂等记录 + DLQ 分类，见 `20260812-alert.triggered消费者接入.md`）；~~replay 工具仅支持 metrics DLQ~~（已泛化 `--event metrics|alert`）；~~alert.triggered 无真实链路验收~~（2026-08-13 `verify-alert-triggered-chain.mjs` 11/11 PASS，见 `20260812-RabbitMQ全链路收口.md`）；~~`alert.resolved.v1`（恢复事件）仍为勘察项~~（**已完成 2026-08-15**：评估器恢复时同事务登记 Outbox 事件 + 本地事件推 WS（`alert.push` status=resolved）+ `alert-resolved-notifier` 幂等消费驱动"恢复通知"，V26 落库 `resolved_at`，真实 broker 验收 `verify-alert-resolved-chain.mjs` 11/11 PASS，见 `docs-SuMon/Develop-log/20260815-alert.resolved恢复事件链路.md`）；真实 SMTP 发送验收仍待外部凭据
-- **运维收口之后仍遗留（2026-08-16 快照）**：真实 SMTP 发送验收、真实 Agent→Server 断网/重启联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需外部凭据/设备，脚本已备）；Docker 镜像实机构建、数据库异地备份定时调度（crontab）、多 JVM 实例部署未配置；孤儿表 `commands`/`ssh_sessions` 保持暂缓清理（20260802 决策延续）；`alert_notifications` 保留期清理与 Outbox 已发布清理均已默认开启（V27 / `OUTBOX_CLEANUP_ENABLED:true`）
+- **运维收口之后仍遗留（2026-08-16 快照）**：真实 SMTP 发送验收、真实 Agent→Server 断网/重启联合 E2E、首管理员空库真实并发、Android approved 用户云端全链路手测（均需外部凭据/设备，脚本已备）；~~Docker 镜像实机构建~~（**已完成 2026-08-16**：WSL2 Docker 三镜像构建 + compose 全栈实跑 PASS，含 agent 容器上报闭环；未推 registry、未做多架构）；数据库异地备份定时调度（crontab）、多 JVM 实例部署未配置；孤儿表 `commands`/`ssh_sessions` 保持暂缓清理（20260802 决策延续）；`alert_notifications` 保留期清理与 Outbox 已发布清理均已默认开启（V27 / `OUTBOX_CLEANUP_ENABLED:true`）

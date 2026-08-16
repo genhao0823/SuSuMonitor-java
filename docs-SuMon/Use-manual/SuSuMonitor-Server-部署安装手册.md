@@ -153,6 +153,38 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/ready   # �
 | 6 | 前端页面可访问（登录/服务器列表/告警页） | 浏览器冒烟 |
 | 7 | Agent 连接与指标上报 | `Go-Agent 部署使用手册` §七 验证 |
 
+## 六点五、Docker Compose 部署（2026-08-16 实机验证通过）
+
+容器化部署为本手册 systemd 路径之外的第二种部署形态（mysql + rabbitmq + server + web 四服务，agent 可选 profile），已在本机 WSL2 Docker 29.4.2 上完成三镜像构建与全栈实跑验收（详见 `docs-SuMon/Develop-log/20260816-Docker镜像实机构建.md`）。
+
+### 6.5.1 前置
+
+- Docker Engine ≥ 26 + Compose v2 插件；国内网络建议配置 registry-mirror（本机用 `docker.m.daocloud.io`，见 dev-log）。
+- 镜像由 `docker compose build` 现场构建（server 构建走 `.docker/settings.xml` 阿里云 Maven 镜像；npm 依赖需可访问 npmjs.org）。
+
+### 6.5.2 环境文件
+
+```bash
+cp .env.example .env   # 或放非仓库路径并 --env-file 引用
+# 必填：MYSQL_ROOT_PASSWORD / DB_PASSWORD / RABBITMQ_PASSWORD
+#       JWT_SECRET(≥32B base64) / AES_GCM_KEY(恰32B base64) / CORS_ALLOWED_ORIGINS
+# 生成：openssl rand -base64 32（JWT/AES）；openssl rand -hex 16（数据库口令）
+```
+
+### 6.5.3 构建与启动
+
+```bash
+docker compose build                                    # server + web
+docker compose --profile agent build agent              # 可选：agent 镜像
+docker compose up -d                                    # 四服务，healthcheck 门控启动顺序
+docker compose ps                                       # 应全部 (healthy)
+```
+
+- 入口：`http://<主机>:${WEB_PORT:-8080}`（nginx 容器反代 `/api`、`/ws/agent`、`/ws/monitor` → server:18080）。
+- 数据：命名卷 `mysql-data`/`rabbitmq-data` 持久化；`docker compose down -v` 清空重置。
+- 验收：`node api-test/verify-docker-compose.mjs`（P0 首管理员 bootstrap + C1 健康/C2 建服务器/C3 WS 订阅/C4 agent token/C5 agent 容器上报闭环，2026-08-16 PASS）。
+- 注意：容器与 systemd 部署不可在同一主机混用端口（3306/5672/18080 均被容器占用时 systemd 路径需改端口）。
+
 ## 七、相关手册
 
 - 升级与回滚：《SuSuMonitor-升级与回滚手册.md》

@@ -140,6 +140,8 @@ SuSuMonitor/
 | MVP-13 | Gateway 与服务治理：统一入口、路由、配置管理、服务发现和服务间鉴权 | 否 |
 | MVP-14 | 分布式运行保障：独立部署、链路追踪、集中日志、RabbitMQ 重试/死信/积压治理和回滚 | 否（2026-08-16 注：RabbitMQ 部分已在单体落地——消费 3 次指数退避重试、3 个 DLQ、DLQ 受控重放 `replay-dlq.mjs --event metrics|alert`、Broker 停机恢复验收 B1-B7、**队列积压探测与阈值告警、消费耗时/失败率窗口监控（20260816 MVP-14 监控收尾，真实 broker 9/9）**；分布式部署/链路追踪/滚动升级回滚未做） |
 
+> **注（2026-08-16 Docker 增强项收口）**：本规划增强阶段的 Docker 资产（`.dockerignore`、三端 Dockerfile、根 docker-compose.yml，2026-08-05 N6 交付）已完成**镜像实机构建**——本机 WSL2 Docker 29.4.2 构建 server(391MB)/web(81.5MB)/agent(26.7MB) 三镜像，compose 全栈实跑验收 P0+C1-C5 PASS（含 agent 容器上报闭环），详见 `docs-SuMon/Develop-log/20260816-Docker镜像实机构建.md`。容器化与 MVP-13/14 的微服务拆分仍是两条线：容器化是部署形态，拆分是架构路线。
+
 微服务阶段的服务边界初步规划如下：
 
 ```text
