@@ -16,7 +16,10 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -60,9 +63,13 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
         if (rules.isEmpty()) {
             return;
         }
+        // S2 性能优化：一次批量查询该 server 的全部状态行，按 ruleId 建 Map 供循环分发，
+        // 消除"每条规则一次 SQL 往返"的 N+1 放大（uk_alert_states_rule_server 保证无重复行）。
+        Map<Long, AlertStateEntity> statesByRule = stateMapper.selectByServerId(metrics.getServerId()).stream()
+                .collect(Collectors.toMap(AlertStateEntity::getRuleId, Function.identity(), (first, ignored) -> first));
         for (AlertRuleEntity rule : rules) {
             try {
-                evaluateRule(rule, metrics);
+                evaluateRule(rule, metrics, statesByRule.get(rule.getId()));
             } catch (Exception exception) {
                 log.warn("alert evaluation failed, ruleId={}, serverId={}",
                         rule.getId(), metrics.getServerId(), exception);
@@ -73,8 +80,7 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
     /**
      * 评估单条规则，根据状态机决策执行对应操作。
      */
-    private void evaluateRule(AlertRuleEntity rule, MetricsLatestVo metrics) {
-        AlertStateEntity state = stateMapper.selectByRuleAndServer(rule.getId(), metrics.getServerId());
+    private void evaluateRule(AlertRuleEntity rule, MetricsLatestVo metrics, AlertStateEntity state) {
         AlertTransition transition = stateMachine.evaluate(rule, metrics, state);
 
         switch (transition) {

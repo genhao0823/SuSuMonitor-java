@@ -1,5 +1,6 @@
 package com.susumonitor.server.module.alert.service;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -69,7 +70,7 @@ class AlertEvaluationServiceTests {
         AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
         MetricsLatestVo metrics = metrics(bd("90"));
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
 
         service.evaluate(metrics);
 
@@ -88,7 +89,7 @@ class AlertEvaluationServiceTests {
         MetricsLatestVo metrics = metrics(bd("95"));
         AlertStateEntity state = activeState(1L, 1L, 1L);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
         when(stateMapper.updateStateActive(anyLong(), anyLong(), any(LocalDateTime.class), eq(0))).thenReturn(1);
 
         service.evaluate(metrics);
@@ -107,7 +108,7 @@ class AlertEvaluationServiceTests {
         MetricsLatestVo metrics = metrics(bd("50"));
         AlertStateEntity state = activeState(1L, 1L, 1L);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
         when(recordMapper.updateStatusToResolved(eq(1L), any(LocalDateTime.class))).thenReturn(1);
         when(stateMapper.deleteState(eq(1L), eq(0))).thenReturn(1);
         AlertRecordEntity record = resolvedRecord(1L);
@@ -130,7 +131,7 @@ class AlertEvaluationServiceTests {
         MetricsLatestVo metrics = metrics(bd("50"));
         AlertStateEntity state = activeState(1L, 1L, 1L);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
         when(recordMapper.updateStatusToResolved(eq(1L), any(LocalDateTime.class))).thenReturn(0);
 
         service.evaluate(metrics);
@@ -147,7 +148,7 @@ class AlertEvaluationServiceTests {
         AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
         MetricsLatestVo metrics = metrics(bd("90"));
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
 
         service.evaluate(metrics);
 
@@ -167,7 +168,7 @@ class AlertEvaluationServiceTests {
 
         service.evaluate(metrics);
 
-        verify(stateMapper, never()).selectByRuleAndServer(anyLong(), anyLong());
+        verify(stateMapper, never()).selectByServerId(anyLong());
         verify(recordMapper, never()).insertRecord(any());
         verify(eventPublisher, never()).publishEvent(any());
         verify(outboxService, never()).enqueue(any(), any(), any(), any());
@@ -181,8 +182,7 @@ class AlertEvaluationServiceTests {
         AlertRuleEntity rule2 = rule(2L, "memory", ">=", bd("90"));
         MetricsLatestVo metrics = metrics(bd("90"), bd("95"));
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule1, rule2));
-        when(stateMapper.selectByRuleAndServer(eq(1L), eq(1L))).thenReturn(null);
-        when(stateMapper.selectByRuleAndServer(eq(2L), eq(1L))).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
 
         service.evaluate(metrics);
 
@@ -201,7 +201,7 @@ class AlertEvaluationServiceTests {
         MetricsLatestVo metrics = metrics(bd("95"));
         AlertStateEntity state = activeState(1L, 1L, 1L);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
         when(stateMapper.updateStateActive(anyLong(), anyLong(), any(LocalDateTime.class), eq(0))).thenReturn(0);
 
         service.evaluate(metrics);
@@ -210,7 +210,22 @@ class AlertEvaluationServiceTests {
         verify(recordMapper, never()).insertRecord(any());
     }
 
-    /** 评估失败应记录日志但不影响其他规则。 */
+    /** 批量状态查询失败应向上传播（由消息消费者重试整条消息），不再逐规则吞异常。 */
+    @Test
+    void stateQueryFailureShouldPropagate() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        MetricsLatestVo metrics = metrics(bd("90"));
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenThrow(new RuntimeException("DB error"));
+
+        assertThrows(RuntimeException.class, () -> service.evaluate(metrics));
+
+        verify(recordMapper, never()).insertRecord(any());
+        verify(stateMapper, never()).insertState(any());
+    }
+
+    /** 单规则评估/写入失败应记录日志但不影响其他规则（逐规则隔离保留）。 */
     @Test
     void evaluationFailureShouldNotAffectOtherRules() {
         setupService();
@@ -218,14 +233,16 @@ class AlertEvaluationServiceTests {
         AlertRuleEntity rule2 = rule(2L, "memory", ">=", bd("90"));
         MetricsLatestVo metrics = metrics(bd("90"), bd("95"));
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule1, rule2));
-        // rule1 的 stateMapper 抛异常，模拟 DB 错误。
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenThrow(new RuntimeException("DB error"));
-        when(stateMapper.selectByRuleAndServer(2L, 1L)).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
+        // rule1 的 record 写入抛异常，模拟单规则 DB 错误。
+        when(recordMapper.insertRecord(any(AlertRecordEntity.class)))
+                .thenThrow(new RuntimeException("DB error"))
+                .thenReturn(1);
 
         service.evaluate(metrics);
 
-        // rule2 仍应正常评估。
-        verify(recordMapper, times(1)).insertRecord(any(AlertRecordEntity.class));
+        // rule2 仍应正常评估（rule1 失败被隔离）。
+        verify(recordMapper, times(2)).insertRecord(any(AlertRecordEntity.class));
     }
 
     // --- 辅助方法 ---
@@ -244,7 +261,7 @@ class AlertEvaluationServiceTests {
         AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
         rule.setConfirmCount(3);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
 
         service.evaluate(metrics(bd("90")));
 
@@ -263,11 +280,12 @@ class AlertEvaluationServiceTests {
         rule.setConfirmCount(3);
         AlertStateEntity counting = new AlertStateEntity();
         counting.setId(1L);
+        counting.setRuleId(1L);
         counting.setActive(false);
         counting.setBreachCount(1);
         counting.setVersion(0);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(counting);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(counting));
         when(stateMapper.incrementBreachCount(eq(1L), any(LocalDateTime.class), eq(0))).thenReturn(1);
 
         service.evaluate(metrics(bd("90")));
@@ -286,11 +304,12 @@ class AlertEvaluationServiceTests {
         rule.setConfirmCount(3);
         AlertStateEntity counting = new AlertStateEntity();
         counting.setId(1L);
+        counting.setRuleId(1L);
         counting.setActive(false);
         counting.setBreachCount(2);
         counting.setVersion(0);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(counting);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(counting));
         when(stateMapper.activateOnBreachThreshold(eq(1L), any(), any(LocalDateTime.class), eq(0)))
                 .thenReturn(1);
 
@@ -311,11 +330,12 @@ class AlertEvaluationServiceTests {
         rule.setConfirmCount(3);
         AlertStateEntity counting = new AlertStateEntity();
         counting.setId(1L);
+        counting.setRuleId(1L);
         counting.setActive(false);
         counting.setBreachCount(2);
         counting.setVersion(0);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(counting);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(counting));
         when(stateMapper.deleteState(eq(1L), eq(0))).thenReturn(1);
 
         service.evaluate(metrics(bd("50")));
