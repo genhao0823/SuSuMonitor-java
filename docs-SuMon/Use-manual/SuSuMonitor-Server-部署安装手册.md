@@ -95,7 +95,7 @@ sudo install -m 0600 -o root -g root server.env /etc/susumonitor/server.env
 | `SPRING_RABBITMQ_*` | RabbitMQ 连接（host/port/virtual-host/username/password） |
 | `AGENT_TRUSTED_PROXY_CIDRS` | 反向代理信任列表（生产默认仅本机） |
 | `CORS_ALLOWED_ORIGINS` | 前端 Origin 白名单（域名备案后为 https://域名） |
-| `ALERT_NOTIFICATION_ENABLED` | 告警外部通知总开关，默认 `false`；`true` 且规则配置收件人才发邮件 |
+| `ALERT_NOTIFICATION_ENABLED` | 告警外部通知总开关，默认 `false`；`true` 时按规则配置的渠道发送（邮件/钉钉/Webhook，其中邮件另需 SMTP 配置） |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP 服务器（邮件告警通道；不配置则邮件通道自动跳过，钉钉/Webhook 不受影响） |
 | `ALERT_MAIL_FROM` | 告警邮件发件人，默认 `noreply@susumonitor.local` |
 | `ALERT_CONSUMER_CONCURRENCY` / `ALERT_CONSUMER_PREFETCH` | 告警消费并发（默认 `1` 单消费者；>1 启用多消费者，幂等由 V15 唯一键保障，2026-08-12 落地）与每消费者预取数 |
