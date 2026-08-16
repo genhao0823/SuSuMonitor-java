@@ -138,7 +138,7 @@ SuSuMonitor/
 | MVP-11 | `alert-service`：通过 RabbitMQ 幂等消费指标事件，完成告警检测、状态迁移、记录和推送 | 已收口（2026-07-31 + 2026-08-01 收口）：V15 消费幂等表 + `MetricsReportedMessage` 契约解析 + `AlertMessageConsumer`（AUTO 确认 + 幂等 + 有限重试）+ DLQ 分类；`verify-alert-ws` 24/24、`verify-mvp11` 17 项验收 PASS；收口：轮询 1000→200ms（延迟 -71%）、DLQ 重放工具、Broker 停机重连验收（见 `Develop-log/20260731-MVP11-Alert-消费侧.md`、`20260801-MVP11-收口.md`） |
 | MVP-12 | `ssh-service`：SSH 连接测试、SSH 会话、PTY、输入输出和超时 | 否（拆分未做；2026-08-16 注：所列能力均已在单体实现——SSH 测试+历史 V23/V24+50400 超时分类、PTY 中继、终端会话收口含断线中继/心跳超时修复、20 分钟 idle 超时） |
 | MVP-13 | Gateway 与服务治理：统一入口、路由、配置管理、服务发现和服务间鉴权 | 否 |
-| MVP-14 | 分布式运行保障：独立部署、链路追踪、集中日志、RabbitMQ 重试/死信/积压治理和回滚 | 否（2026-08-16 注：RabbitMQ 部分已在单体落地——消费 3 次指数退避重试、3 个 DLQ、DLQ 受控重放 `replay-dlq.mjs --event metrics|alert`、Broker 停机恢复验收 B1-B7；分布式部署/链路追踪/滚动升级回滚未做） |
+| MVP-14 | 分布式运行保障：独立部署、链路追踪、集中日志、RabbitMQ 重试/死信/积压治理和回滚 | 否（2026-08-16 注：RabbitMQ 部分已在单体落地——消费 3 次指数退避重试、3 个 DLQ、DLQ 受控重放 `replay-dlq.mjs --event metrics|alert`、Broker 停机恢复验收 B1-B7、**队列积压探测与阈值告警、消费耗时/失败率窗口监控（20260816 MVP-14 监控收尾，真实 broker 9/9）**；分布式部署/链路追踪/滚动升级回滚未做） |
 
 微服务阶段的服务边界初步规划如下：
 
