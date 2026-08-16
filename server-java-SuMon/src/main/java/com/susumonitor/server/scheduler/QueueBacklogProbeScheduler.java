@@ -2,7 +2,7 @@ package com.susumonitor.server.scheduler;
 
 import com.susumonitor.server.module.system.QueueBacklogProbeService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "susumonitor.rabbitmq.queue-monitor-enabled", havingValue = "true")
+@ConditionalOnExpression("${susumonitor.rabbitmq.enabled:true} and ${susumonitor.rabbitmq.queue-monitor-enabled:true}")
 public class QueueBacklogProbeScheduler {
 
     private final QueueBacklogProbeService probeService;

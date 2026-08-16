@@ -19,11 +19,15 @@ import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
 import com.susumonitor.server.module.system.RabbitHealthChecker;
+import com.susumonitor.server.module.system.QueueBacklogSnapshotRegistry;
+import com.susumonitor.server.module.alert.consume.ConsumeStatsService;
+import com.susumonitor.server.module.alert.consume.ConsumeTimingStatsRegistry;
 import com.susumonitor.server.module.terminal.mapper.TerminalSessionMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.test.context.ActiveProfiles;
@@ -131,6 +135,14 @@ class SystemControllerTests {
     @MockitoBean
     private ConsumeRecordMapper consumeRecordMapper;
 
+    // 监控快照组件替身：enabled=false 时条件 Bean 不存在，测试注入 mock 验证端点组合逻辑。
+    @MockitoBean
+    private ConsumeTimingStatsRegistry consumeTimingStatsRegistry;
+    @MockitoBean
+    private ConsumeStatsService consumeStatsService;
+    @MockitoBean
+    private QueueBacklogSnapshotRegistry queueBacklogSnapshotRegistry;
+
 
     // 条件装配断言：test profile（susumonitor.rabbitmq.enabled=false）下发布器不应加载。
     @Autowired(required = false)
@@ -223,6 +235,36 @@ class SystemControllerTests {
     @Test
     void outboxPublisherShouldNotLoadWhenDisabled() {
         org.junit.jupiter.api.Assertions.assertNull(outboxPublisherScheduler);
+    }
+
+    /** 未认证访问监控快照端点返回 401。 */
+    @Test
+    void rabbitmqConsumersShouldRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/system/rabbitmq/consumers"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(40100));
+    }
+
+    /** 管理员访问监控快照端点：组件为空时返回空列表（enabled=false 条件语义）。 */
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void rabbitmqConsumersShouldReturnEmptyListWhenComponentsAbsent() throws Exception {
+        mockMvc.perform(get("/api/system/rabbitmq/consumers"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    /** 管理员访问队列快照端点：无探测结果时返回空列表。 */
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void rabbitmqQueuesShouldReturnEmptyListWhenNoSnapshot() throws Exception {
+        mockMvc.perform(get("/api/system/rabbitmq/queues"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
     }
 
     // 条件装配断言：test profile（susumonitor.rabbitmq.enabled=false）下消费者不应加载。

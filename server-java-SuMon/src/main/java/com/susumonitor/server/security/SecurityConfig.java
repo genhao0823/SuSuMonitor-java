@@ -106,6 +106,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/alerts/records", "/api/alerts/records/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/alerts/records/*/read").authenticated()
                          .requestMatchers(HttpMethod.GET, "/api/servers", "/api/servers/**").authenticated()
+                         // RabbitMQ 运行监控快照仅管理员可见（MVP-14 监控收尾）。
+                         .requestMatchers(HttpMethod.GET, "/api/system/rabbitmq/**").hasRole("ADMIN")
                          .requestMatchers("/ws/agent", "/ws/monitor").permitAll()
                          .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

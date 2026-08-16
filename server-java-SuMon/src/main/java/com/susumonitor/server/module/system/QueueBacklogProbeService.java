@@ -35,7 +35,7 @@ public class QueueBacklogProbeService {
             RabbitMqTopologyConfig.ALERT_RESOLVED_DLQ);
 
     /** 业务队列名集合（超阈值才告警）。 */
-    static final List<String> BUSINESS_QUEUES = List.of(
+    public static final List<String> BUSINESS_QUEUES = List.of(
             RabbitMqTopologyConfig.ALERT_METRICS_QUEUE,
             RabbitMqTopologyConfig.ALERT_TRIGGERED_QUEUE,
             RabbitMqTopologyConfig.ALERT_RESOLVED_QUEUE);
