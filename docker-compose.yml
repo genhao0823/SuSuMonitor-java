@@ -101,14 +101,16 @@ services:
       start_period: 10s
 
   # 目标主机上的 Agent 建议直接用 systemd 部署；此 profile 供容器化试点/测试。
+  # 注意：compose 加载时会插值全部服务（含 profile 门控），因此此处不能用 :? 必填语法，
+  # 否则未启用 agent profile 的其余命令也会报"变量缺失"。空值时由 agent 二进制启动校验报错。
   agent:
     build: ./agent-go-SuMon
     profiles: ["agent"]
     restart: unless-stopped
     environment:
       SUSUMONITOR_BACKEND_URL: ${SUSUMONITOR_BACKEND_URL:-ws://server:18080}
-      SUSUMONITOR_SERVER_ID: ${SUSUMONITOR_SERVER_ID:?set SUSUMONITOR_SERVER_ID in .env}
-      SUSUMONITOR_AGENT_TOKEN: ${SUSUMONITOR_AGENT_TOKEN:?set SUSUMONITOR_AGENT_TOKEN in .env}
+      SUSUMONITOR_SERVER_ID: ${SUSUMONITOR_SERVER_ID:-}
+      SUSUMONITOR_AGENT_TOKEN: ${SUSUMONITOR_AGENT_TOKEN:-}
       SUSUMONITOR_METRICS_BUFFER_PATH: /var/lib/susumonitor/metrics-buffer.json
       SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES: 720
       SUSUMONITOR_METRICS_BUFFER_MAX_BYTES: 0
