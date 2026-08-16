@@ -1,5 +1,7 @@
 # 本地仓库收口指南(对应 `D:\develop\Git\SuSuMonitor.git`)
 
+> **本索引为 Sprint 4 历史快照（2026-08-02），最新状态以主仓库 README 与 docs-SuMon 为准**
+
 > **位置提示**:本文档是给 `D:\develop\Git\SuSuMonitor.git` 本地裸仓库的"内容索引"。物理 README.md 写不进 bare repo,这里放在主项目根目录,提交到 main 后即可通过 git log 追溯。
 
 ## 仓库
@@ -13,16 +15,17 @@
 
 | 分支 | 指向 | 状态 |
 |---|---|---|
-| `main` | `cacf131` | ✅ Sprint 1-4 收口主干 |
-| `feat/agent-monitoring` | `cacf131` | ✅ = main(已合并,保留供追溯)|
+| `main` | `ab22b2e` | ✅ Sprint 1-4 收口主干 |
+| `feat/agent-monitoring` | `ab22b2e` | ✅ = main(已合并,保留供追溯)|
 
 ## Tag
 
 | Tag | 指向 | 说明 |
 |---|---|---|
-| `v0.4.0-sprint4` | `cacf131` | Sprint 1-4 收口里程碑 |
+| `v0.4.0-sprint4` | `ab22b2e` | Sprint 1-4 收口里程碑 |
+| `v0.5.0-cloud` | `6d6744e` | Polish-5 GitHub 远程协作收口 |
 
-## Sprint 1-4 收口总结(主项目主分支 `cacf131`)
+## Sprint 1-4 收口总结(主项目主分支 `ab22b2e`)
 
 | Sprint | 状态 | 关键 commit | 内容 |
 |---|---|---|---|
@@ -35,13 +38,13 @@
 
 | 工具 | 命令 | 数量 | 状态 |
 |---|---|---|---|
-| Vitest 单元测试 | `npm run test` | 37 测试 / 7 文件 | ✅ |
+| Vitest 单元测试 | `npm run test` | 129 测试 / 22 spec 文件 | ✅ |
 | audit:catchup(11 规则)| `npm run audit:catchup` | 0 ERROR / 0 WARN / 0 INFO | ✅ |
-| api:e2e(HTTP 13 路径)| `npm run api:e2e` | 13 路径 | ✅ |
-| ui:e2e(浏览器 17 路径)| `npm run ui:e2e` | 17 路径 | ✅ |
+| api:e2e(真实 HTTP 检查)| `npm run api:e2e` | 19 项 | ✅ |
+| ui:e2e(浏览器场景)| `npm run ui:e2e` | 18 场景 | ✅ |
 | typecheck | `npm run typecheck` | 0 错 | ✅ |
 | lint | `npm run lint` | 0 错 0 警 | ✅ |
-| openapi:check | `npm run openapi:check` | 3/3 | ✅ |
+| openapi:check | `npm run openapi:check` | 5/5 | ✅ |
 
 ## 收口操作步骤(供未来参考)
 

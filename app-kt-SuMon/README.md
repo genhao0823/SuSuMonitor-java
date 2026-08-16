@@ -18,9 +18,9 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 | 用户审核 | admin 列表/搜索/单条/批量通过拒绝 |
 | 实时推送 | 前台 Service 常驻 + WS 订阅 + 告警系统通知（Android 13+ 权限请求） |
 | 设置 | 用户信息、通知开关、后端地址、关于 |
-| SSH 终端 | 自绘 Canvas 终端（SimpleTerminalView，等宽行缓冲 + ANSI 剥离）复用 /ws/monitor 通道收发 PTY（approved 用户，仅入口在服务器详情） |
+| SSH 终端 | 自研 ANSI 终端模拟器（TerminalEmulator + SimpleTerminalView：解析/着色/渲染非剥离、双屏、滚动回退），复用 /ws/monitor 通道收发 PTY；支持 resize/功能键/Ctrl、断线自动重连（approved 用户，仅入口在服务器详情） |
 
-**阶段二已含**：SSH 终端（自绘简化终端，复用 /ws/monitor WebSocket 通道，无需本地 PTY）。
+**阶段二已含**：SSH 终端（自研 ANSI 终端模拟器，支持 top/htop 类 TUI；复用 /ws/monitor WebSocket 通道，无需本地 PTY）。
 
 ## 技术栈
 
@@ -36,7 +36,7 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 ```bash
 # 前置：JDK 17+、Android SDK（local.properties 指向 sdk.dir）
 ./gradlew :app:assembleDebug
-./gradlew :app:testDebugUnitTest   # 45 个单元测试
+./gradlew :app:testDebugUnitTest   # 85 个单元测试
 ```
 
 Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
@@ -47,15 +47,14 @@ Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 2. 连接真机或启动模拟器，运行 `app` 配置
 3. 登录页输入后端账号（首个用户为 admin，或联系管理员审核）
 
-> 明文 HTTP/WS 仅在演示环境可用（network_security_config 仅放行 `82.156.245.102`）；
-> 生产切 HTTPS 后需同时收紧网络安全配置。
+> network_security_config 全局禁止明文 HTTP，仅放行 HTTPS/WSS（`genhaosan.online`）；生产环境仅允许加密连接。
 
 ## 云端联调状态（2026-08-06）
 
 - ✅ 注册 / pending 登录 403 / 用户名冲突 409 / 错误友好提示（模拟器 + 云端）
 - ✅ 阶段一全流程（smoke 管理员账号）：服务器 CRUD、SSH 测试（指纹未确认 40901 业务预期）、主机指纹格式校验、告警规则 CRUD、用户审核（单条/批量通过拒绝）、实时监控历史图表（1h/6h/24h/7d）
 - ✅ 阶段二 SSH 终端：`ls` / `whoami` / `hostname` PTY 输出回显正常，退格/回车/返回关闭正确
-- ✅ 终端复用 /ws/monitor 通道（open→opened→input/output→close→closed），断线不自动重连
+- ✅ 终端复用 /ws/monitor 通道（open→opened→input/output→close→closed），断线自动重连（RECONNECTING 相位 + 指数退避重开 + UI 提示）
 - ✅ 联调修复 3 个契约/容错 bug：AdminUserVo camelCase、metrics page_size 上限 100、详情页 metrics 404 容错
 
 ## 目录结构
@@ -73,8 +72,8 @@ app/src/main/java/com/susumonitor/
 
 ## 协议对齐
 
-- REST：`docs-SuMon/OpenApi-SuMon/*.json`（31 端点，auth 模块 camelCase，其余 snake_case）
+- REST：`docs-SuMon/OpenApi-SuMon/*.json`（5 个文件，29 路径/34 端点操作，auth 模块 camelCase，其余 snake_case）
 - WebSocket：`docs-SuMon/Protocol-SuMon/websocket-protocol.md` v1.3
   - 先 `POST /api/ws/monitor-ticket` 取 30s 一次性 ticket → 连 `ws://…/ws/monitor?ticket=…`
   - `metrics.subscribe` → 收 `metrics.update` / `alert.push` / `server.status.update` / `error`
-- 错误码：`server-java-SuMon/common/ErrorCode.java`（40100/40300/40001/40002…）
+- 错误码：`server-java-SuMon/src/main/java/com/susumonitor/server/common/ErrorCode.java`（40100/40300/40001/40002…）

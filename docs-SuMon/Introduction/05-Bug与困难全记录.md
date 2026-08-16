@@ -1,6 +1,6 @@
 # 05 Bug 与困难全记录
 
-> 面试"你遇到的最大困难/最有成就感的 Bug"必考题素材库。共 20+ 个真实问题,按根因类别分类,每个按 **现象 → 根因 → 解决 → 教训** 四段式记录。原始记录见 `docs-SuMon/Bug-fix/`(10 篇)与 `docs-SuMon/Difficulty-log/`(5 篇)及对应 dev-log。
+> 面试"你遇到的最大困难/最有成就感的 Bug"必考题素材库。共 20+ 个真实问题,按根因类别分类,每个按 **现象 → 根因 → 解决 → 教训** 四段式记录。原始记录见 `docs-SuMon/Bug-fix/`(9 篇,另含 README 索引)与 `docs-SuMon/Difficulty-log/`(9 篇,见目录 README 索引)及对应 dev-log。
 
 ---
 

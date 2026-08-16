@@ -53,6 +53,7 @@ Vite 已配置代理 `/api → http://localhost:18080`，前端直接以 `/api/*
 | `npm run format` | Prettier 格式化 |
 | `npm run test` | 执行 Vitest 单元测试 |
 | `npm run openapi:check` | 校验 OpenAPI 结构、引用和 operationId |
+| `npm run audit:catchup` | catch-up 静态审计（11 条规则） |
 | `npm run api:e2e` | 执行真实后端 HTTP 路径检查 |
 | `npm run ui:e2e` | 执行浏览器 UI 路径检查 |
 
@@ -121,6 +122,7 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | 服务器详情投递状态（积压/最旧采样/缓冲丢弃/本地死信） | ✅ | M4-3（2026-08-05） |
 | 监控页 ECharts 折线图 + 时间范围选择（1h/6h/24h/7d，图表/表格切换） | ✅ | N2（2026-08-05） |
 | 监控图告警阈值线（markLine，警告橙/严重红虚线）+ 告警记录/规则页通知状态列 | ✅ | N4（2026-08-05） |
+| 告警通知历史详情弹窗（记录详情页查看各渠道通知投递历史） | ✅ 已实现（2026-08-07 Polish6-M8） | GET /api/alerts/records/{id}/notifications |
 
 ### 扩展命令
 
@@ -133,11 +135,11 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | `npm run format` | Prettier 格式化 |
 | `npm run openapi:check` | OpenAPI 契约 lint |
 | `npm run audit:catchup` | catch-up 静态审计(11 条规则,扫魔法数字 / 参数名 / API 路径 / 占位密码 / TS any / 残留日志) |
-| `npm run test` | Vitest 单元测试(122 用例,覆盖 stores + utils + composables + api/services/components) |
-| `npm run api:e2e` | HTTP API 自动化测试(覆盖 17 路径中的 HTTP 部分) |
-| `npm run ui:e2e` | UI E2E 浏览器自动化(puppeteer-core + 系统 Chrome,17 路径) |
+| `npm run test` | Vitest 单元测试(129 用例 / 22 个 spec 文件,覆盖 stores + utils + composables + api/services/components + views + layouts) |
+| `npm run api:e2e` | HTTP API 自动化测试(19 项检查) |
+| `npm run ui:e2e` | UI E2E 浏览器自动化(puppeteer-core + 系统 Chrome,18 场景) |
 
-### 目录结构(2026-07-21 更新)
+### 目录结构(2026-08-16 更新)
 
 ```text
 web-vue-SuMon/
@@ -148,11 +150,15 @@ web-vue-SuMon/
 ├── tsconfig.json
 ├── tsconfig.node.json
 ├── vite.config.ts
+├── vitest.config.ts
 ├── index.html
 ├── env.d.ts
 ├── README.md
-├── scripts/
-│   ├── check-openapi.mjs       # OpenAPI 契约结构 lint
+├── scripts/                     # 5 个文件
+│   ├── check-openapi.mjs        # OpenAPI 契约结构 lint
+│   ├── api-e2e-test.mjs         # api:e2e 真实后端 HTTP 路径检查
+│   ├── audit-catchup.mjs        # catch-up 静态审计(11 条规则)
+│   ├── ui-e2e-test.mjs          # ui:e2e 浏览器自动化
 │   └── README.md
 ├── public/
 │   ├── favicon.jpg              # 涂山苏苏 favicon
@@ -164,6 +170,7 @@ web-vue-SuMon/
     ├── App.vue
     ├── styles/global.css
     ├── api/                     # HTTP 客户端封装
+    ├── services/                # WebSocket 封装(websocket.ts / terminal-ws.ts)
     ├── stores/                  # Pinia 状态(auth 等)
     ├── router/
     │   ├── index.ts             # 路由表 + 守卫 + 进度条

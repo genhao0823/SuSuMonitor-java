@@ -2,7 +2,7 @@
 
 SuSuMonitor 监控采集 Agent，Go 实现。
 
-> **当前状态（2026-08-05）**：WebSocket 鉴权、心跳、指数退避重连、gopsutil 指标采集、`metrics.report` 上报、`metrics.ack` 入口确认、有界本地 FIFO 缓冲、`metrics.nack` 永久拒绝死信（snapshot v2，v1 自动迁移）、心跳携带投递遥测和 Linux PTY 终端链路已实现。正式生产部署应使用 HTTPS/WSS。
+> **当前状态（2026-08-12）**：WebSocket 鉴权、心跳、指数退避重连、gopsutil 指标采集、`metrics.report` 上报、`metrics.ack` 入口确认、有界本地 FIFO 缓冲、`metrics.nack` 永久拒绝死信（snapshot v2，v1 自动迁移）、nack 有限重试（`retriable_server_error` 分级退避，snapshot v3）、心跳携带投递遥测和 Linux PTY 终端链路已实现。正式生产部署应使用 HTTPS/WSS。PTY 输出以原始字节透传（Base64），ANSI 序列不剥离，由展示端（Web/Android）解析着色。
 
 - Go 1.23（`go.mod` 要求 1.23）
 - gopsutil（跨平台系统指标采集）
@@ -30,7 +30,8 @@ agent-go-SuMon/
 │   ├── wsclient/     WebSocket 连接、鉴权、重连
 │   ├── collector/    系统指标采集
 │   ├── metricbuffer/ 未确认指标的持久化 FIFO
-│   └── reporter/     metrics.report 构造、入队与确认后发送
+│   ├── reporter/     metrics.report 构造、入队与确认后发送
+│   └── terminal/     Linux PTY 会话承载（输出原始字节透传）
 └── bin/              构建产物（不提交 Git）
 ```
 
@@ -60,8 +61,14 @@ cp .env.example .env
 | `SUSUMONITOR_BACKEND_URL` | 后端 WebSocket 地址，如 `ws://localhost:18080` |
 | `SUSUMONITOR_SERVER_ID` | 服务器 ID（admin 预建后获得） |
 | `SUSUMONITOR_AGENT_TOKEN` | Agent Token（admin 通过 REST 预发放，明文仅一次性返回） |
+| `SUSUMONITOR_COLLECT_INTERVAL_SECONDS` | 指标采集周期，默认 5 秒 |
+| `SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS` | 心跳周期，默认 30 秒 |
+| `SUSUMONITOR_RECONNECT_INITIAL_SECONDS` | 断线重连首次退避等待，默认 5 秒 |
+| `SUSUMONITOR_RECONNECT_MAX_SECONDS` | 断线重连退避上限，默认 60 秒 |
+| `SUSUMONITOR_LOG_LEVEL` | 日志级别，默认 `info` |
 | `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标 FIFO 文件，默认 `/var/lib/susumonitor/metrics-buffer.json` |
 | `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` | 待确认指标最大条数，默认 720（约 1 小时的 5 秒采集） |
+| `SUSUMONITOR_METRICS_BUFFER_MAX_BYTES` | 待确认指标缓冲字节上限，默认 0（不限制；设为 ≥1024 字节生效） |
 | `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` | 一次指标写入后等待 `metrics.ack` 的最长时间，默认 15 秒 |
 | `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` | ACK 超时后的首次重传等待，默认 2 秒 |
 | `SUSUMONITOR_METRICS_RETRY_MAX_SECONDS` | ACK 超时重传退避上限，默认 60 秒 |
@@ -70,6 +77,16 @@ cp .env.example .env
 | `SUSUMONITOR_NACK_RETRY_MAX` | 可重试 nack（`retriable_server_error`）的最大重试次数，默认 3，达到上限后移入本地死信 |
 | `SUSUMONITOR_NACK_RETRY_INITIAL_SECONDS` | 可重试 nack 的首次退避间隔，默认 2 秒（指数翻倍至上限） |
 | `SUSUMONITOR_NACK_RETRY_MAX_SECONDS` | 可重试 nack 的最大退避间隔，默认 60 秒 |
+| `SUSUMONITOR_TERMINAL_ENABLED` | 终端功能开关，默认 `false` |
+| `SUSUMONITOR_TERMINAL_SHELL` | PTY 启动的 shell，默认 `/bin/bash` |
+| `SUSUMONITOR_TERMINAL_MAX_SESSIONS` | 终端会话数上限，默认 4 |
+| `SUSUMONITOR_TERMINAL_MAX_INPUT_BYTES` | 单块输入字节上限，默认 16384（16KiB） |
+| `SUSUMONITOR_TERMINAL_MAX_OUTPUT_BYTES` | 单块输出字节上限，默认 16384（16KiB） |
+| `SUSUMONITOR_TERMINAL_OUTPUT_RATE_BYTES_PER_SECOND` | 输出字节令牌桶速率，默认 262144（256KB/s） |
+| `SUSUMONITOR_TERMINAL_OUTPUT_BURST_BYTES` | 输出突发字节，默认 524288（512KB） |
+| `SUSUMONITOR_TERMINAL_OUTPUT_QUEUE_SIZE` | 输出队列块数，默认 64 |
+| `SUSUMONITOR_TERMINAL_IDLE_TIMEOUT_SECONDS` | 会话空闲超时，默认 1200（20 分钟） |
+| `SUSUMONITOR_TERMINAL_MAX_LIFETIME_SECONDS` | 会话总寿命，默认 28800（8 小时） |
 
 ## 指标上报边界
 
