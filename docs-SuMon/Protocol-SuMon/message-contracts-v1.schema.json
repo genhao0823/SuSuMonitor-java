@@ -14,7 +14,7 @@
     "event_type": {
       "type": "string",
       "enum": ["metrics.reported"],
-      "description": "逻辑事件名；alert.triggered 仅为预留"
+      "description": "本 schema 仅覆盖 metrics.reported.v1；alert.triggered.v1 / alert.resolved.v1 契约见 message-contracts-v1.md §四/§五（均已实现）"
     },
     "schema_version": {
       "type": "integer",

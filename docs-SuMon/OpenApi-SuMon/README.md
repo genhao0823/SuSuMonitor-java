@@ -2,7 +2,7 @@
 
 > 本目录是 SuSuMonitor 后端 REST API 的权威 OpenAPI 3.0 契约源，供 Apifox 导入、前端类型生成、CI 校验与人工查阅使用。
 >
-> 契约基线：`main @ 21a2061`（2026-08-05；含用户管理批量审核、告警确认窗口、Outbox/消费侧、Agent 指标 ACK/NACK 分类与投递遥测状态字段）。
+> 契约基线：`main @ 21a2061`（2026-08-05；含用户管理批量审核、告警确认窗口、Outbox/消费侧、Agent 指标 ACK/NACK 分类与投递遥测状态字段）；此后增量：`2445645`（通知投递历史端点）、`c2672c8`（SSH 测试历史 + 主机密钥观察）、`2f27587`（AlertRecord.resolved_at，V26）。当前与 `main @ ab22b2e`（2026-08-16）Controller 1:1 一致。
 >
 > 校验命令：`cd web-vue-SuMon && npm run openapi:check`（CI 友好，退出 0 即契约与 Java Controller 完全一致）。
 >
@@ -15,10 +15,10 @@
 | `openapi-system.json` | 系统健康 / 就绪探针（公开） | 2 |
 | `openapi-auth.json` | 注册 / 登录 / 当前用户 / 登出 | 4 |
 | `openapi-admin.json` | 管理员用户分页/搜索与单个、批量审核（ROLE_ADMIN） | 5 |
-| `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹 / SSH 测试 / Agent Token / Monitor Ticket / 指标最新值 / 指标历史 | 14 |
-| `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读（ROLE_ADMIN + 已认证） | 6 |
+| `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹与观察 / SSH 测试与历史 / Agent Token / Monitor Ticket / 指标最新值 / 指标历史 | 13 路径 / 16 端点操作 |
+| `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读 / 通知投递历史（ROLE_ADMIN + 已认证） | 5 路径 / 7 端点操作 |
 
-合计 31 个端点，与全部 Java Controller `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping` 声明 1:1 对齐（基线 `main @ 21a2061`，2026-08-05）。
+合计 29 条路径 / 34 个端点操作，与全部 Java Controller `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping` 声明 1:1 对齐（`main @ ab22b2e`，2026-08-16）。
 
 ## 端点索引
 
@@ -64,7 +64,9 @@
 | 方法 | 路径 | 说明 | 错误码 |
 |---|---|---|---|
 | PUT | `/api/servers/{id}/ssh/host-key` | 确认 / 轮换 SSH 主机指纹（仅握手 + 指纹校验，不发送凭据） | 40002, 40100, 40300, 40301, 40400, 40900, 40901, 40902, 42900, 50001, 50002, 50400 |
+| POST | `/api/servers/{id}/ssh/host-key/observe` | 观察目标主机指纹（不修改登记） | 40002, 40100, 40300, 40301, 40400, 42900, 50001, 50002, 50400 |
 | POST | `/api/servers/{id}/ssh/test` | 使用已存凭据测 SSH（仅握手指纹 + 认证，不执行命令） | 40002, 40100, 40300, 40301, 40400, 40901, 42900, 50001, 50002, 50400 |
+| GET | `/api/servers/{id}/ssh/test/history` | SSH 测试历史分页（V23，90 天保留） | 40100, 40300, 40400 |
 
 ### Agent Token（ROLE_ADMIN）
 
@@ -97,6 +99,7 @@
 | DELETE | `/api/alerts/rules/{id}` | ADMIN | 软删除告警规则 | 40100, 40300, 40400 |
 | GET | `/api/alerts/records` | 已认证 | 告警记录分页（按 server_id/status/时间窗口过滤） | 40002, 40100 |
 | PUT | `/api/alerts/records/{id}/read` | 已认证 | 标记告警记录已读（unread → read） | 40002, 40100, 40300, 40400, 40900 |
+| GET | `/api/alerts/records/{id}/notifications` | 已认证 | 告警通知投递历史（V21） | 40002, 40100, 40400 |
 
 ## 错误码全表
 
@@ -153,7 +156,7 @@ OpenAPI 不覆盖 WS 协议层（消息帧、订阅、推送）。
 | `npm run openapi:check` | 纯只读，扫描 `docs-SuMon/OpenApi-SuMon/*.json` 与 Java Controller 路径，校验标题/版本/端点/operationId/responses/`$ref` |
 | `npm run audit:catchup` | 静态扫描 `web-vue-SuMon/src/**` 检查 11 条规则 |
 | `npm run api:e2e` | 真实 HTTP 端到端（需运行中后端 + 数据库） |
-| `npm run ui:e2e` | Puppeteer 浏览器 17 路径（需系统 Chrome） |
+| `npm run ui:e2e` | Puppeteer 浏览器 18 场景（需系统 Chrome） |
 
 ## 维护流程
 

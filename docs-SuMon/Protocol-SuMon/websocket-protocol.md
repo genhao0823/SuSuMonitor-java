@@ -186,7 +186,7 @@ Terminal-specific error codes are `40003` invalid payload, `40302` access denied
 
 ## Runtime Validation
 
-The following paths were validated against the isolated MySQL database `susumonitor_agent_ws_validation_20260721` and an application instance on port 18081:
+（2026-08-16 注：本节为 2026-07-21 历史快照。）The following paths were validated against the isolated MySQL database `susumonitor_agent_ws_validation_20260721` and an application instance on port 18081:
 
 ```text
 Agent Token REST       19 checks passed

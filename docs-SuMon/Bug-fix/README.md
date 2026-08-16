@@ -1,7 +1,7 @@
 # SuSuMonitor 后端 Bug 修复目录
 
 本目录跟踪 SuSuMonitor 后端开发过程中发现的所有 bug。
-每个 bug 一份独立 Markdown 文件,命名规则 `YYYYMMDD-代号.md`。
+每个 bug 一份独立 Markdown 文件,命名规则 `YYYY-MM-DD-代号.md`（README 首版写 `YYYYMMDD` 为笔误，实际文件均为连字符格式）。
 
 ## 当前 Bug 索引
 
@@ -12,6 +12,9 @@
 | 2026-07-21 | M4-ssh-test-error-code | `POST /api/servers/{id}/ssh/test` 错误码笼统 | 中 | SSH 连接 | ✅ 已修复：50002/50003 已通过 Apifox 真实分类验收（2026-07-25，用例 `397698534`/`397636440`） |
 | 2026-07-21 | M4-server-list-soft-delete | 列表过滤已软删除数据 | 低 | 服务器管理 | 已验证（J3，真实 MySQL/HTTP 通过） |
 | 2026-07-27 | MVP6-alert-rules-mapper-500 | `POST/PUT/DELETE /api/alerts/rules` 返回 500 空响应体 | 高 | 告警规则 Mapper | ✅ 代码已修复：`@Param("rule")` 已加 + `AlertRuleMapperMybatisTests` 用 H2 真实走 INSERT/UPDATE/软删通过；`mvn test` + `mvn package` 通过；2026-08-10 补 `api-test/verify-alert-rules.mjs`（POST/PUT/DELETE 4 路 + 唯一性 40900 + 软删后重建），真实 MySQL/HTTP 联调脚本已备 |
+| 2026-07-27 | MVP6-alert-store-swallows-error | 前端 alerts store 吞错误导致告警页无提示 | 中 | 前端告警 store | ✅ 已修复（2026-07-28 告警页收口同步修复，vitest 覆盖） |
+| 2026-07-28 | MVP6-alert-rules-no-uniqueness-check | 告警规则无唯一性校验可重复创建 | 高 | 告警规则 | ✅ 已修复（V13 生成列唯一索引，2026-08-10 收口复核） |
+| 2026-07-31 | MVP6-alert-state-not-retriggered | 告警恢复后不再触发（state 行未删） | 高 | 告警评估 | ✅ 已修复（`handleResolve` 删除 state 行，commit `f7dba69`；verify-alert-ws 24/24 复核） |
 
 ## 文档结构
 

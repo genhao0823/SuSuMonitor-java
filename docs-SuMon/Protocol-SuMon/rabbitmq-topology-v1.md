@@ -201,3 +201,12 @@ MVP-11 已完成 `susumonitor.alert.metrics` 消费者、幂等消费、重试�
 | DLQ 分类 | 数据错误（JSON/schema/字段契约）零重试进 `susumonitor.alert.triggered.dlq` |
 
 验证：Maven 全量 506 tests 全绿（新增消费者 9 例、契约反序列化 1 例、校验器 8 例、recoverer 队列映射 3 例、通知拆分 3 例）。
+
+## 十二、实现确认（2026-08-15，alert.resolved.v1 发布 + 消费侧落地）
+
+本文档 §二/§三 的 `susumonitor.alert.resolved` 队列对与 `alert.resolved.v1` routing key 已落地（见 `Develop-log/20260815-alert.resolved恢复事件链路.md`）：
+
+- 评估器恢复事务内同事务登记 outbox 行（V25 routing_key 列）→ 发布器路由到 `susumonitor.alert.resolved`。
+- 消费者 `alert-resolved-notifier` 幂等消费（V15），在消费事务内为规则配置的渠道排程"恢复通知"，提交后异步发送；错误分类、容器级有限重试与 DLQ 语义与 §五 完全一致。
+- 失败留痕 recoverer 的队列→consumer 映射同步扩展（`susumonitor.alert.resolved`→alert-resolved-notifier）。
+- 验证：真实 broker 验收 `verify-alert-resolved-chain.mjs` 11/11 PASS（合法信封→队列归零→恢复通知排程落库→consumed；同 event_id 重投幂等；三条坏消息 DLQ +3；失败留痕）。

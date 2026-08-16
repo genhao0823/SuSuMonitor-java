@@ -83,7 +83,7 @@
 （邮件/钉钉/Webhook），提交后异步发送——外部通知触发源由此从本地 AFTER_COMMIT 直呼
 切换为 Broker 消息驱动，Broker 中断恢复后 outbox 补发也能重新触发通知。`alert.push`
 Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越界不重复生成该事件；恢复
-语义需由后续明确的事件类型或查询状态表达，不能复用本事件伪装成恢复事件。
+语义已由 `alert.resolved.v1`（§五，2026-08-15 落地）表达，不能复用本事件伪装成恢复事件。
 
 ```json
 {
@@ -180,9 +180,9 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 可选字段 `trace_id`/`correlation_id` 本阶段（MVP-10）不携带，消费侧不得要求必填。
 - 真实 Broker 验收已核对出队消息与本文契约一致（verify-outbox.mjs）。
 
-仍属 MVP-11：完整 JSON Schema 引擎、`message_consume_records`、消费幂等与 DLQ 分类执行。
+> 2026-08-16 注：本段末"仍属 MVP-11：完整 JSON Schema 引擎…"的消费幂等与 DLQ 分类已于 2026-08-01 落地（见 §九）；完整 JSON Schema 引擎仍未引入（字段级运行校验）。
 
-## 八、实现确认（2026-07-31，MVP-11 消费侧落地）
+## 九、实现确认（2026-07-31，MVP-11 消费侧落地）
 
 消费侧已按本文契约解析并验收（见 `Develop-log/20260731-MVP11-Alert-消费侧.md`）：
 
@@ -197,7 +197,7 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 时间口径：`occurred_at`/`collected_at` 解析沿用 UTC 秒级格式，消费记录 `consumed_at` 写入 UTC（应用时钟）。
 - JSON Schema 运行校验仍未引入；已实现无外部依赖的字段级运行校验，确保畸形载荷在进入幂等查询和告警评估前直接拒绝进 DLQ。
 
-## 九、实现确认（2026-08-12，alert.triggered.v1 发布侧落地）
+## 十、实现确认（2026-08-12，alert.triggered.v1 发布侧落地）
 
 本文档 §四 的 `alert.triggered.v1` 信封已由 `AlertTriggeredEnvelopeFactory` 实现
 （见 `Develop-log/20260812-告警事件RabbitMQ发布.md`）：
@@ -211,9 +211,9 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 发布时机：评估事务内与告警记录同事务登记 outbox 行（`message_outbox.routing_key=alert.triggered.v1`，V25）。
 - 验证：`AlertTriggeredEnvelopeFactoryTests` 与契约示例逐字段断言，Maven 全量 486 tests 全绿。
 
-消费者侧（`alert-notifier` 幂等消费 + 通知排程 + DLQ 分类）已于同日接入，见 §十。
+消费者侧（`alert-notifier` 幂等消费 + 通知排程 + DLQ 分类）已于同日接入，见 §十一。
 
-## 十、实现确认（2026-08-12，alert.triggered.v1 消费者接入）
+## 十一、实现确认（2026-08-12，alert.triggered.v1 消费者接入）
 
 本文档 §四 的消费者侧已实现（见 `Develop-log/20260812-alert.triggered消费者接入.md`）：
 
@@ -231,3 +231,12 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 通知触发源切换：原 `AlertNotificationPublisher`（AFTER_COMMIT 直呼 notify）已删除，
   外部通知完全由本消费者驱动——同一 record 只触发一次通知，避免双发。
 - 验证：Maven 全量 506 tests 全绿（新增消费者/消息/校验器 3+8+9 用例与 recovered 映射断言）。
+
+## 十二、实现确认（2026-08-15，alert.resolved.v1 发布 + 消费侧落地）
+
+本文档 §五 的 `alert.resolved.v1` 已由 `AlertResolvedEnvelopeFactory` 发布、`AlertResolvedConsumer`（consumer=`alert-resolved-notifier`）消费（见 `Develop-log/20260815-alert.resolved恢复事件链路.md`）：
+
+- 发布时机：评估器 `handleResolve` 在恢复事务内——`updateStatusToResolved`（V26 落库 `resolved_at`）成功后同事务登记 outbox 行（`routing_key=alert.resolved.v1`）+ 发布本地事件（AFTER_COMMIT 推 `alert.push`，`payload.alert.status=resolved`）；记录未实际转为 resolved 不发事件。
+- 信封字段与 §五 示例一致（snake_case、`event_type=alert.resolved`、`schema_version=1`、`producer=alert-service`；payload 8 字段不含触发值）。
+- 消费侧：幂等（V15）→ 规则有效且有渠道且记录已 resolved → `scheduleNotifications` 排程"恢复通知"（文案按 status 分支为 `[恢复]` 语义）→ 提交后 `sendScheduled`；错误分类与失败留痕与 §十一 同模式（`FailedConsumeRecordRecoverer` 队列映射含 `susumonitor.alert.resolved`→alert-resolved-notifier）。
+- 验证：真实 broker 验收 `verify-alert-resolved-chain.mjs` 11/11 PASS（2026-08-15）；Maven 全量 541→550 tests 全绿。
