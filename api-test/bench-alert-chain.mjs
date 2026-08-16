@@ -253,8 +253,8 @@ async function setupUser(adminToken) {
   const password = `Bench-${Date.now()}!`
   const registered = await api('/api/auth/register', { method: 'POST', body: { username, password } })
   assert(registered.status === 200, 'Bench user registration failed')
-  const pending = await api('/api/admin/users/pending', { token: adminToken })
-  const user = pending.body.data.find((item) => item.username === username)
+  const pending = await api('/api/admin/users?status=pending&page=1&page_size=100', { token: adminToken })
+  const user = pending.body.data.items.find((item) => item.username === username)
   assert(user, 'Bench user missing from pending list')
   const approved = await api(`/api/admin/users/${user.id}/approve`, { method: 'PUT', token: adminToken })
   assert(approved.status === 200, 'Bench user approval failed')
