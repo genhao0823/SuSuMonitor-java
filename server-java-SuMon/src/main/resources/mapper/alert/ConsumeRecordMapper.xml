@@ -36,4 +36,10 @@
             last_error = VALUES(last_error),
             consumed_at = NULL
     </insert>
+    <select id="countByConsumerAndStatus" resultType="java.util.HashMap">
+        SELECT consumer AS consumer, COUNT(*) AS count
+        FROM message_consume_records
+        WHERE status = #{status} AND created_at &gt;= #{since}
+        GROUP BY consumer
+    </select>
 </mapper>

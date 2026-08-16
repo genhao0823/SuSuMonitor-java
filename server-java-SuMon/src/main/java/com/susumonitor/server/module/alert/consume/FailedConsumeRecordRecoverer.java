@@ -32,14 +32,11 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
     /** 与 V15 表定义一致：last_error VARCHAR(500)，不落敏感信息。 */
     static final int MAX_ERROR_LENGTH = 500;
 
-    /** 队列 → 消费者名映射（与 @RabbitListener 消费的队列一一对应）。 */
-    private static final java.util.Map<String, String> QUEUE_CONSUMER = java.util.Map.of(
-            AlertMessageConsumer.QUEUE, AlertMessageConsumer.CONSUMER_NAME,
-            AlertTriggeredConsumer.QUEUE, AlertTriggeredConsumer.CONSUMER_NAME,
-            AlertResolvedConsumer.QUEUE, AlertResolvedConsumer.CONSUMER_NAME);
+    /** 队列 → 消费者名映射（与 @RabbitListener 消费的队列一一对应，共享定义见 ConsumerQueueNames）。 */
+    private static final java.util.Map<String, String> QUEUE_CONSUMER = ConsumerQueueNames.QUEUE_TO_CONSUMER;
 
     /** 缺省消费者名：队列信息缺失时回退 metrics 评估消费（兼容旧行为）。 */
-    private static final String DEFAULT_CONSUMER = AlertMessageConsumer.CONSUMER_NAME;
+    private static final String DEFAULT_CONSUMER = ConsumerQueueNames.DEFAULT_CONSUMER;
 
     private final ConsumeRecordMapper consumeRecordMapper;
 

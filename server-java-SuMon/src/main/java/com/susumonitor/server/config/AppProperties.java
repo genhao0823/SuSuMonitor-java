@@ -1153,6 +1153,11 @@ public class AppProperties {
         /** 是否启用已发布 Outbox 记录的保留期清理（只删 published 行，pending/失败行不受影响）。 */
         private boolean outboxCleanupEnabled = true;
 
+        /** 消费失败率统计窗口（分钟），按 message_consume_records.created_at 过滤（MVP-14 监控收尾）。 */
+        @Min(value = 1, message = "Consume stats window must be at least one minute")
+        @Max(value = 1440, message = "Consume stats window must not exceed 1440 minutes")
+        private int consumeStatsWindowMinutes = 60;
+
         /** 已发布 Outbox 记录的保留天数。 */
         @Min(value = 1, message = "Outbox retention days must be at least one")
         @Max(value = 3650, message = "Outbox retention days must not exceed 3650")
@@ -1318,6 +1323,24 @@ public class AppProperties {
          */
         public void setOutboxCleanupEnabled(boolean outboxCleanupEnabled) {
             this.outboxCleanupEnabled = outboxCleanupEnabled;
+        }
+
+        /**
+         * 获取消费失败率统计窗口（分钟）。
+         *
+         * @return 统计窗口分钟数
+         */
+        public int getConsumeStatsWindowMinutes() {
+            return consumeStatsWindowMinutes;
+        }
+
+        /**
+         * 设置消费失败率统计窗口（分钟）。
+         *
+         * @param consumeStatsWindowMinutes 统计窗口分钟数
+         */
+        public void setConsumeStatsWindowMinutes(int consumeStatsWindowMinutes) {
+            this.consumeStatsWindowMinutes = consumeStatsWindowMinutes;
         }
 
         /**

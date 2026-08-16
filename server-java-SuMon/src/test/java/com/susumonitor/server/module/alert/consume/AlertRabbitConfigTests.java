@@ -26,6 +26,7 @@ class AlertRabbitConfigTests {
     private SimpleRabbitListenerContainerFactory buildFactory(int concurrency, int prefetch) {
         ConnectionFactory connectionFactory = mock(ConnectionFactory.class);
         MessageRecoverer recoverer = mock(MessageRecoverer.class);
+        ConsumeTimingInterceptor timingInterceptor = mock(ConsumeTimingInterceptor.class);
         return config.rabbitListenerContainerFactory(
                 connectionFactory,
                 3,
@@ -34,7 +35,8 @@ class AlertRabbitConfigTests {
                 Duration.ofSeconds(10),
                 concurrency,
                 prefetch,
-                recoverer);
+                recoverer,
+                timingInterceptor);
     }
 
     /** 读取并发字段：concurrentConsumers/maxConcurrentConsumers 在工厂类，prefetchCount 在父类。 */

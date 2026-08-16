@@ -150,6 +150,59 @@ class ConsumeRecordMapperMybatisTests {
         }
     }
 
+    /** 聚合查询应按消费者分组并按 created_at 窗口过滤（MVP-14 失败率统计）。 */
+    @Test
+    void countByConsumerAndStatusShouldGroupAndFilterByWindow() throws Exception {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 16, 12, 0, 0);
+        insertRow("alert-notifier", "failed", now.minusMinutes(10));
+        insertRow("alert-notifier", "failed", now.minusMinutes(120));
+        insertRow("alert-notifier", "consumed", now.minusMinutes(5));
+        insertRow("alert-resolved-notifier", "failed", now.minusMinutes(1));
+        insertRow("alert-evaluator", "failed", now.minusMinutes(200));
+
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            ConsumeRecordMapper mapper = session.getMapper(ConsumeRecordMapper.class);
+            LocalDateTime since = now.minusMinutes(60);
+
+            var failedWindow = toCountMap(mapper.countByConsumerAndStatus("failed", since));
+            assertEquals(1L, failedWindow.get("alert-notifier"));
+            assertEquals(1L, failedWindow.get("alert-resolved-notifier"));
+            assertEquals(2, failedWindow.size());
+
+            var consumedWindow = toCountMap(mapper.countByConsumerAndStatus("consumed", since));
+            assertEquals(1L, consumedWindow.get("alert-notifier"));
+            assertEquals(1, consumedWindow.size());
+        }
+    }
+
+    /** H2 与 MySQL 对无引号列标签的大小写折叠不同，聚合结果键统一归一化。 */
+    private java.util.Map<String, Long> toCountMap(java.util.List<java.util.Map<String, Object>> rows) {
+        java.util.Map<String, Long> counts = new java.util.HashMap<>();
+        for (java.util.Map<String, Object> row : rows) {
+            String consumer = String.valueOf(row.getOrDefault("consumer", row.getOrDefault("CONSUMER", "")));
+            Object count = row.getOrDefault("count", row.getOrDefault("COUNT", 0L));
+            counts.put(consumer, ((Number) count).longValue());
+        }
+        return counts;
+    }
+
+    /** 插入一条带显式 created_at 的消费记录（窗口过滤测试用）。 */
+    private static int rowSequence;
+
+    private void insertRow(String consumer, String status, LocalDateTime createdAt) throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            try (var statement = session.getConnection().prepareStatement(
+                    "INSERT INTO message_consume_records (consumer, event_id, status, attempts, created_at)"
+                            + " VALUES (?, ?, ?, 0, ?)")) {
+                statement.setString(1, consumer);
+                statement.setString(2, "event-" + (++rowSequence));
+                statement.setString(3, status);
+                statement.setObject(4, createdAt);
+                statement.executeUpdate();
+            }
+        }
+    }
+
     private ConsumeRecordEntity newRecord() {
         ConsumeRecordEntity record = new ConsumeRecordEntity();
         record.setConsumer("alert-evaluator");

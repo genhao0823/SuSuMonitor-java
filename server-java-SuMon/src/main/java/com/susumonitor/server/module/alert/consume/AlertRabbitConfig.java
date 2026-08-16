@@ -53,11 +53,14 @@ public class AlertRabbitConfig {
             @Value("${spring.rabbitmq.listener.simple.retry.max-interval:10000ms}") Duration maxInterval,
             @Value("${spring.rabbitmq.listener.simple.concurrency:1}") int concurrency,
             @Value("${spring.rabbitmq.listener.simple.prefetch:1}") int prefetch,
-            MessageRecoverer failedConsumeRecordRecoverer) {
+            MessageRecoverer failedConsumeRecordRecoverer,
+            ConsumeTimingInterceptor consumeTimingInterceptor) {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
-        factory.setAdviceChain(buildRetryAdvice(maxAttempts, initialInterval.toMillis(), multiplier,
-                maxInterval.toMillis(), failedConsumeRecordRecoverer));
+        // 耗时拦截器置于最外层：记录含容器级重试循环的整轮处理耗时（MVP-14 监控收尾）。
+        factory.setAdviceChain(consumeTimingInterceptor,
+                buildRetryAdvice(maxAttempts, initialInterval.toMillis(), multiplier,
+                        maxInterval.toMillis(), failedConsumeRecordRecoverer));
         if (concurrency > 1) {
             factory.setConcurrentConsumers(concurrency);
             factory.setMaxConcurrentConsumers(concurrency);

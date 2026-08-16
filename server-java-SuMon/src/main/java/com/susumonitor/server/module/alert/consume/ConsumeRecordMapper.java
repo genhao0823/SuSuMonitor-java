@@ -1,5 +1,8 @@
 package com.susumonitor.server.module.alert.consume;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -22,4 +25,8 @@ public interface ConsumeRecordMapper {
     /** 失败留痕 upsert：插入/翻转为 failed 行并记录尝试次数与原因（消息进入 DLQ）。 */
     int upsertFailed(@Param("consumer") String consumer, @Param("eventId") String eventId,
             @Param("attempts") int attempts, @Param("lastError") String lastError);
+
+    /** 按消费者统计窗口内指定状态的记录数（MVP-14 失败率监控：failed/(consumed+failed)）。 */
+    List<Map<String, Object>> countByConsumerAndStatus(@Param("status") String status,
+            @Param("since") LocalDateTime since);
 }
