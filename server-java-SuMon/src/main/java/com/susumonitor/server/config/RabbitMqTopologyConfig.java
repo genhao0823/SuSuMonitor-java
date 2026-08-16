@@ -21,17 +21,17 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "susumonitor.rabbitmq.enabled", havingValue = "true")
 public class RabbitMqTopologyConfig {
 
-    static final String EVENTS_EXCHANGE = "susumonitor.events";
-    static final String DLX_EXCHANGE = "susumonitor.dlx";
-    static final String ALERT_METRICS_QUEUE = "susumonitor.alert.metrics";
-    static final String ALERT_METRICS_DLQ = "susumonitor.alert.metrics.dlq";
-    static final String METRICS_REPORTED_KEY = "metrics.reported.v1";
-    static final String ALERT_TRIGGERED_QUEUE = "susumonitor.alert.triggered";
-    static final String ALERT_TRIGGERED_DLQ = "susumonitor.alert.triggered.dlq";
-    static final String ALERT_TRIGGERED_KEY = "alert.triggered.v1";
-    static final String ALERT_RESOLVED_QUEUE = "susumonitor.alert.resolved";
-    static final String ALERT_RESOLVED_DLQ = "susumonitor.alert.resolved.dlq";
-    static final String ALERT_RESOLVED_KEY = "alert.resolved.v1";
+    public static final String EVENTS_EXCHANGE = "susumonitor.events";
+    public static final String DLX_EXCHANGE = "susumonitor.dlx";
+    public static final String ALERT_METRICS_QUEUE = "susumonitor.alert.metrics";
+    public static final String ALERT_METRICS_DLQ = "susumonitor.alert.metrics.dlq";
+    public static final String METRICS_REPORTED_KEY = "metrics.reported.v1";
+    public static final String ALERT_TRIGGERED_QUEUE = "susumonitor.alert.triggered";
+    public static final String ALERT_TRIGGERED_DLQ = "susumonitor.alert.triggered.dlq";
+    public static final String ALERT_TRIGGERED_KEY = "alert.triggered.v1";
+    public static final String ALERT_RESOLVED_QUEUE = "susumonitor.alert.resolved";
+    public static final String ALERT_RESOLVED_DLQ = "susumonitor.alert.resolved.dlq";
+    public static final String ALERT_RESOLVED_KEY = "alert.resolved.v1";
 
     /** 业务事件交换器。 */
     @Bean

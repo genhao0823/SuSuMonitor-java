@@ -135,6 +135,9 @@ susumonitor:
     max-backoff-seconds: ${OUTBOX_MAX_BACKOFF_SECONDS:300}
     outbox-cleanup-enabled: ${OUTBOX_CLEANUP_ENABLED:true}
     consume-stats-window-minutes: ${ALERT_CONSUME_STATS_WINDOW_MINUTES:60}
+    queue-monitor-enabled: ${ALERT_QUEUE_MONITOR_ENABLED:true}
+    queue-monitor-interval-ms: ${ALERT_QUEUE_MONITOR_INTERVAL_MS:60000}
+    queue-backlog-warn-threshold: ${ALERT_QUEUE_BACKLOG_WARN_THRESHOLD:10000}
     outbox-retention-days: ${OUTBOX_RETENTION_DAYS:30}
     outbox-cleanup-cron: ${OUTBOX_CLEANUP_CRON:0 30 3 * * ?}
     outbox-cleanup-batch-size: ${OUTBOX_CLEANUP_BATCH_SIZE:1000}

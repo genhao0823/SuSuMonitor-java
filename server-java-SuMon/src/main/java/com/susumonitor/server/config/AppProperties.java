@@ -1158,6 +1158,19 @@ public class AppProperties {
         @Max(value = 1440, message = "Consume stats window must not exceed 1440 minutes")
         private int consumeStatsWindowMinutes = 60;
 
+        /** 是否启用队列积压探测（MVP-14 监控收尾）。 */
+        private boolean queueMonitorEnabled = true;
+
+        /** 队列积压探测间隔（毫秒）。 */
+        @Min(value = 5000, message = "Queue monitor interval must be at least 5000 ms")
+        @Max(value = 3600000, message = "Queue monitor interval must not exceed 3600000 ms")
+        private long queueMonitorIntervalMs = 60000;
+
+        /** 业务队列积压告警阈值：消息数超过该值输出 backlog warn 日志。 */
+        @Min(value = 1, message = "Queue backlog warn threshold must be at least one")
+        @Max(value = 100000000, message = "Queue backlog warn threshold must not exceed 100000000")
+        private int queueBacklogWarnThreshold = 10000;
+
         /** 已发布 Outbox 记录的保留天数。 */
         @Min(value = 1, message = "Outbox retention days must be at least one")
         @Max(value = 3650, message = "Outbox retention days must not exceed 3650")
@@ -1341,6 +1354,60 @@ public class AppProperties {
          */
         public void setConsumeStatsWindowMinutes(int consumeStatsWindowMinutes) {
             this.consumeStatsWindowMinutes = consumeStatsWindowMinutes;
+        }
+
+        /**
+         * 返回是否启用队列积压探测。
+         *
+         * @return 是否启用探测
+         */
+        public boolean isQueueMonitorEnabled() {
+            return queueMonitorEnabled;
+        }
+
+        /**
+         * 设置队列积压探测开关。
+         *
+         * @param queueMonitorEnabled 是否启用探测
+         */
+        public void setQueueMonitorEnabled(boolean queueMonitorEnabled) {
+            this.queueMonitorEnabled = queueMonitorEnabled;
+        }
+
+        /**
+         * 获取队列积压探测间隔（毫秒）。
+         *
+         * @return 探测间隔毫秒数
+         */
+        public long getQueueMonitorIntervalMs() {
+            return queueMonitorIntervalMs;
+        }
+
+        /**
+         * 设置队列积压探测间隔（毫秒）。
+         *
+         * @param queueMonitorIntervalMs 探测间隔毫秒数
+         */
+        public void setQueueMonitorIntervalMs(long queueMonitorIntervalMs) {
+            this.queueMonitorIntervalMs = queueMonitorIntervalMs;
+        }
+
+        /**
+         * 获取业务队列积压告警阈值。
+         *
+         * @return 告警阈值
+         */
+        public int getQueueBacklogWarnThreshold() {
+            return queueBacklogWarnThreshold;
+        }
+
+        /**
+         * 设置业务队列积压告警阈值。
+         *
+         * @param queueBacklogWarnThreshold 告警阈值
+         */
+        public void setQueueBacklogWarnThreshold(int queueBacklogWarnThreshold) {
+            this.queueBacklogWarnThreshold = queueBacklogWarnThreshold;
         }
 
         /**
