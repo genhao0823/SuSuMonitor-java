@@ -6,6 +6,7 @@ services:
     image: mysql:8.4
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: ${DB_NAME:-susumonitor}
       MYSQL_USER: ${DB_USER:-susumonitor}
@@ -22,6 +23,7 @@ services:
     image: rabbitmq:4.3-management
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-susumonitor}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-susumonitor}
@@ -37,6 +39,9 @@ services:
     build: ./server-java-SuMon
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
+      # 容器内存上限内给 JVM 留 75% 堆（N6 预告的容器 JVM 调优）。
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75.0
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-susumonitor}
@@ -68,16 +73,32 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      # 探活用 /api/health（liveness；/api/ready 会随 Broker 状态波动，不适合作为容器健康依据）。
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:18080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
     expose:
       - "18080"
 
   web:
     build: ./web-vue-SuMon
     restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
     ports:
       - "${WEB_PORT:-8080}:8080"
     depends_on:
-      - server
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # 目标主机上的 Agent 建议直接用 systemd 部署；此 profile 供容器化试点/测试。
   agent:
