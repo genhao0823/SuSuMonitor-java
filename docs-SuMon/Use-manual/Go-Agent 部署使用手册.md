@@ -2,7 +2,7 @@
 
 **适用范围**: 被监控 Linux 主机（含家庭内网 / NAT 主机、WSL 调试机）部署 Go Agent 接入云端后端  
 **Agent 工程目录**: `agent-go-SuMon/`  
-**后端接入地址**: `ws://SERVER_IP_OR_DOMAIN/ws/agent`  
+**后端接入地址**: `wss://SERVER_IP_OR_DOMAIN/ws/agent`（生产必须 HTTPS/WSS）  
 **协议参考**: `docs-SuMon/Protocol-SuMon/websocket-protocol.md`
 
 ## 一、Agent 定位与架构

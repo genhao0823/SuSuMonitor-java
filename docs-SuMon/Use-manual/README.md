@@ -10,7 +10,7 @@
 | [SuSuMonitor-升级与回滚手册.md](./SuSuMonitor-升级与回滚手册.md) | 版本升级流程、回滚决策矩阵（JAR 可回滚 / 数据库不可回滚） |
 | [SuSuMonitor-备份与恢复手册.md](./SuSuMonitor-备份与恢复手册.md) | 数据库 + 密钥备份（`deploy/backup.sh`）、恢复（`deploy/restore.sh`）、演练 |
 | [SuSuMonitor-安全检查手册.md](./SuSuMonitor-安全检查手册.md) | 端口/数据库/RabbitMQ/密钥/TLS 安全基线 + 上线前检查表 |
-| [SuSuMonitor-RabbitMQ-运维手册.md](./SuSuMonitor-RabbitMQ-运维手册.md) | MVP-10 Outbox 依赖的 RabbitMQ 日常运维（vhost/拓扑/积压/停机恢复） |
+| [SuSuMonitor-RabbitMQ-运维手册.md](./SuSuMonitor-RabbitMQ-运维手册.md) | MVP-10 Outbox + MVP-11 消费侧依赖的 RabbitMQ 日常运维（vhost/拓扑：`susumonitor.alert.metrics`/`susumonitor.alert.triggered`/`susumonitor.alert.resolved` 三业务队列 + DLQ/积压/停机恢复） |
 
 ## Agent（Go Agent）
 

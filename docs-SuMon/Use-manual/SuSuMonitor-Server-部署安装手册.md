@@ -58,7 +58,7 @@ rabbitmqctl set_permissions -p susumonitor susumonitor '.*' '.*' '.*'
 rabbitmqctl set_user_tags susumonitor administrator   # 管理台/验收脚本需要 management 角色
 ```
 
-> 拓扑（`susumonitor.events`/`susumonitor.dlx`/`susumonitor.alert.metrics`/`susumonitor.alert.metrics.dlq`）由后端启动时幂等自动声明，无需手工建。详见《RabbitMQ 运维手册》。
+> 拓扑（8 件：2 exchange `susumonitor.events`/`susumonitor.dlx` + 6 队列 `susumonitor.alert.metrics`/`susumonitor.alert.triggered`/`susumonitor.alert.resolved` 及其 `.dlq`）由后端启动时幂等自动声明，无需手工建。详见《RabbitMQ 运维手册》。
 
 ### 3.3 构建发布包
 
@@ -98,6 +98,12 @@ sudo install -m 0600 -o root -g root server.env /etc/susumonitor/server.env
 | `ALERT_NOTIFICATION_ENABLED` | 告警外部通知总开关，默认 `false`；`true` 且规则配置收件人才发邮件 |
 | `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP 服务器（邮件告警通道；不配置则邮件通道自动跳过，钉钉/Webhook 不受影响） |
 | `ALERT_MAIL_FROM` | 告警邮件发件人，默认 `noreply@susumonitor.local` |
+| `ALERT_CONSUMER_CONCURRENCY` / `ALERT_CONSUMER_PREFETCH` | 告警消费并发（默认 `1` 单消费者；>1 启用多消费者，幂等由 V15 唯一键保障，2026-08-12 落地）与每消费者预取数 |
+| `ALERT_CONSUME_MAX_ATTEMPTS` | 消费重试上限，默认 `3` 次（耗尽转 DLQ） |
+| `ALERT_NOTIFICATION_CLEANUP_ENABLED` / `ALERT_NOTIFICATION_RETENTION_DAYS` | 通知历史清理开关（默认 `true`）/ 保留天数（默认 `90`） |
+| `ALERT_NOTIFICATION_CLEANUP_CRON` / `ALERT_NOTIFICATION_CLEANUP_BATCH_SIZE` / `ALERT_NOTIFICATION_CLEANUP_MAX_BATCHES_PER_RUN` | 通知清理调度 cron（默认每天 03:00）/ 每批条数（默认 1000）/ 单次最多批数（默认 100） |
+
+> 完整环境变量清单以 `server-java-SuMon/src/main/resources/application.yml` 为准（含 `ALERT_RECORD_CLEANUP_*`、`SSH_TEST_HISTORY_*` 等）。
 
 > **通知重试（2026-08-05）**：每个渠道在 `alert_notifications` 表记一行，首次失败按 2^attempts 秒退避（上限 60s）重试，最多 5 次；达上限标记 `failed` 并在告警记录页显示"发送失败"。失败原因截断 500 字符留痕。
 

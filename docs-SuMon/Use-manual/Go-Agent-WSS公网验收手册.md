@@ -144,7 +144,7 @@ journalctl -u susumonitor-agent -f --no-pager   # 观察 JSON 日志
 |---|---|---|
 | 1 | 终端输出洪峰 | Go 侧令牌桶限流生效，超限按 `output_rate_exceeded` 关闭 |
 | 2 | 输出队列满 | 会话按既定策略关闭，不无限缓存 |
-| 3 | 慢消费者 | 触发 Monitor 背压（关闭码 `1012`），记录关闭原因；WSL loopback 无法稳定触发，公网慢网下验收 |
+| 3 | 慢消费者 | 触发 Monitor 背压（关闭码 `1011`，`CloseStatus.SESSION_NOT_RELIABLE`），记录关闭原因；WSL loopback 无法稳定触发，公网慢网下验收 |
 | 4 | 超频发送（压测脚本） | 服务端返回错误码 `42901`/`42902`，随后关闭连接，Agent 退避重连 |
 | 5 | 控制帧洪泛 | `42904`，Monitor 被断连 |
 
@@ -155,7 +155,7 @@ journalctl -u susumonitor-agent -f --no-pager   # 观察 JSON 日志
 | # | 步骤 | 预期 |
 |---|---|---|
 | 1 | `systemctl restart susumonitor-agent` | 秒级恢复，重新认证 |
-| 2 | `kill -9` 模拟崩溃 | systemd `Restart=on-failure` 自动拉起 |
+| 2 | `kill -9` 模拟崩溃 | systemd `Restart=always` 自动拉起 |
 | 3 | 日志轮转 | `logrotate` 生效，日志不无限增长 |
 | 4 | 升级 | 替换二进制 → restart → 新版本日志确认 |
 | 5 | 回滚 | 保留旧版本目录 → 恢复旧二进制 → restart |
@@ -183,18 +183,18 @@ journalctl -u susumonitor-agent -f --no-pager   # 观察 JSON 日志
 | `api-test/verify-mvp11.mjs` | Alert 消费侧正常/幂等/DLQ |
 | `agent-go-SuMon/scripts/run-wsl-pty-integration.sh` | WSL PTY 链路集成 |
 
-## 6. MVP-11 外部待验项（Java 侧，Go Agent 作为指标生产者配合）
+## 6. MVP-11 外部验收项（2026-08-16 更新：三项均已完成）
 
-以下三项已在开发日志中登记但未执行，属于消费侧验收，Go Agent 配合持续产生合法指标即可：
+原登记为"待验"的三项已全部执行完成，Go Agent 作为指标生产者配合验证：
 
-1. `api-test/verify-mvp11-concurrency.mjs`：并发消费幂等。
-2. `api-test/replay-mvp11-dlq.mjs`：DLQ 受控重放。
-3. `api-test/verify-mvp11-broker-recovery.md`：Broker 停机/恢复补发。
+1. ~~`api-test/verify-mvp11-concurrency.mjs`：并发消费幂等。~~ 已完成（2026-08-12，Polish-7 M6）：多消费者并发消费落地，`ALERT_CONSUMER_CONCURRENCY`/`ALERT_CONSUMER_PREFETCH` 可配，幂等由 V15 唯一键 + 业务事务保障。见 `Develop-log/20260812-Polish7-M6-告警消费多消费者并发.md`。
+2. ~~`api-test/replay-mvp11-dlq.mjs`：DLQ 受控重放。~~ 已完成：字段级消息契约 DLQ 验收 2026-08-01（`Develop-log/20260801-字段级消息契约DLQ验收.md`）；重放工具 2026-08-12 泛化至 `--event metrics|alert`（`api-test/replay-dlq.mjs` / `replay-mvp11-dlq.mjs`），见 `Develop-log/20260812-RabbitMQ全链路收口.md`。
+3. ~~`api-test/verify-mvp11-broker-recovery.md`：Broker 停机/恢复补发。~~ 已完成（2026-08-01）：Broker 停机消费侧重连验收通过，见 `Develop-log/20260801-MVP11-收口.md`（三、Broker 停机消费侧重连验收）。
 
-执行环境：MySQL 验证库 + RabbitMQ（`susumonitor` vhost）+ 隔离 Java 实例 + 管理员账号。
+执行环境（历史记录，验收已通过）：MySQL 验证库 + RabbitMQ（`susumonitor` vhost）+ 隔离 Java 实例 + 管理员账号。
 
 ## 7. 已知限制
 
 - `/ws/agent`、`/ws/monitor` 的连接注册表、ticket、订阅和终端中继均为单 JVM 内存状态，多实例横向扩容未验证。
 - 明文 `ws://` 已被运营商劫持验证，公网一律使用 `wss://`。
-- 慢消费者 `1012` 背压需要受控慢网环境，WSL loopback 无法稳定触发。
+- 慢消费者 `1011`（`CloseStatus.SESSION_NOT_RELIABLE`）背压需要受控慢网环境，WSL loopback 无法稳定触发。

@@ -13,7 +13,7 @@ Agent 上报 metrics.report
   -> OutboxPublisherScheduler（1s 轮询，FOR UPDATE SKIP LOCKED）
   -> Publisher Confirm 投递到 susumonitor.events
   -> susumonitor.alert.metrics 队列
-  -> AlertMessageConsumer（AUTO 确认 + 幂等 + 有限重试；不可重试/重试耗尽 -> DLQ）
+  -> AlertMessageConsumer（AUTO 确认 + 幂等 + 有限重试；默认单消费者，可配置并发 `ALERT_CONSUMER_CONCURRENCY`；不可重试/重试耗尽 -> DLQ）
 ```
 
 - RabbitMQ 承载 **metrics.reported.v1 事件投递**；Agent/Monitor WebSocket、MySQL、SSH/终端链路均不经过它。
@@ -53,7 +53,7 @@ rabbitmqctl clear_permissions -p susumonitor <用户名>
 
 > 凭据管理：RabbitMQ 密码通过 `server.env` 的 `SPRING_RABBITMQ_PASSWORD` 注入；vhost/用户清单建议随《备份与恢复手册》记录。
 
-## 三、拓扑（冻结 4 件套，幂等声明）
+## 三、拓扑（2 exchange + 6 队列，幂等声明）
 
 | 类型 | 名称 | 关键参数 |
 |---|---|---|
@@ -63,9 +63,11 @@ rabbitmqctl clear_permissions -p susumonitor <用户名>
 | Queue | `susumonitor.alert.metrics.dlq` | durable，不自动回投业务队列 |
 | Queue | `susumonitor.alert.triggered` | durable；`x-dead-letter-exchange=susumonitor.dlx`、`x-dead-letter-routing-key=alert.triggered.v1`；出站告警事件，消费者 `alert-notifier` 已接入（2026-08-12），驱动外部通知排程 |
 | Queue | `susumonitor.alert.triggered.dlq` | durable，不自动回投业务队列 |
+| Queue | `susumonitor.alert.resolved` | durable；`x-dead-letter-exchange=susumonitor.dlx`、`x-dead-letter-routing-key=alert.resolved.v1`；恢复事件，消费者 `alert-resolved-notifier` 已接入（2026-08-12） |
+| Queue | `susumonitor.alert.resolved.dlq` | durable，不自动回投业务队列 |
 
 - 由 `RabbitMqTopologyConfig` 声明式创建，**broker 重启/升级后自动重建**，无需手工声明。
-- 绑定：`susumonitor.events -- metrics.reported.v1 --> susumonitor.alert.metrics`；`susumonitor.events -- alert.triggered.v1 --> susumonitor.alert.triggered`；DLX → DLQ 同理。
+- 绑定（共 6 条）：`susumonitor.events -- metrics.reported.v1 --> susumonitor.alert.metrics`；`susumonitor.events -- alert.triggered.v1 --> susumonitor.alert.triggered`；`susumonitor.events -- alert.resolved.v1 --> susumonitor.alert.resolved`；DLX → DLQ 同理。
 
 ```bash
 rabbitmqctl list_queues -p susumonitor name durable arguments
@@ -77,8 +79,8 @@ rabbitmqctl list_exchanges -p susumonitor name type durable
 | 项 | 方式 | 说明 |
 |---|---|---|
 | 后端视角 | `GET /api/ready` | DB + RabbitMQ 双检查；Broker 不可达返回 **HTTP 503 / 50301 "rabbitmq unavailable"**（存活但未就绪，应用不退出） |
-| 积压监控 | `rabbitmqctl list_queues -p susumonitor name messages` | `susumonitor.alert.metrics` / `susumonitor.alert.triggered` 正常应接近 0（消费即 ACK）；**持续增长**说明消费者未运行或评估/通知排程失败（查后端日志与 DLQ）；对应 DLQ 增长 = 数据错误或重试耗尽，需人工介入 |
-| 死信处置 | 管理台/管理 API 查看两个 DLQ（`susumonitor.alert.metrics.dlq` / `susumonitor.alert.triggered.dlq`）；先运行 `node api-test/replay-mvp11-dlq.mjs [--event metrics\|alert]`（默认 dry-run、最多 10 条）审查摘要。仅在**本机隔离验证环境**、根因已修复且消息契约有效时，设置 `SUSUMONITOR_VALIDATION_CONFIRM=I_UNDERSTAND_DLQ_REPLAY` 后追加 `--execute --limit=N`（N≤50）。工具只将合规信封（对应事件的契约）原样发布回 `susumonitor.events`，绝不直接写业务队列、不输出 payload；非法 JSON/schema/type 等消息拒绝重放。全量处理（含 --purge 清空）用 `node api-test/replay-dlq.mjs [--event metrics\|alert] [--replay\|--purge]`。生产死信仍须按变更流程人工审查与重放，禁止将本工具指向生产 Management API。 |
+| 积压监控 | `rabbitmqctl list_queues -p susumonitor name messages` | `susumonitor.alert.metrics` / `susumonitor.alert.triggered` / `susumonitor.alert.resolved` 正常应接近 0（消费即 ACK）；**持续增长**说明消费者未运行或评估/通知排程失败（查后端日志与 DLQ）；对应 DLQ 增长 = 数据错误或重试耗尽，需人工介入 |
+| 死信处置 | 管理台/管理 API 查看三个 DLQ（`susumonitor.alert.metrics.dlq` / `susumonitor.alert.triggered.dlq` / `susumonitor.alert.resolved.dlq`）；先运行 `node api-test/replay-mvp11-dlq.mjs [--event metrics\|alert]`（默认 dry-run、最多 10 条）审查摘要。仅在**本机隔离验证环境**、根因已修复且消息契约有效时，设置 `SUSUMONITOR_VALIDATION_CONFIRM=I_UNDERSTAND_DLQ_REPLAY` 后追加 `--execute --limit=N`（N≤50）。工具只将合规信封（对应事件的契约）原样发布回 `susumonitor.events`，绝不直接写业务队列、不输出 payload；非法 JSON/schema/type 等消息拒绝重放。全量处理（含 --purge 清空）用 `node api-test/replay-dlq.mjs [--event metrics\|alert] [--replay\|--purge]`。生产死信仍须按变更流程人工审查与重放，禁止将本工具指向生产 Management API。 |
 | 管理台 | http://127.0.0.1:15672（仅内网） | 队列/连接/节点监控 |
 | Broker 状态 | `rabbitmqctl status` | 节点/版本/Erlang 版本 |
 
