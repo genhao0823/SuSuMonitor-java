@@ -4,7 +4,7 @@
  * 捕获魔法数字 / 参数名错误 / API 路径拼错 / OpenAPI schema 漂移等
  * catch-up 阶段常见的隐藏 bug。
  *
- * 11 条审计规则:见 RULES 数组(6 regex + 2 customCheck)。
+ * 11 条审计规则:见 RULES 数组(9 regex + 2 customCheck)。
  * 设计原则:纯只读、离线、零依赖、CI 友好(退出码 0/1)。
  *
  * 用法:`npm run audit:catchup`
@@ -221,7 +221,7 @@ function main() {
 
   const findings = []
 
-  // 6 条 regex 规则
+  // 9 条 regex 规则
   for (const file of files) {
     const content = readFileSync(file, 'utf8')
     for (const rule of RULES) {

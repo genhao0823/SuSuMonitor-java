@@ -1,9 +1,9 @@
 """模拟浏览器终端全链路测试：ticket → WS(WSS) → terminal.open → 等待 terminal.opened。
 
 纯标准库实现，无第三方依赖。用法:
-  python ws_terminal_test.py <ws_url_prefix>
-    例: python ws_terminal_test.py https://genhaosan.online   (公网走 nginx/WSS)
-        python ws_terminal_test.py http://127.0.0.1:18080     (服务器本机直连后端)
+  python verify-terminal-ws.py <ws_url_prefix>
+    例: python verify-terminal-ws.py https://genhaosan.online   (公网走 nginx/WSS)
+        python verify-terminal-ws.py http://127.0.0.1:18080     (服务器本机直连后端)
 """
 import base64
 import hashlib
