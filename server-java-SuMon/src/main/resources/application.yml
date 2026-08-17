@@ -27,6 +27,13 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+  data:
+    redis:
+      # 多实例化阶段一（2026-08-17）：ticket 共享存储；REDIS_ENABLED=false 时本段不生效。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2s}
   rabbitmq:
     listener:
       simple:
@@ -55,6 +62,11 @@ susumonitor:
   jwt:
     secret: ${JWT_SECRET:}
     expire-hours: ${JWT_EXPIRE_HOURS:72}
+  redis:
+    # 多实例化阶段一（2026-08-17）：默认关闭，现有 systemd/本机/compose 部署零影响；
+    # 多实例部署时显式开启（REDIS_ENABLED=true）。
+    enabled: ${REDIS_ENABLED:false}
+    ticket-ttl-seconds: ${REDIS_TICKET_TTL_SECONDS:30}
   alert:
     notification-enabled: ${ALERT_NOTIFICATION_ENABLED:false}
     mail-from: ${ALERT_MAIL_FROM:noreply@susumonitor.local}

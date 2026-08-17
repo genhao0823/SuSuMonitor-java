@@ -55,6 +55,10 @@ public class AppProperties {
     @Valid
     private final Alert alert = new Alert();
 
+    /** 多实例化阶段一（2026-08-17）：Redis 共享存储（Monitor ticket）开关与参数。 */
+    @Valid
+    private final Redis redis = new Redis();
+
     /** SSH 测试历史保留期与清理批次配置。 */
     @Valid
     private final SshTestHistory sshTestHistory = new SshTestHistory();
@@ -138,6 +142,15 @@ public class AppProperties {
      */
     public Alert getAlert() {
         return alert;
+    }
+
+    /**
+     * 获取 Redis 共享存储配置（多实例化阶段一：Monitor ticket）。
+     *
+     * @return Redis 配置
+     */
+    public Redis getRedis() {
+        return redis;
     }
 
     /**
@@ -1934,6 +1947,43 @@ public class AppProperties {
          */
         public void setNotificationCleanupMaxBatchesPerRun(int notificationCleanupMaxBatchesPerRun) {
             this.notificationCleanupMaxBatchesPerRun = notificationCleanupMaxBatchesPerRun;
+        }
+    }
+
+    /**
+     * Redis 共享存储配置（多实例化阶段一：Monitor ticket 跨实例共享）。
+     *
+     * <p>连接参数（host/port/password/timeout）由 spring-boot-starter-data-redis 的
+     * {@code spring.data.redis.*} 自动配置管理（见 application.yml），本类只放业务开关与参数。</p>
+     */
+    public static class Redis {
+
+        /** 是否启用 Redis 共享存储（默认关闭：现有 systemd/本机/compose 部署零影响）。 */
+        private boolean enabled = false;
+
+        /** Monitor ticket 有效期（秒）；Redis TTL 自动过期。 */
+        @Min(value = 5, message = "Redis ticket TTL must be at least 5 seconds")
+        @Max(value = 300, message = "Redis ticket TTL must not exceed 300 seconds")
+        private int ticketTtlSeconds = 30;
+
+        /** 是否启用 Redis 共享存储。 */
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        /** 设置是否启用 Redis 共享存储。 */
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        /** 获取 Monitor ticket 有效期（秒）。 */
+        public int getTicketTtlSeconds() {
+            return ticketTtlSeconds;
+        }
+
+        /** 设置 Monitor ticket 有效期（秒）。 */
+        public void setTicketTtlSeconds(int ticketTtlSeconds) {
+            this.ticketTtlSeconds = ticketTtlSeconds;
         }
     }
 

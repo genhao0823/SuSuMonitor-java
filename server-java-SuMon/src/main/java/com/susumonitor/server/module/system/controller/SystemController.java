@@ -9,6 +9,7 @@ import com.susumonitor.server.module.alert.consume.ConsumeTimingStatsRegistry;
 import com.susumonitor.server.module.system.QueueBacklogProbeService;
 import com.susumonitor.server.module.system.QueueBacklogSnapshotRegistry;
 import com.susumonitor.server.module.system.RabbitHealthChecker;
+import com.susumonitor.server.module.system.RedisHealthChecker;
 import com.susumonitor.server.module.system.vo.ConsumeStatsVo;
 import com.susumonitor.server.module.system.vo.HealthStatusVo;
 import com.susumonitor.server.module.system.vo.QueueBacklogVo;
@@ -44,6 +45,8 @@ public class SystemController {
 
     private final ObjectProvider<RabbitHealthChecker> rabbitHealthChecker;
 
+    private final ObjectProvider<RedisHealthChecker> redisHealthChecker;
+
     private final ObjectProvider<ConsumeTimingStatsRegistry> consumeTimingStatsRegistry;
 
     private final ObjectProvider<ConsumeStatsService> consumeStatsService;
@@ -63,6 +66,7 @@ public class SystemController {
      */
     public SystemController(DataSource dataSource,
             ObjectProvider<RabbitHealthChecker> rabbitHealthChecker,
+            ObjectProvider<RedisHealthChecker> redisHealthChecker,
             @Value("${spring.application.name:susumonitor}") String applicationName,
             ObjectProvider<ConsumeTimingStatsRegistry> consumeTimingStatsRegistry,
             ObjectProvider<ConsumeStatsService> consumeStatsService,
@@ -70,6 +74,7 @@ public class SystemController {
             AppProperties appProperties) {
         this.dataSource = dataSource;
         this.rabbitHealthChecker = rabbitHealthChecker;
+        this.redisHealthChecker = redisHealthChecker;
         this.applicationName = applicationName;
         this.consumeTimingStatsRegistry = consumeTimingStatsRegistry;
         this.consumeStatsService = consumeStatsService;
@@ -89,8 +94,8 @@ public class SystemController {
 
     /**
      * 就绪检查：数据库必须可用；Outbox 启用（存在 RabbitHealthChecker Bean）时
-     * RabbitMQ 也必须可用——"存活但未就绪"语义，Broker 不可达返回 50301，
-     * 应用不退出，发布器退避重试。
+     * RabbitMQ 也必须可用，Redis 启用（存在 RedisHealthChecker Bean）时 Redis 也必须可用——
+     * "存活但未就绪"语义，Broker/Redis 不可达返回 50301/50302，应用不退出。
      */
     @GetMapping("/ready")
     public ApiResponse<ReadyStatusVo> ready() {
@@ -104,6 +109,10 @@ public class SystemController {
         RabbitHealthChecker checker = rabbitHealthChecker.getIfAvailable();
         if (checker != null && !checker.isHealthy()) {
             throw new BusinessException(ErrorCode.RABBITMQ_UNAVAILABLE);
+        }
+        RedisHealthChecker redisChecker = redisHealthChecker.getIfAvailable();
+        if (redisChecker != null && !redisChecker.isHealthy()) {
+            throw new BusinessException(ErrorCode.REDIS_UNAVAILABLE);
         }
         return ApiResponse.success(new ReadyStatusVo("UP", "ok", OffsetDateTime.now(ZoneOffset.UTC)));
     }

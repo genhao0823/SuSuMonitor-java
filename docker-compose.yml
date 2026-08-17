@@ -35,6 +35,20 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   server:
     build: ./server-java-SuMon
     restart: unless-stopped
@@ -59,6 +73,10 @@ services:
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-susumonitor}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
       SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-susumonitor}
+      # 多实例化阶段一（2026-08-17）：Redis ticket 共享；默认关闭，经 .env 显式开启。
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       ALERT_NOTIFICATION_ENABLED: ${ALERT_NOTIFICATION_ENABLED:-false}
       MAIL_HOST: ${MAIL_HOST:-}
       MAIL_PORT: ${MAIL_PORT:-587}
@@ -72,6 +90,8 @@ services:
       mysql:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       # 探活用 /api/health（liveness；/api/ready 会随 Broker 状态波动，不适合作为容器健康依据）。
@@ -123,4 +143,5 @@ services:
 volumes:
   mysql-data:
   rabbitmq-data:
+  redis-data:
   agent-data:
