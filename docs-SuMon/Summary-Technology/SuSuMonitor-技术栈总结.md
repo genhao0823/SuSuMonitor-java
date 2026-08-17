@@ -29,7 +29,7 @@
 | MVP-6 告警前端 | 已实现（2026-07-27 Sprint 0-7 收口，2026-07-31 更新） | `views/AlertRecordsView.vue` + `AlertRulesView.vue` + `alert.push` WS 消费；真实端到端链路 2026-07-28 验收通过 |
 | MVP-7 Web SSH 终端 | 已实现 T1-T4（T4 xterm.js 前端 2026-07-28，2026-07-31 更新） | `views/TerminalView.vue` + 路由 `/terminal/:serverId`；T5 云端部署已验证（明文 HTTP）、T6 家庭 Linux 主机部署待验 |
 | Docker / Android | 已落地（2026-08-16 更新） | Docker：三端 Dockerfile + 根 docker-compose.yml（2026-08-05）→ 三镜像实机构建 + compose 全栈实跑 PASS（2026-08-16）；Android：`app-kt-SuMon` 阶段一+二+Polish-7 |
-| Redis / Prometheus / k8s / GitHub Actions | Redis 已落地（2026-08-17）；其余计划中 | Redis：多实例化阶段一 Monitor ticket 共享（`spring-boot-starter-data-redis`，`REDIS_ENABLED` 可选启用，GETDEL 一次性，见 `Develop-log/20260817-多实例化阶段一Redis与Ticket.md`）；Prometheus/k8s/GitHub Actions 属增强阶段 |
+| Redis / Prometheus / k8s / GitHub Actions | Redis 已落地（2026-08-17/18）；其余计划中 | Redis：Monitor ticket 共享（GETDEL 一次性 + 双实例跨实例验收 2026-08-18）、JWT 黑名单真实登出、登录防爆破限流（429+Retry-After），均 `REDIS_ENABLED` 可选启用，见 `Develop-log/20260818-WSL修复与Redis安全加固.md`；Prometheus/k8s/GitHub Actions 属增强阶段 |
 
 ---
 

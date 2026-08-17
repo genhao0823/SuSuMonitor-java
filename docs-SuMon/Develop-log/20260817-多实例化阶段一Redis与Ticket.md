@@ -50,6 +50,8 @@
 
 **根因（环境级 bug，非本项目代码）**：WSL2 2.7.3 → **2.7.11**（已升级尝试）在 Windows 10.0.26200 上 **VM 每 1-2 分钟崩溃重启循环**（静置 3 分钟也崩；停 dockerd、`.wslconfig` memory=6GB 限制均无效；Windows 事件日志仅见重启后正常 VmSwitch 事件，无崩溃根因）。任何 >30s 的连续操作都会被崩溃窗口打断；双实例同时就绪的窗口从未重叠。该问题在 2026-08-16 Docker 验收时已存在（当时靠单次会话紧凑编排通过），本次升级 WSL 未修复。
 
+> **修正注（2026-08-18）**：上文"崩溃重启循环"结论**有误**——真实根因是 `.wslconfig` 的 **`vmIdleTimeout` 默认 60000 毫秒**（VM 空闲 60 秒自动关闭，Microsoft 官方文档确认），非崩溃。已通过 `vmIdleTimeout=600000` 修复（`.wslconfig` 合并段 + 重启，静置 3 分钟验证稳定）。**双实例跨实例 ticket 验收已于 2026-08-18 全部完成**（`verify-redis-ticket.mjs` P0+C1-C4 PASS + 失效演练 50302→恢复 + `verify-alert-ws` 24/24），验收链路改为 WSL 内单会话执行（MySQL/RabbitMQ 经网关直连，详见 `20260818-WSL修复与Redis安全加固.md`）。
+
 ## 五、诚实边界
 
 - 跨实例一次性语义的代码保证 = `GETDEL` 原子取删（单测 `RedisMonitorTicketServiceTests` 覆盖命中/未命中/重放语义）；真实双实例验收留待稳定环境执行（脚本 `api-test/verify-redis-ticket.mjs` 已备，执行步骤见计划文档 §三）
