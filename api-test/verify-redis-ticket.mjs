@@ -117,10 +117,11 @@ async function main() {
   const tokenB = loginB.body.data.token
   checks.P0 = 'admin login on both instances OK'
 
-  // 建一个 server（共享 DB，供 subscribe 使用）。
+  // 建一个 server（共享 DB，供 subscribe 使用）；host 随机化避免与历史残留冲突（唯一约束）。
+  const hostBase = 127 + 1 + Math.floor(Math.random() * 100)
   const created = await api(baseA, '/api/servers', {
     method: 'POST', token: tokenA,
-    body: { name: `redis_ticket_${Date.now()}`, host: '127.0.0.3', description: 'multi-instance ticket e2e', ssh_host: '127.0.0.3', ssh_port: 22, ssh_user: 'e2e', ssh_auth_type: 'password', ssh_password: 'e2e-placeholder' }
+    body: { name: `redis_ticket_${Date.now()}`, host: `${hostBase}.1.2.3`, description: 'multi-instance ticket e2e', ssh_host: `${hostBase}.1.2.3`, ssh_port: 22, ssh_user: 'e2e', ssh_auth_type: 'password', ssh_password: 'e2e-placeholder' }
   })
   assert(created.status === 200, `server create failed: ${created.body.code}`)
   const serverId = created.body.data.id
