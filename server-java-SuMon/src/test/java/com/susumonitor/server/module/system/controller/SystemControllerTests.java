@@ -19,6 +19,7 @@ import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
 import com.susumonitor.server.module.system.RabbitHealthChecker;
+import com.susumonitor.server.module.system.RedisHealthChecker;
 import com.susumonitor.server.module.system.QueueBacklogSnapshotRegistry;
 import com.susumonitor.server.module.alert.consume.ConsumeStatsService;
 import com.susumonitor.server.module.alert.consume.ConsumeTimingStatsRegistry;
@@ -132,6 +133,9 @@ class SystemControllerTests {
     // RabbitMQ 探活替身：ready 检查 Broker 分支（enabled=false 时业务 Bean 不存在，仅测试注入 mock）。
     @MockitoBean
     private RabbitHealthChecker rabbitHealthChecker;
+    // Redis 探活替身：ready 检查 Redis 分支（多实例化阶段一，默认关闭时业务 Bean 不存在）。
+    @MockitoBean
+    private RedisHealthChecker redisHealthChecker;
     @MockitoBean
     private ConsumeRecordMapper consumeRecordMapper;
 
@@ -183,6 +187,7 @@ class SystemControllerTests {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.isValid(2)).thenReturn(true);
         when(rabbitHealthChecker.isHealthy()).thenReturn(true);
+        when(redisHealthChecker.isHealthy()).thenReturn(true);
 
         mockMvc.perform(get("/api/ready"))
                 .andExpect(status().isOk())
@@ -210,6 +215,7 @@ class SystemControllerTests {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.isValid(2)).thenReturn(true);
         when(rabbitHealthChecker.isHealthy()).thenReturn(true);
+        when(redisHealthChecker.isHealthy()).thenReturn(true);
 
         mockMvc.perform(get("/api/ready"))
                 .andExpect(status().isOk())
@@ -229,6 +235,21 @@ class SystemControllerTests {
                 .andExpect(header().string("X-Request-ID", not(blankOrNullString())))
                 .andExpect(jsonPath("$.code").value(50301))
                 .andExpect(jsonPath("$.message").value("rabbitmq unavailable"));
+    }
+
+    /** Redis 不可达时 ready 返回 50302（多实例化阶段一），应用存活不退出。 */
+    @Test
+    void readyShouldReturnServiceUnavailableWhenRedisIsDown() throws Exception {
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.isValid(2)).thenReturn(true);
+        when(rabbitHealthChecker.isHealthy()).thenReturn(true);
+        when(redisHealthChecker.isHealthy()).thenReturn(false);
+
+        mockMvc.perform(get("/api/ready"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("X-Request-ID", not(blankOrNullString())))
+                .andExpect(jsonPath("$.code").value(50302))
+                .andExpect(jsonPath("$.message").value("redis unavailable"));
     }
 
     /** test profile 关闭 Outbox 时发布器不应加载（条件装配）。 */
