@@ -44,6 +44,8 @@
 | SSH 连接测试权限 | 仅 `admin` 允许 |
 | 当前开发范围 | 只做本机开发和调试 |
 | MVP-1 依赖 | 不依赖 Docker、Redis、k8s、Prometheus、Grafana、Android |
+
+> **注（2026-08-17 多实例化阶段一收口）**：上表为 MVP-1 决策原文（不依赖 Redis 属当时范围决策，非永久禁令）。2026-08-17 起按多实例化规划落地 Redis 底座——`spring-boot-starter-data-redis` + `REDIS_ENABLED` 可选开关（默认 false，现有部署零影响），Monitor ticket 改 Redis 共享（GETDEL 一次性 + TTL 自动过期），`/api/ready` 加 50302 Redis 探活；详见 `docs-SuMon/Develop-log/20260817-多实例化阶段一Redis与Ticket.md`。注册表与 WS 事件广播仍单 JVM，属阶段二/三。
 | Java 编码规范 | 遵循《阿里巴巴 Java 开发手册》 |
 | Git 本机备份仓库 | `D:\develop\Git\SuSuMonitor.git` |
 | Git remote 名称 | `backup` |

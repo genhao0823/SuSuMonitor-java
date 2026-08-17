@@ -169,6 +169,8 @@ cp .env.example .env   # 或放非仓库路径并 --env-file 引用
 # 必填：MYSQL_ROOT_PASSWORD / DB_PASSWORD / RABBITMQ_PASSWORD
 #       JWT_SECRET(≥32B base64) / AES_GCM_KEY(恰32B base64) / CORS_ALLOWED_ORIGINS
 # 生成：openssl rand -base64 32（JWT/AES）；openssl rand -hex 16（数据库口令）
+# 多实例化阶段一（2026-08-17）：REDIS_ENABLED=true 启用 Redis ticket 共享（compose 自带 redis 服务；
+#   Redis 需 ≥6.2 以支持 GETDEL；REDIS_PASSWORD 可选，本机内网可不设）
 ```
 
 ### 6.5.3 构建与启动

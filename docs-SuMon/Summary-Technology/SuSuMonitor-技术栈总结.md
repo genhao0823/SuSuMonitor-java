@@ -29,7 +29,7 @@
 | MVP-6 告警前端 | 已实现（2026-07-27 Sprint 0-7 收口，2026-07-31 更新） | `views/AlertRecordsView.vue` + `AlertRulesView.vue` + `alert.push` WS 消费；真实端到端链路 2026-07-28 验收通过 |
 | MVP-7 Web SSH 终端 | 已实现 T1-T4（T4 xterm.js 前端 2026-07-28，2026-07-31 更新） | `views/TerminalView.vue` + 路由 `/terminal/:serverId`；T5 云端部署已验证（明文 HTTP）、T6 家庭 Linux 主机部署待验 |
 | Docker / Android | 已落地（2026-08-16 更新） | Docker：三端 Dockerfile + 根 docker-compose.yml（2026-08-05）→ 三镜像实机构建 + compose 全栈实跑 PASS（2026-08-16）；Android：`app-kt-SuMon` 阶段一+二+Polish-7 |
-| Redis / Prometheus / k8s / GitHub Actions | 计划中 | 均属增强阶段 |
+| Redis / Prometheus / k8s / GitHub Actions | Redis 已落地（2026-08-17）；其余计划中 | Redis：多实例化阶段一 Monitor ticket 共享（`spring-boot-starter-data-redis`，`REDIS_ENABLED` 可选启用，GETDEL 一次性，见 `Develop-log/20260817-多实例化阶段一Redis与Ticket.md`）；Prometheus/k8s/GitHub Actions 属增强阶段 |
 
 ---
 
@@ -416,7 +416,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 
 以下在需求文档中规划但**当前代码未实现**，面试中可作为技术视野展示，需诚实区分"规划"与"已做"：
 
-- Spring Data Redis：指标缓存、JWT 黑名单、限流、Agent 在线状态缓存
+- Spring Data Redis：**已落地（2026-08-17 多实例化阶段一：Monitor ticket 共享）**；指标缓存、JWT 黑名单、限流、Agent 在线状态缓存仍为规划
 - Micrometer + Prometheus + Grafana：应用指标采集与监控
 - Testcontainers：Docker 可用后的 MySQL/Redis 集成测试（2026-08-16 起本机 WSL2 Docker 引擎已可用，可作为后续集成测试底座）
 - Quartz：复杂调度（若 Spring Scheduling 不足）
@@ -462,7 +462,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 
 1. ~~**ECharts**：`package.json` 已声明依赖，前端无任何实际调用代码。当前图表用 SVG/表格替代。~~（2026-08-16 更新：已实际使用，`web-vue-SuMon/src/components/MetricsLineChart.vue` 指标折线图）
 2. **openapi-typescript**：devDep 已声明，未配置生成脚本，`api.d.ts` 为手写。
-3. **Redis / Prometheus / k8s / GitHub Actions**：均属增强阶段规划，代码未实现。（2026-08-16 更新：Docker 与 Android 已移出本清单——Docker 资产 2026-08-05 落地、三镜像实机构建 2026-08-16 完成，Android App 阶段一+二+Polish-7 完整实现）
+3. **Redis / Prometheus / k8s / GitHub Actions**：Redis 已落地（2026-08-17 多实例化阶段一 ticket 共享，`REDIS_ENABLED` 可选）；Prometheus/k8s/GitHub Actions 均属增强阶段规划，代码未实现。（2026-08-16 更新：Docker 与 Android 已移出本清单——Docker 资产 2026-08-05 落地、三镜像实机构建 2026-08-16 完成，Android App 阶段一+二+Polish-7 完整实现）
 4. ~~**xterm.js Web SSH 终端**~~：~~属 MVP-7，尚未实现~~（2026-07-31 更新：T4 前端已于 2026-07-28 实现最小可用版本，`views/TerminalView.vue` + 路由 `/terminal/:serverId`；T5 云端部署已验证、T6 家庭主机部署待验）。
 5. ~~**Alert 告警系统前端**~~：~~前端告警页面未实现~~（2026-07-31 更新：MVP-6 告警前端已于 2026-07-27 收口，记录页 + 规则页 + `alert.push` WS 消费，2026-07-28 真实端到端链路验收通过）。
 
