@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -21,6 +22,14 @@ public class GlobalExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final long loginLimitWindowSeconds;
+
+    /** 注入登录防爆破窗口秒数（Retry-After 头；属性缺失时默认 60）。 */
+    public GlobalExceptionHandler(
+            @Value("${susumonitor.security.login-limit-window-seconds:60}") long loginLimitWindowSeconds) {
+        this.loginLimitWindowSeconds = loginLimitWindowSeconds;
+    }
+
     /**
      * 处理业务异常，从异常中提取 ErrorCode 并返回对应的 HTTP 状态和响应体。
      *
@@ -31,7 +40,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
         ErrorCode errorCode = exception.getErrorCode();
         LOGGER.warn("Business exception: {}", errorCode.getMessage());
-        return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorCode));
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(errorCode.getHttpStatus());
+        if (errorCode == ErrorCode.LOGIN_RATE_LIMIT_REACHED) {
+            // 登录防爆破：告知客户端窗口秒数后再试。
+            builder.header("Retry-After", String.valueOf(loginLimitWindowSeconds));
+        }
+        return builder.body(ApiResponse.error(errorCode));
     }
 
     /**

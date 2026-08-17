@@ -232,6 +232,36 @@ public class AppProperties {
         public void setAesGcmKey(String aesGcmKey) {
             this.aesGcmKey = aesGcmKey;
         }
+
+        /** 登录防爆破（Redis 安全加固一期，2026-08-18）：窗口内每 IP 最大登录尝试次数。 */
+        @Min(value = 1, message = "Login limit max attempts must be at least one")
+        @Max(value = 10000, message = "Login limit max attempts must not exceed 10000")
+        private int loginLimitMaxAttempts = 10;
+
+        /** 登录防爆破：固定窗口时长（秒）。 */
+        @Min(value = 5, message = "Login limit window must be at least 5 seconds")
+        @Max(value = 3600, message = "Login limit window must not exceed 3600 seconds")
+        private int loginLimitWindowSeconds = 60;
+
+        /** 获取登录防爆破窗口内每 IP 最大尝试次数。 */
+        public int getLoginLimitMaxAttempts() {
+            return loginLimitMaxAttempts;
+        }
+
+        /** 设置登录防爆破窗口内每 IP 最大尝试次数。 */
+        public void setLoginLimitMaxAttempts(int loginLimitMaxAttempts) {
+            this.loginLimitMaxAttempts = loginLimitMaxAttempts;
+        }
+
+        /** 获取登录防爆破固定窗口时长（秒）。 */
+        public int getLoginLimitWindowSeconds() {
+            return loginLimitWindowSeconds;
+        }
+
+        /** 设置登录防爆破固定窗口时长（秒）。 */
+        public void setLoginLimitWindowSeconds(int loginLimitWindowSeconds) {
+            this.loginLimitWindowSeconds = loginLimitWindowSeconds;
+        }
     }
 
     public static class Agent {

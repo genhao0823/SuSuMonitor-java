@@ -154,6 +154,10 @@ class AuthControllerTests {
     // Redis 黑名单替身（Redis 安全加固一期，默认关闭时业务 Bean 不存在，测试注入 mock）。
     @MockitoBean
     private RedisTokenBlacklist redisTokenBlacklist;
+
+    // 登录防爆破替身（避免真实内存实现跨用例累计计数；限流行为用独立用例验证）。
+    @MockitoBean
+    private com.susumonitor.server.module.auth.limit.LoginRateLimiter loginRateLimiter;
     @MockitoBean
     private OutboxMapper outboxMapper;
     @MockitoBean
@@ -236,6 +240,26 @@ class AuthControllerTests {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value(40900))
                 .andExpect(jsonPath("$.message").value("resource conflict"));
+    }
+
+    @Test
+    // 登录防爆破：限流器拒绝时返回 429 + code 42905 + Retry-After 头，且不触达登录业务。
+    void loginShouldReturn429WhenRateLimited() throws Exception {
+        LoginRequest request = loginRequest("admin", "Password123");
+        org.mockito.Mockito.doThrow(new com.susumonitor.server.common.BusinessException(
+                        com.susumonitor.server.common.ErrorCode.LOGIN_RATE_LIMIT_REACHED))
+                .when(loginRateLimiter).checkAttempt(org.mockito.ArgumentMatchers.anyString());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.code").value(42905))
+                .andExpect(jsonPath("$.message").value("login rate limit reached"));
+
+        org.mockito.Mockito.verify(userService, org.mockito.Mockito.never())
+                .login(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

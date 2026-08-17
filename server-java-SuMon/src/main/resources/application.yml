@@ -88,6 +88,9 @@ susumonitor:
     cleanup-max-batches-per-run: ${SSH_TEST_HISTORY_CLEANUP_MAX_BATCHES_PER_RUN:100}
   security:
     aes-gcm-key: ${AES_GCM_KEY:}
+    # 登录防爆破（Redis 安全加固一期，2026-08-18）：窗口内每 IP 最大尝试次数与窗口秒数。
+    login-limit-max-attempts: ${LOGIN_LIMIT_MAX_ATTEMPTS:10}
+    login-limit-window-seconds: ${LOGIN_LIMIT_WINDOW_SECONDS:60}
   agent:
     register-key: ${AGENT_REGISTER_KEY:}
     max-connections: ${AGENT_MAX_CONNECTIONS:128}

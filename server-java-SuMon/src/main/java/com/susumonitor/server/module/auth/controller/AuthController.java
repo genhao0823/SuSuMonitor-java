@@ -1,8 +1,10 @@
 package com.susumonitor.server.module.auth.controller;
 
 import com.susumonitor.server.common.ApiResponse;
+import com.susumonitor.server.common.ClientIpResolver;
 import com.susumonitor.server.module.auth.dto.LoginRequest;
 import com.susumonitor.server.module.auth.dto.RegisterRequest;
+import com.susumonitor.server.module.auth.limit.LoginRateLimiter;
 import com.susumonitor.server.module.auth.service.UserService;
 import com.susumonitor.server.module.auth.vo.CurrentUserVo;
 import com.susumonitor.server.module.auth.vo.LoginVo;
@@ -42,6 +44,10 @@ public class AuthController {
 
     private final ObjectProvider<RedisTokenBlacklist> tokenBlacklist;
 
+    private final ObjectProvider<LoginRateLimiter> loginRateLimiter;
+
+    private final ClientIpResolver clientIpResolver;
+
     private final Clock clock;
 
     /**
@@ -60,7 +66,11 @@ public class AuthController {
     /**
      * 校验用户凭据并为已审核用户签发 JWT。
      *
+     * <p>登录前先做防爆破限流（按客户端 IP 固定窗口计数，超限 429）。
+     * 限流实现由 Redis 启用状态决定：Redis 启用时跨实例共享计数，否则内存兜底。</p>
+     *
      * @param request  登录请求
+     * @param httpRequest HTTP 请求（解析客户端 IP）
      * @param response HTTP 响应，用于禁止缓存敏感 Token
      * @return 登录结果
      */
@@ -68,7 +78,12 @@ public class AuthController {
     public ApiResponse<LoginVo> login(
             @Valid
             @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
+        LoginRateLimiter limiter = loginRateLimiter.getIfAvailable();
+        if (limiter != null) {
+            limiter.checkAttempt(clientIpResolver.resolve(httpRequest));
+        }
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader(HttpHeaders.PRAGMA, "no-cache");
         return ApiResponse.success(userService.login(request));
