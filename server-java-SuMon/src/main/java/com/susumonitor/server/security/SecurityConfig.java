@@ -1,6 +1,7 @@
 package com.susumonitor.server.security;
 
 import com.susumonitor.server.module.auth.mapper.UserMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ public class SecurityConfig {
      * @param jwtTokenService JWT 服务
      * @param userMapper 用户 Mapper
      * @param securityErrorHandler 安全错误处理器
+     * @param tokenBlacklist Redis 黑名单（可选，Redis 未启用时为空）
      * @return JWT 认证过滤器
      */
     // 将 JWT 过滤器注册为 Spring Bean，供安全链引用。
@@ -35,8 +37,9 @@ public class SecurityConfig {
     public JwtAuthenticationFilter jwtAuthenticationFilter(
             JwtTokenService jwtTokenService,
             UserMapper userMapper,
-            SecurityErrorHandler securityErrorHandler) {
-        return new JwtAuthenticationFilter(jwtTokenService, userMapper, securityErrorHandler);
+            SecurityErrorHandler securityErrorHandler,
+            ObjectProvider<RedisTokenBlacklist> tokenBlacklist) {
+        return new JwtAuthenticationFilter(jwtTokenService, userMapper, securityErrorHandler, tokenBlacklist);
     }
 
     /**

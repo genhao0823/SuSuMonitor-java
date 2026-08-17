@@ -41,8 +41,11 @@ import com.susumonitor.server.security.JwtTokenService;
 import com.susumonitor.server.security.SecurityConfig;
 import com.susumonitor.server.security.SecurityErrorHandler;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -178,7 +181,7 @@ class AlertRecordControllerTests {
 
     private void authenticateUser() {
         when(jwtTokenService.parseToken(USER_TOKEN))
-                .thenReturn(new JwtTokenService.ParsedToken(2L, "approved_user", "user-token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(2L, "approved_user", "user-token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         com.susumonitor.server.module.auth.entity.UserEntity user = new com.susumonitor.server.module.auth.entity.UserEntity();
         user.setId(2L);
         user.setUsername("approved_user");

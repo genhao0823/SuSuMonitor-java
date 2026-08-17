@@ -1,5 +1,7 @@
 package com.susumonitor.server.security;
 
+import java.time.Instant;
+
 /**
  * 定义用户 JWT 的签发和解析契约，供认证业务与安全过滤器依赖。
  */
@@ -26,7 +28,8 @@ public interface JwtTokenService {
      * @param userId 用户 ID
      * @param username 用户名
      * @param tokenId JWT ID
+     * @param expiresAt 过期时间（Redis 黑名单 TTL 依据）
      */
-    record ParsedToken(Long userId, String username, String tokenId) {
+    record ParsedToken(Long userId, String username, String tokenId, Instant expiresAt) {
     }
 }

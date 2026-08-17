@@ -715,14 +715,14 @@ class ServerControllerTests {
     /** 配置管理员 JWT 和数据库最新状态回查。 */
     private void authenticateAdmin() {
         when(jwtTokenService.parseToken(ADMIN_TOKEN))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "admin-token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "admin-token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(authenticationUser(1L, "admin", "admin"));
     }
 
     /** 配置已审核普通用户 JWT 和数据库最新状态回查。 */
     private void authenticateUser() {
         when(jwtTokenService.parseToken(USER_TOKEN))
-                .thenReturn(new JwtTokenService.ParsedToken(2L, "approved_user", "user-token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(2L, "approved_user", "user-token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(2L))
                 .thenReturn(authenticationUser(2L, "approved_user", "user"));
     }

@@ -246,7 +246,7 @@ class MetricsControllerTests {
 
     private void authenticateUser() {
         when(jwtTokenService.parseToken(USER_TOKEN))
-                .thenReturn(new JwtTokenService.ParsedToken(2L, "approved_user", "user-token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(2L, "approved_user", "user-token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(2L)).thenReturn(authenticationUser());
     }
 

@@ -32,7 +32,9 @@ import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
 import com.susumonitor.server.module.terminal.mapper.TerminalSessionMapper;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import javax.sql.DataSource;
@@ -160,7 +162,7 @@ class AdminUserControllerTests {
         page.setPageSize(20);
         Mockito.when(adminUserService.pageUsers("pending", "user", 1, 20)).thenReturn(page);
         Mockito.when(jwtTokenService.parseToken("admin-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
 
         mockMvc.perform(get("/api/admin/users")
@@ -232,7 +234,7 @@ class AdminUserControllerTests {
     @Test
     void approveUserShouldReturnSuccess() throws Exception {
         Mockito.when(jwtTokenService.parseToken("admin-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
         Mockito.when(adminUserService.approveUser(2L, 1L)).thenReturn(reviewedUser(2L, "approved"));
 
@@ -249,7 +251,7 @@ class AdminUserControllerTests {
     @Test
     void rejectUserShouldReturnSuccess() throws Exception {
         Mockito.when(jwtTokenService.parseToken("admin-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
         Mockito.when(adminUserService.rejectUser(2L, 1L)).thenReturn(reviewedUser(2L, "rejected"));
 
@@ -321,7 +323,7 @@ class AdminUserControllerTests {
     // 配置管理员 JWT 和数据库状态回查。
     private void authenticateAdmin() {
         Mockito.when(jwtTokenService.parseToken("admin-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
     }
 

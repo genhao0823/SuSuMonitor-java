@@ -22,11 +22,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.http.HttpMethod;
 
 /**
  * 验证 Bearer JWT，并依据数据库最新用户状态建立无状态认证上下文。
+ *
+ * <p>Redis 启用时额外校验 JWT 黑名单（登出真实失效，跨实例生效）；
+ * 认证成功后将 ParsedToken 放入 request attribute，供登出等端点读取 tokenId 与剩余有效期。</p>
  */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -42,6 +46,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String APPROVED_STATUS = "approved";
 
+    /** 认证成功后放置 ParsedToken 的 request attribute 名（登出端点读取）。 */
+    public static final String JWT_PARSED_TOKEN_ATTRIBUTE = "jwt_parsed_token";
+
     private static final ZoneId APPLICATION_ZONE = ZoneOffset.UTC;
 
     private final JwtTokenService jwtTokenService;
@@ -50,20 +57,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final SecurityErrorHandler securityErrorHandler;
 
+    private final ObjectProvider<RedisTokenBlacklist> tokenBlacklist;
+
     /**
      * 创建 Bearer 过滤器并注入 Token、用户状态和错误响应依赖。
      *
      * @param jwtTokenService JWT 服务
      * @param userMapper 用户数据访问接口
      * @param securityErrorHandler 安全错误处理器
+     * @param tokenBlacklist Redis 黑名单（可选，Redis 未启用时为空）
      */
     public JwtAuthenticationFilter(
             JwtTokenService jwtTokenService,
             UserMapper userMapper,
-            SecurityErrorHandler securityErrorHandler) {
+            SecurityErrorHandler securityErrorHandler,
+            ObjectProvider<RedisTokenBlacklist> tokenBlacklist) {
         this.jwtTokenService = jwtTokenService;
         this.userMapper = userMapper;
         this.securityErrorHandler = securityErrorHandler;
+        this.tokenBlacklist = tokenBlacklist;
     }
 
     /**
@@ -102,10 +114,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String token = extractBearerToken(authorization);
             JwtTokenService.ParsedToken parsedToken = jwtTokenService.parseToken(token);
+            RedisTokenBlacklist blacklist = tokenBlacklist.getIfAvailable();
+            if (blacklist != null && blacklist.isRevoked(parsedToken.tokenId())) {
+                throw new BadCredentialsException("token has been revoked");
+            }
             UserEntity userEntity = userMapper.selectAuthenticationUserById(parsedToken.userId());
             if (!eligibleUser(userEntity, parsedToken)) {
                 throw new BadCredentialsException("authentication is no longer valid");
             }
+            request.setAttribute(JWT_PARSED_TOKEN_ATTRIBUTE, parsedToken);
             SecurityContextHolder.setContext(createSecurityContext(userEntity));
         } catch (JwtException | BadCredentialsException exception) {
             LOGGER.debug("JWT authentication rejected");

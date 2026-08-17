@@ -36,6 +36,7 @@ import com.susumonitor.server.module.alert.mapper.AlertNotificationCleanupMapper
 import com.susumonitor.server.module.metrics.outbox.OutboxCleanupMapper;
 import com.susumonitor.server.module.metrics.mapper.IngestionCleanupMapper;
 import com.susumonitor.server.security.JwtTokenService;
+import com.susumonitor.server.security.RedisTokenBlacklist;
 import com.susumonitor.server.module.alert.mapper.AlertNotificationMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.consume.ConsumeRecordMapper;
@@ -44,6 +45,7 @@ import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
 import com.susumonitor.server.module.terminal.mapper.TerminalSessionMapper;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -148,6 +150,10 @@ class AuthControllerTests {
     // 提供 JWT 服务替身，使安全过滤器测试可控制 Token 解析结果。
     @MockitoBean
     private JwtTokenService jwtTokenService;
+
+    // Redis 黑名单替身（Redis 安全加固一期，默认关闭时业务 Bean 不存在，测试注入 mock）。
+    @MockitoBean
+    private RedisTokenBlacklist redisTokenBlacklist;
     @MockitoBean
     private OutboxMapper outboxMapper;
     @MockitoBean
@@ -299,7 +305,8 @@ class AuthControllerTests {
     void authenticatedUserShouldAccessMeAndLogout() throws Exception {
         UserEntity authenticationUser = authenticationUser();
         when(jwtTokenService.parseToken("valid-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id",
+                        java.time.Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(authenticationUser);
 
         mockMvc.perform(get("/api/auth/me")
@@ -317,6 +324,28 @@ class AuthControllerTests {
 
         org.mockito.Mockito.verify(userMapper, org.mockito.Mockito.times(2))
                 .selectAuthenticationUserById(1L);
+    }
+
+    @Test
+    // Redis 启用场景：logout 将当前 token 的 jti 写入黑名单（TTL=剩余有效期），真实失效。
+    void logoutShouldRevokeTokenInBlacklistWhenRedisEnabled() throws Exception {
+        UserEntity authenticationUser = authenticationUser();
+        when(jwtTokenService.parseToken("valid-token"))
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id",
+                        java.time.Instant.parse("2026-08-18T00:00:00Z")));
+        when(userMapper.selectAuthenticationUserById(1L)).thenReturn(authenticationUser);
+        when(redisTokenBlacklist.isRevoked("token-id")).thenReturn(false);
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .header("Authorization", "Bearer valid-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        // TTL = 剩余有效期（固定 Clock 下为 72h 减签发至今的时长），且 revoke 被调用。
+        org.mockito.ArgumentCaptor<java.time.Duration> ttlCaptor =
+                org.mockito.ArgumentCaptor.forClass(java.time.Duration.class);
+        org.mockito.Mockito.verify(redisTokenBlacklist).revoke(org.mockito.Mockito.eq("token-id"), ttlCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertTrue(ttlCaptor.getValue().toSeconds() > 0);
     }
 
     @Test
@@ -345,7 +374,7 @@ class AuthControllerTests {
         authenticationUser.setUsername("normal_user");
         authenticationUser.setRole("user");
         when(jwtTokenService.parseToken("user-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(2L, "normal_user", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(2L, "normal_user", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(2L)).thenReturn(authenticationUser);
 
         mockMvc.perform(get("/api/admin/users/pending")

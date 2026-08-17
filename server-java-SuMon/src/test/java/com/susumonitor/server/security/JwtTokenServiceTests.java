@@ -67,6 +67,7 @@ class JwtTokenServiceTests {
         assertEquals(7L, parsedToken.userId());
         assertEquals("approved_user", parsedToken.username());
         assertNotNull(UUID.fromString(parsedToken.tokenId()));
+        assertNotNull(parsedToken.expiresAt());
     }
 
     /**

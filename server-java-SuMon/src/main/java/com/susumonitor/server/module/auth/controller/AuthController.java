@@ -7,9 +7,18 @@ import com.susumonitor.server.module.auth.service.UserService;
 import com.susumonitor.server.module.auth.vo.CurrentUserVo;
 import com.susumonitor.server.module.auth.vo.LoginVo;
 import com.susumonitor.server.security.AuthenticatedUser;
+import com.susumonitor.server.security.JwtAuthenticationFilter;
+import com.susumonitor.server.security.JwtTokenService;
+import com.susumonitor.server.security.RedisTokenBlacklist;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,12 +32,17 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>所有认证接口统一以 /api/auth 为路径前缀，通过 UserService 完成认证业务。</p>
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final UserService userService;
+
+    private final ObjectProvider<RedisTokenBlacklist> tokenBlacklist;
+
+    private final Clock clock;
 
     /**
      * 接收注册请求并委托 UserService 完成用户创建业务。
@@ -73,12 +87,28 @@ public class AuthController {
     }
 
     /**
-     * 确认无状态退出，客户端收到响应后负责删除本地 JWT。
+     * 登出：Redis 启用时将当前 token 的 jti 写入黑名单（TTL=剩余有效期），
+     * 此后任何实例携带该 token 请求均 401（真实失效）；Redis 未启用时保持
+     * 无状态空操作（客户端删除本地 JWT）。
      *
+     * @param request HTTP 请求（读取过滤器放置的 ParsedToken）
      * @return data 为 null 的统一成功响应
      */
     @PostMapping("/logout")
-    public ApiResponse<Void> logout() {
+    public ApiResponse<Void> logout(HttpServletRequest request) {
+        RedisTokenBlacklist blacklist = tokenBlacklist.getIfAvailable();
+        if (blacklist != null) {
+            JwtTokenService.ParsedToken parsedToken = (JwtTokenService.ParsedToken)
+                    request.getAttribute(JwtAuthenticationFilter.JWT_PARSED_TOKEN_ATTRIBUTE);
+            if (parsedToken != null) {
+                Duration ttl = Duration.between(Instant.now(clock), parsedToken.expiresAt());
+                if (!ttl.isNegative() && !ttl.isZero()) {
+                    blacklist.revoke(parsedToken.tokenId(), ttl);
+                }
+            } else {
+                log.warn("logout skipped: parsed token missing from request attribute");
+            }
+        }
         return ApiResponse.success(null);
     }
 }
