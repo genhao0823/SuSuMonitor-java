@@ -1,18 +1,18 @@
 <template>
   <el-card
-    class="dashboard-view__card dashboard-view__card--glass"
+    class="dashboard-ssh-card liquid-glass-card"
     shadow="never"
   >
     <template #header>
-      <div class="dashboard-view__card-header">
-        <div class="dashboard-view__card-title">
+      <div class="dashboard-ssh-card__header">
+        <div class="dashboard-ssh-card__title">
           <TushanFoxMark
             :size="28"
             alt="涂山苏苏·SSH 测试"
           />
-          最近 SSH 测试
+          <span>最近 SSH 测试</span>
         </div>
-        <span class="dashboard-view__badge dashboard-view__badge--info">{{ history.length }}</span>
+        <span class="liquid-badge liquid-badge--info">{{ history.length }} 次</span>
       </div>
     </template>
     <el-skeleton
@@ -41,13 +41,12 @@
           :key="item.tested_at"
           class="dashboard-ssh-card__row"
         >
-          <el-tag
-            :type="item.connected ? 'success' : 'danger'"
-            size="small"
-            effect="plain"
+          <span
+            class="liquid-badge"
+            :class="item.connected ? 'liquid-badge--ok' : 'liquid-badge--down'"
           >
             {{ item.connected ? '成功' : '失败' }}
-          </el-tag>
+          </span>
           <span
             v-if="!item.connected"
             class="dashboard-ssh-card__code"
@@ -75,10 +74,6 @@ import TushanFoxMark from '@/components/TushanFoxMark.vue'
 import type { SshTestResult } from '@/types/api'
 import { formatDateTime } from '@/utils/format'
 
-/**
- * Dashboard SSH 测试历史卡。
- * 纯展示组件:数据由 DashboardView 通过 props 传入,不自行发起请求。
- */
 defineProps<{
   history: SshTestResult[]
   loading: boolean
@@ -87,6 +82,21 @@ defineProps<{
 </script>
 
 <style scoped>
+.dashboard-ssh-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-ssh-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #2a1626;
+}
+
 .dashboard-ssh-card__list {
   display: flex;
   flex-direction: column;
@@ -96,33 +106,37 @@ defineProps<{
 .dashboard-ssh-card__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  border-top: 1px solid rgba(39, 39, 42, 0.08);
 }
 
 .dashboard-ssh-card__code {
-  color: var(--el-color-danger);
+  color: #f43f5e;
   font-family: monospace;
+  font-weight: 600;
 }
 
 .dashboard-ssh-card__duration {
-  color: var(--el-text-color-secondary);
+  color: #6d3b54;
+  font-weight: 600;
 }
 
 .dashboard-ssh-card__time {
   margin-left: auto;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
+  color: #8a5872;
+  font-size: 11.5px;
 }
 
 .dashboard-ssh-card__hint {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: #8a5872;
 }
 
 .dashboard-ssh-card__error {
   font-size: 13px;
-  color: var(--el-color-danger);
+  color: #f43f5e;
 }
 </style>

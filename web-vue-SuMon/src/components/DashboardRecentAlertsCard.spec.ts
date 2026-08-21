@@ -7,6 +7,7 @@ const global = {
     'el-card': { template: '<div><slot /></div>' },
     'el-skeleton': { template: '<div class="skeleton" />' },
     'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+    'el-icon': { template: '<span><slot /></span>' },
     'el-empty': { template: '<div class="empty"><slot /></div>' }
   }
 }
