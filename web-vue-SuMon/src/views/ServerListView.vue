@@ -24,8 +24,7 @@
       shadow="never"
     >
       <ServerSearchBar
-        v-model:name-value="searchName"
-        v-model:host-value="searchHost"
+        v-model:keyword="keyword"
         v-model:page-size="pageSize"
         :page-size-options="pageSizeOptions"
         @reload="onReload"
@@ -229,12 +228,8 @@ const totalCount = ref<number>(0)
 const page = ref(1)
 const pageSizeOptions: number[] = [10, 20, 50]
 const pageSize = ref<number>(pageSizeOptions[0])
-const searchName = useDebouncedRef<string>(
-  typeof route.query.name === 'string' ? route.query.name : '',
-  500
-)
-const searchHost = useDebouncedRef<string>(
-  typeof route.query.host === 'string' ? route.query.host : '',
+const keyword = useDebouncedRef<string>(
+  typeof route.query.keyword === 'string' ? route.query.keyword : '',
   500
 )
 const sortBy = ref<ServerQuery['sort_by']>('id')
@@ -253,13 +248,9 @@ function buildQuery(): ServerQuery {
     sort_by: sortBy.value,
     sort_order: sortOrder.value
   }
-  const name = searchName.value.trim()
-  const host = searchHost.value.trim()
-  if (name.length > 0) {
-    query.name = name
-  }
-  if (host.length > 0) {
-    query.host = host
+  const normalizedKeyword = keyword.value.trim()
+  if (normalizedKeyword.length > 0) {
+    query.keyword = normalizedKeyword
   }
   return query
 }
@@ -300,10 +291,8 @@ function onReload(): void {
 
 function syncQueryToUrl(): void {
   const query: Record<string, string> = {}
-  const name = searchName.value.trim()
-  const host = searchHost.value.trim()
-  if (name.length > 0) query.name = name
-  if (host.length > 0) query.host = host
+  const normalizedKeyword = keyword.value.trim()
+  if (normalizedKeyword.length > 0) query.keyword = normalizedKeyword
   if (page.value !== 1) query.page = String(page.value)
   if (pageSize.value !== pageSizeOptions[0]) query.page_size = String(pageSize.value)
   if (sortBy.value !== 'id') query.sort_by = String(sortBy.value)
@@ -313,6 +302,7 @@ function syncQueryToUrl(): void {
 
 function restoreQueryFromUrl(): void {
   const query = route.query
+  if (typeof query.keyword === 'string') keyword.value = query.keyword
   if (typeof query.page === 'string') {
     const nextPage = Number.parseInt(query.page, 10)
     if (!Number.isNaN(nextPage) && nextPage >= 1) page.value = nextPage
@@ -498,7 +488,7 @@ onBeforeUnmount(() => {
   }
 })
 
-watch([searchName, searchHost], () => {
+watch(keyword, () => {
   if (!initialized.value) return
   page.value = 1
   void reload()

@@ -67,12 +67,11 @@ const SERVER: Server = {
 const globalStubs = {
   PageHeader: { template: '<div><slot name="actions" /></div>' },
   ServerSearchBar: {
-    props: ['nameValue', 'hostValue', 'pageSize', 'pageSizeOptions'],
-    emits: ['update:nameValue', 'update:hostValue', 'update:pageSize', 'reload'],
+    props: ['keyword', 'pageSize', 'pageSizeOptions'],
+    emits: ['update:keyword', 'update:pageSize', 'reload'],
     template:
       '<div>' +
-      '<button class="search-name" @click="$emit(\'update:nameValue\', \' node \' )">name</button>' +
-      '<button class="search-host" @click="$emit(\'update:hostValue\', \' 10.0 \' )">host</button>' +
+      '<button class="search-keyword" @click="$emit(\'update:keyword\', \' node \' )">keyword</button>' +
       '<button class="search-reload" @click="$emit(\'reload\')">reload</button>' +
       '</div>'
   },
@@ -184,8 +183,7 @@ describe('ServerListView 查询与操作回归', () => {
 
   it('从 URL 恢复分页排序与筛选并同步精简后的 query', async () => {
     Object.assign(routeQuery, {
-      name: 'node',
-      host: '10.0',
+      keyword: 'node',
       page: '2',
       page_size: '20',
       sort_by: 'name',
@@ -197,16 +195,14 @@ describe('ServerListView 查询与操作回归', () => {
     expect(serverApi.listServers).toHaveBeenLastCalledWith({
       page: 2,
       page_size: 20,
-      name: 'node',
-      host: '10.0',
+      keyword: 'node',
       sort_by: 'name',
       sort_order: 'asc'
     })
     expect(replaceSpy).toHaveBeenLastCalledWith({
       name: 'servers',
       query: {
-        name: 'node',
-        host: '10.0',
+        keyword: 'node',
         page: '2',
         page_size: '20',
         sort_by: 'name',
@@ -220,7 +216,7 @@ describe('ServerListView 查询与操作回归', () => {
     await flush()
     const initialCalls = vi.mocked(serverApi.listServers).mock.calls.length
 
-    await wrapper.find('.search-name').trigger('click')
+    await wrapper.find('.search-keyword').trigger('click')
     await vi.advanceTimersByTimeAsync(499)
     expect(serverApi.listServers).toHaveBeenCalledTimes(initialCalls)
     await vi.advanceTimersByTimeAsync(1)
@@ -230,7 +226,7 @@ describe('ServerListView 查询与操作回归', () => {
     expect(serverApi.listServers).toHaveBeenLastCalledWith({
       page: 1,
       page_size: 10,
-      name: 'node',
+      keyword: 'node',
       sort_by: 'id',
       sort_order: 'desc'
     })

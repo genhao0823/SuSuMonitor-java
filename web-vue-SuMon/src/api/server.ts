@@ -14,7 +14,7 @@ import type {
 } from '@/types/api'
 
 /**
- * 查询服务器分页列表。支持 page/page_size/sort/sort_order 以及 name/host/keyword 检索。
+ * 查询服务器分页列表。支持 page/page_size/sort_by/sort_order 和 keyword 模糊检索。
  *
  * @param query 查询参数对象
  * @returns 分页结果

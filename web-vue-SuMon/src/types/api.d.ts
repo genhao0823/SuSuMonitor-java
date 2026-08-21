@@ -165,16 +165,12 @@ export interface ServerStatusPushPayload {
 }
 
 /**
- * 服务器列表查询参数。
- * 后端 OpenAPI 允许 keyword 单一字段模糊匹配;前端额外提供 name/host
- * 两个独立字段以满足"按 name 搜"与"按 host 搜"的精确场景。
+ * 服务器列表查询参数,与后端 OpenAPI 契约保持一致。
  */
 export interface ServerQuery {
   page?: number
   page_size?: number
   keyword?: string
-  name?: string
-  host?: string
   sort_by?: 'id' | 'name' | 'host' | 'created_at' | 'updated_at'
   sort_order?: 'asc' | 'desc'
 }
