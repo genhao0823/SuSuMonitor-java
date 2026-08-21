@@ -624,4 +624,12 @@ onBeforeUnmount(() => {
   color: var(--el-color-danger);
   font-size: 12px;
 }
+
+@media (max-width: 640px) {
+  .alert-records-view__pagination {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
 </style>

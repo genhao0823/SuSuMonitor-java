@@ -260,3 +260,16 @@ a:hover {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 91, 138, 0.45);
 }
+
+@media (max-width: 768px) {
+  /* 移动端固定操作列会覆盖全部数据列；改回普通列并允许表格容器横向滚动。 */
+  .el-table th.el-table-fixed-column--right,
+  .el-table td.el-table-fixed-column--right {
+    position: static !important;
+    right: auto !important;
+  }
+
+  .el-table .el-scrollbar__wrap {
+    overflow-x: auto !important;
+  }
+}

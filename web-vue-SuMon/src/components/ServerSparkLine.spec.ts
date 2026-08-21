@@ -38,6 +38,13 @@ describe('ServerSparkLine', () => {
     expect(downW.text()).toContain('-80')
   })
 
+  it('delta 最多显示一位小数,不暴露浮点运算尾数', () => {
+    const w = mountSpark({ data: [31.2, 45.8, 38.4, 52.1] })
+
+    expect(w.text()).toContain('+20.9')
+    expect(w.text()).not.toContain('20.900000000000002')
+  })
+
   it('showMeta=false 隐藏 delta 文字', () => {
     const w = mountSpark({ data: [1, 2, 3, 4, 5], showMeta: false })
     expect(w.find('.server-spark-line__delta').exists()).toBe(false)
