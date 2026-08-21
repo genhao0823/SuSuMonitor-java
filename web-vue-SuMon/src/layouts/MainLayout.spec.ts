@@ -43,7 +43,7 @@ describe('MainLayout', () => {
 
     await wrapper.get('button[aria-label="展开侧栏"]').trigger('click')
 
-    expect(wrapper.find('aside').attributes('width')).toBe('220px')
+    expect(wrapper.find('aside').attributes('width')).toBe('230px')
     expect(wrapper.get('button[aria-label="收起侧栏"]')).toBeTruthy()
 
     await wrapper.get('button[aria-label="收起侧栏"]').trigger('click')

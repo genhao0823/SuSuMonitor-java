@@ -5,7 +5,7 @@
       class="main-layout__sidebar"
     >
       <div class="main-layout__brand">
-        SuSuMonitor
+        <span class="main-layout__brand-su">Su</span><span class="main-layout__brand-su main-layout__brand-su--gold">Su</span><span class="main-layout__brand-mon">Monitor</span>
       </div>
       <el-menu
         :default-active="activeRoute"
@@ -19,18 +19,19 @@
           v-for="item in visibleMenus"
           :key="item.name"
           :index="item.name"
+          class="main-layout__menu-item"
         >
-          <el-icon>
+          <el-icon class="main-layout__menu-icon">
             <component :is="item.icon" />
           </el-icon>
           <template #title>
-            {{ item.label }}
+            <span class="main-layout__menu-text">{{ item.label }}</span>
           </template>
         </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container class="main-layout__body">
-      <el-header class="main-layout__header">
+      <el-header class="main-layout__header liquid-glass-header">
         <div class="main-layout__header-left">
           <el-tooltip
             :content="sidebarToggleLabel"
@@ -57,9 +58,9 @@
             @command="handleCommand"
           >
             <span class="main-layout__user-trigger">
-              <el-icon>
-                <UserFilled />
-              </el-icon>
+              <span class="main-layout__avatar-wrap">
+                <el-icon><UserFilled /></el-icon>
+              </span>
               <span class="main-layout__username">
                 {{ auth.user?.username ?? '未登录' }}
               </span>
@@ -125,8 +126,8 @@ const router = useRouter()
 const auth = useAuthStore()
 const isSidebarCollapsed = ref(true)
 
-const sidebarWidth = computed(() => isSidebarCollapsed.value ? '0px' : '220px')
-const sidebarToggleLabel = computed(() => isSidebarCollapsed.value ? '展开侧栏' : '收起侧栏')
+const sidebarWidth = computed(() => (isSidebarCollapsed.value ? '0px' : '230px'))
+const sidebarToggleLabel = computed(() => (isSidebarCollapsed.value ? '展开侧栏' : '收起侧栏'))
 
 function toggleSidebar(): void {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
@@ -172,7 +173,7 @@ const activeRoute = computed<string>(() => {
   if (typeof name !== 'string') {
     return ''
   }
-   if (name === 'servers' || name === 'server-detail' || name === 'server-metrics') {
+  if (name === 'servers' || name === 'server-detail' || name === 'server-metrics') {
     return 'servers'
   }
   if (name === 'admin-users') {
@@ -237,83 +238,144 @@ defineExpose({ iconMap })
 
 <style scoped>
 .main-layout {
+  position: relative;
   height: 100vh;
+  background: var(--susu-page-bg);
 }
 
 .main-layout__sidebar {
-  background: #1e293b;
+  background: rgba(22, 28, 42, 0.88);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
   color: #f8fafc;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 180ms ease;
+  transition: width 240ms cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
 }
 
 .main-layout__brand {
-  height: 56px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.main-layout__brand-su {
+  color: #ff5b8a;
+  text-shadow: 0 0 12px rgba(255, 91, 138, 0.6);
+}
+
+.main-layout__brand-su--gold {
+  color: #f5b942;
+  text-shadow: 0 0 12px rgba(245, 185, 66, 0.6);
+}
+
+.main-layout__brand-mon {
+  color: #f1f5f9;
+  font-size: 15px;
+  margin-left: 4px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .main-layout__menu {
   flex: 1;
   border-right: none;
+  padding: 12px 10px;
+}
+
+.main-layout__menu-item {
+  border-radius: 6px;
+  margin-bottom: 6px;
+  height: 46px;
+  line-height: 46px;
+  transition: all 0.22s ease;
+  font-weight: 500;
+}
+
+.main-layout__menu-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  transform: translateX(3px);
+}
+
+.main-layout__menu-item.is-active {
+  background: #a82c51 !important;
+  box-shadow: 0 6px 18px rgba(255, 91, 138, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.main-layout__menu-icon {
+  font-size: 17px;
+  margin-right: 8px;
 }
 
 .main-layout__body {
-  background: var(--el-bg-color-page);
-  transition: width 180ms ease;
+  background: transparent;
+  transition: width 240ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 1;
 }
 
 .main-layout__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  background: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  height: 56px;
+  padding: 0 24px;
+  height: 60px;
+  z-index: 5;
 }
 
 .main-layout__header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .main-layout__sidebar-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  color: var(--el-text-color-regular);
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
+  color: #5c3a4d;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(183, 50, 92, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all 0.22s ease;
 }
 
 .main-layout__sidebar-toggle:hover {
-  color: var(--el-color-primary);
-  background: var(--el-fill-color-light);
+  color: #ff5b8a;
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255, 91, 138, 0.2);
 }
 
 .main-layout__sidebar-toggle:focus-visible {
-  outline: 2px solid var(--el-color-primary-light-5);
+  outline: 2px solid #ff5b8a;
   outline-offset: 2px;
 }
 
 .main-layout__header-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
+  font-size: 17px;
+  font-weight: 700;
+  color: #2a1626;
+  letter-spacing: 0;
 }
 
 .main-layout__user {
@@ -326,25 +388,76 @@ defineExpose({ iconMap })
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
-  color: var(--el-text-color-regular);
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  color: #2a1626;
+  box-shadow: 0 2px 8px rgba(183, 50, 92, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: all 0.22s ease;
 }
 
 .main-layout__user-trigger:hover {
-  background: var(--el-fill-color-light);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 91, 138, 0.4);
+  box-shadow: 0 4px 14px rgba(255, 91, 138, 0.18);
+  transform: translateY(-1px);
+}
+
+.main-layout__avatar-wrap {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #a82c51;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  box-shadow: 0 2px 6px rgba(255, 91, 138, 0.35);
 }
 
 .main-layout__username {
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #2a1626;
 }
 
 .main-layout__role {
-  margin-left: 4px;
+  margin-left: 2px;
 }
 
 .main-layout__main {
   padding: 24px;
   overflow: auto;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .main-layout__sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+  }
+
+  .main-layout__body {
+    min-width: 0;
+  }
+
+  .main-layout__header {
+    padding: 0 12px;
+  }
+
+  .main-layout__main {
+    padding: 16px 12px;
+  }
+
+  .main-layout__username,
+  .main-layout__role {
+    display: none;
+  }
 }
 </style>
