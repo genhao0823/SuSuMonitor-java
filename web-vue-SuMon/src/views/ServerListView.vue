@@ -302,7 +302,6 @@ function syncQueryToUrl(): void {
 
 function restoreQueryFromUrl(): void {
   const query = route.query
-  if (typeof query.keyword === 'string') keyword.value = query.keyword
   if (typeof query.page === 'string') {
     const nextPage = Number.parseInt(query.page, 10)
     if (!Number.isNaN(nextPage) && nextPage >= 1) page.value = nextPage

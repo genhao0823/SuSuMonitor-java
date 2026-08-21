@@ -191,6 +191,9 @@ describe('ServerListView 查询与操作回归', () => {
     })
     wrapper = mountView()
     await flush()
+    await vi.advanceTimersByTimeAsync(500)
+    await flush()
+
     expect(serverApi.listServers).toHaveBeenCalledTimes(1)
     expect(serverApi.listServers).toHaveBeenLastCalledWith({
       page: 2,
