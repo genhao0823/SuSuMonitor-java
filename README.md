@@ -15,7 +15,7 @@
 | 当前基线 | `fix/web-glassmorphism-closeout`（代码提交至 `fb672dd`，前端收口文档为本次提交） |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
 | 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/增长表保留期清理（幂等接收记录 7 天、消费记录 30 天、告警记录 90 天、SSH 测试历史 90 天、**通知投递记录 90 天（V27）**、**Outbox 已发布 30 天（默认开启）**，Flyway V22/V24/V27）/告警消费多消费者并发（V15 唯一键幂等，本地 broker 验收并发 4 消费 100 条零重复）/Agent nack 有限重试（retriable_server_error + snapshot v3 持久化预算）/告警事件 Broker 发布+消费（alert.triggered.v1：Outbox 按行路由 V25 发布，alert-notifier 幂等消费并驱动外部通知，Broker 中断恢复可补发触发）/**告警恢复事件链路（alert.resolved.v1：评估器恢复时同事务登记 V26 resolved_at 落库 + Outbox 发布，alert-resolved-notifier 幂等消费驱动恢复通知，真实 broker 验收 11/11）**/**终端断线中继（Agent 断开时服务端推送 terminal.closed(agent_disconnected)，20260814 WSL E2E 真实验收）**/**心跳超时路径终端收口修复（90s 心跳超时同样收口，AGENT_HEARTBEAT_TIMEOUT_SECONDS 参数化）**/**MVP-14 监控收尾（队列积压探测与阈值告警 + 消费耗时/失败率窗口统计，ADMIN 端点 /api/system/rabbitmq/queues|consumers，真实 broker 验收 9/9）**/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
-| Web 前端 | 2026-08-21 完成克制玻璃设计系统、应用壳层、Dashboard 与列表页收口；恢复服务器列表 URL/防抖/自动刷新/SSH 错误映射；移动端表格不再被固定操作列覆盖；Vitest 134/134、typecheck/lint/build 通过。真实账号 UI E2E 待运行时隔离凭据与后端环境。 |
+| Web 前端 | 2026-08-21 完成克制玻璃设计系统、应用壳层、Dashboard 与列表页收口；恢复服务器列表 URL/防抖/自动刷新/SSH 错误映射，搜索收敛为 OpenAPI 的 keyword 契约；移动端表格不再被固定操作列覆盖；Vitest 133/133、typecheck/lint/build 通过。真实账号 UI E2E 待运行时隔离凭据与后端环境。 |
 | Android App | **阶段一+阶段二+Polish-7 已完整实现（2026-08-12）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情/排序、实时指标（WS + OkHttp pingInterval 心跳）、告警记录（通知深链到告警 Tab）、DataStore 通知开关持久化、前台服务告警通知、SSH 终端（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl + **自研 ANSI 终端模拟器**：增量 CSI 解析/双屏/滚动回退/256 色/备用屏，支持 top/htop 类 TUI + **断线自动重连**：指数退避自动重开）；`gradlew assembleDebug` + 85 单测全绿；云端全链路手测待真机 |
 | 首次上云端部署 | 腾讯云 OpenCloudOS 公网明文 HTTP 已跑通(2026-07-31,前端 5173 + 后端 18080 + Agent 8089 + RabbitMQ 5672,端到端联调 PASS),详见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md` |
 | 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；Android App 云端全链路手测（待设备）、数据库异地备份定时调度（crontab）仍属后续阶段（Docker 镜像实机构建已完成 2026-08-16；多实例化已落地——Redis ticket 共享 2026-08-17 + 双实例跨实例验收完成、JWT 黑名单与登录防爆破 2026-08-18，见 `docs-SuMon/Develop-log/20260818-WSL修复与Redis安全加固.md`）；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接为自研模拟器边界外 |
@@ -65,7 +65,7 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 
 ## 当前进度(2026-07-22 收口)
 
-> 本节是对齐修订保留的原文表格，未做删改。**2026-08-21 注：以下为 2026-07-22 历史快照；当前前端值：Vitest 134 测试（22 spec 文件）/ api:e2e 19 项 / ui:e2e 18 场景。**
+> 本节是对齐修订保留的原文表格，未做删改。**2026-08-21 注：以下为 2026-07-22 历史快照；当前前端值：Vitest 133 测试（22 spec 文件）/ api:e2e 19 项 / ui:e2e 18 场景。**
 
 | 阶段 | 状态 | 内容 |
 |---|---|---|
@@ -78,7 +78,7 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 
 ### 4 道测试防线
 
-> 2026-08-21 注：下表为历史快照（Vitest 现为 134 测试 / 22 文件；api:e2e 19 项；ui:e2e 18 场景；audit:catchup 仍 11 条规则）。
+> 2026-08-21 注：下表为历史快照（Vitest 现为 133 测试 / 22 文件；api:e2e 19 项；ui:e2e 18 场景；audit:catchup 仍 11 条规则）。
 
 | 工具 | 命令 | 数量 |
 |---|---|---|

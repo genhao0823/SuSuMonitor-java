@@ -6,7 +6,7 @@ SuSuMonitor 监控平台的 Web 前端工程，基于 Vue 3 + Vite + Element Plu
 
 **M2-M6 主页面已实现**：认证、主布局、仪表盘、服务器管理、用户审核、实时指标页面以及 MVP-6 告警前端（告警记录 + 告警规则）均已接入真实后端。Web SSH 终端属于 MVP-7，~~当前尚未实现~~（T4 xterm.js 前端已于 2026-07-28 实现最小可用版本，路由 `/terminal/:serverId`，详见 [`docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md`](../docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md)）。
 
-**2026-08-21 前端收口**：统一 `styles/glass.css` 设计令牌与 8px 玻璃表面，完成应用壳层、Dashboard、服务器和告警列表响应式收口；恢复服务器列表 URL query、防抖搜索、30 秒刷新、SSH 错误分类与末页回退。当前 typecheck/lint/build 通过，Vitest 134/134；真实账号 UI E2E 仍需在隔离后端与运行时凭据可用时执行。
+**2026-08-21 前端收口**：统一 `styles/glass.css` 设计令牌与 8px 玻璃表面，完成应用壳层、Dashboard、服务器和告警列表响应式收口；恢复服务器列表 URL query、防抖关键字搜索、30 秒刷新、SSH 错误分类与末页回退；搜索收敛为后端 OpenAPI 的单一 `keyword` 契约。当前 typecheck/lint/build 通过，Vitest 133/133；真实账号 UI E2E 仍需在隔离后端与运行时凭据可用时执行。
 
 详细计划：[`docs-SuMon/Develop-plans/20260720-Web前端详细开发计划.md`](../docs-SuMon/Develop-plans/20260720-Web前端详细开发计划.md)
 当前总览：[`docs-SuMon/Develop-log/20260722-Web前端总览.md`](../docs-SuMon/Develop-log/20260722-Web前端总览.md)
@@ -145,7 +145,7 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | `npm run format` | Prettier 格式化 |
 | `npm run openapi:check` | OpenAPI 契约 lint |
 | `npm run audit:catchup` | catch-up 静态审计(11 条规则,扫魔法数字 / 参数名 / API 路径 / 占位密码 / TS any / 残留日志) |
-| `npm run test` | Vitest 单元测试(134 用例 / 22 个 spec 文件,覆盖 stores + utils + composables + api/services/components + views + layouts) |
+| `npm run test` | Vitest 单元测试(133 用例 / 22 个 spec 文件,覆盖 stores + utils + composables + api/services/components + views + layouts) |
 | `npm run api:e2e` | HTTP API 自动化测试(19 项检查) |
 | `npm run ui:e2e` | UI E2E 浏览器自动化(puppeteer-core + 系统 Chrome,18 场景) |
 
