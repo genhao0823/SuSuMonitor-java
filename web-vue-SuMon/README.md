@@ -6,6 +6,8 @@ SuSuMonitor 监控平台的 Web 前端工程，基于 Vue 3 + Vite + Element Plu
 
 **M2-M6 主页面已实现**：认证、主布局、仪表盘、服务器管理、用户审核、实时指标页面以及 MVP-6 告警前端（告警记录 + 告警规则）均已接入真实后端。Web SSH 终端属于 MVP-7，~~当前尚未实现~~（T4 xterm.js 前端已于 2026-07-28 实现最小可用版本，路由 `/terminal/:serverId`，详见 [`docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md`](../docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md)）。
 
+**2026-08-21 前端收口**：统一 `styles/glass.css` 设计令牌与 8px 玻璃表面，完成应用壳层、Dashboard、服务器和告警列表响应式收口；恢复服务器列表 URL query、防抖搜索、30 秒刷新、SSH 错误分类与末页回退。当前 typecheck/lint/build 通过，Vitest 134/134；真实账号 UI E2E 仍需在隔离后端与运行时凭据可用时执行。
+
 详细计划：[`docs-SuMon/Develop-plans/20260720-Web前端详细开发计划.md`](../docs-SuMon/Develop-plans/20260720-Web前端详细开发计划.md)
 当前总览：[`docs-SuMon/Develop-log/20260722-Web前端总览.md`](../docs-SuMon/Develop-log/20260722-Web前端总览.md)
 
@@ -20,6 +22,9 @@ SuSuMonitor 监控平台的 Web 前端工程，基于 Vue 3 + Vite + Element Plu
 | 状态 | Pinia 3（含持久化插件） |
 | 组件库 | Element Plus 2（按需引入） |
 | HTTP | axios 1 |
+| 图表与终端 | ECharts 5 + xterm.js 5 |
+| 设计系统 | 原生 CSS 变量 + `backdrop-filter` + reduced-motion |
+| 测试 | Vitest 1 + Vue Test Utils + Puppeteer Core |
 | 代码规范 | ESLint 8 + Prettier 3 |
 
 ## 前置条件
@@ -56,6 +61,10 @@ Vite 已配置代理 `/api → http://localhost:18080`，前端直接以 `/api/*
 | `npm run audit:catchup` | catch-up 静态审计（11 条规则） |
 | `npm run api:e2e` | 执行真实后端 HTTP 路径检查 |
 | `npm run ui:e2e` | 执行浏览器 UI 路径检查 |
+
+`ui:e2e` 的管理员凭据不允许写入源码或文档，必须通过
+`SUSUMONITOR_UI_E2E_ADMIN_USERNAME` / `SUSUMONITOR_UI_E2E_ADMIN_PASSWORD`
+在运行时注入；完整参数见 [`scripts/README.md`](./scripts/README.md#ui-e2e-testmjs)。
 
 ## 与后端契约
 
@@ -123,6 +132,7 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | 监控页 ECharts 折线图 + 时间范围选择（1h/6h/24h/7d，图表/表格切换） | ✅ | N2（2026-08-05） |
 | 监控图告警阈值线（markLine，警告橙/严重红虚线）+ 告警记录/规则页通知状态列 | ✅ | N4（2026-08-05） |
 | 告警通知历史详情弹窗（记录详情页查看各渠道通知投递历史） | ✅ 已实现（2026-08-07 Polish6-M8） | GET /api/alerts/records/{id}/notifications |
+| 克制玻璃设计系统 + 三视口响应式收口 | ✅ 2026-08-21（Dashboard/服务器/告警页；移动端表格与分页修复） | `src/styles/glass.css` + `src/styles/global.css` |
 
 ### 扩展命令
 
@@ -135,7 +145,7 @@ npm run dev    # http://127.0.0.1:5173,自动代理 /api → :18080
 | `npm run format` | Prettier 格式化 |
 | `npm run openapi:check` | OpenAPI 契约 lint |
 | `npm run audit:catchup` | catch-up 静态审计(11 条规则,扫魔法数字 / 参数名 / API 路径 / 占位密码 / TS any / 残留日志) |
-| `npm run test` | Vitest 单元测试(129 用例 / 22 个 spec 文件,覆盖 stores + utils + composables + api/services/components + views + layouts) |
+| `npm run test` | Vitest 单元测试(134 用例 / 22 个 spec 文件,覆盖 stores + utils + composables + api/services/components + views + layouts) |
 | `npm run api:e2e` | HTTP API 自动化测试(19 项检查) |
 | `npm run ui:e2e` | UI E2E 浏览器自动化(puppeteer-core + 系统 Chrome,18 场景) |
 
@@ -168,7 +178,9 @@ web-vue-SuMon/
 └── src/
     ├── main.ts
     ├── App.vue
-    ├── styles/global.css
+    ├── styles/
+    │   ├── glass.css              # 品牌/状态/玻璃表面设计令牌
+    │   └── global.css             # Element Plus 覆盖与响应式表格规则
     ├── api/                     # HTTP 客户端封装
     ├── services/                # WebSocket 封装(websocket.ts / terminal-ws.ts)
     ├── stores/                  # Pinia 状态(auth 等)
