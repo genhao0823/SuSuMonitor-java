@@ -1,6 +1,7 @@
 ﻿import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import * as mockApi from '@/api/auth'
+import { ApiBusinessError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import type { ApiResponse, CurrentUser, LoginResult } from '@/types/api'
 
@@ -71,7 +72,6 @@ describe('auth store', () => {
   })
 
   it('login 澶辫触(code != 0)鎶?ApiBusinessError', async () => {
-    const { ApiBusinessError } = await import('@/api/client')
     vi.mocked(mockApi.loginUser).mockRejectedValueOnce(
       new ApiBusinessError(40101, '鍑瘉閿欒')
     )
@@ -117,7 +117,6 @@ describe('auth store', () => {
   })
 
   it('refresh 鎶涢敊(40100 妯℃嫙)娓呯┖鏈湴浼氳瘽', async () => {
-    const { ApiBusinessError } = await import('@/api/client')
     vi.mocked(mockApi.getCurrentUser).mockRejectedValueOnce(
       new ApiBusinessError(40100, 'unauthorized')
     )
@@ -151,6 +150,5 @@ describe('auth store', () => {
     expect(auth.isApproved).toBe(false)
   })
 })
-
 
 
