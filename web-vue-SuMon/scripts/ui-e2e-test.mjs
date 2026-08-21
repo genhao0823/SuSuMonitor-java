@@ -6,15 +6,28 @@
  * 不需要下载 chromium,直接用本地 Chrome。
  * 捕获 console.error / pageerror / requestfailed。
  *
- * 用法:`node scripts/ui-e2e-test.mjs`
+ * 用法:设置 SUSUMONITOR_UI_E2E_ADMIN_USERNAME / PASSWORD 后执行
+ * `node scripts/ui-e2e-test.mjs`。
  * 退出码:0 全过 / 1 有 fail
  */
 
 import puppeteer from 'puppeteer-core'
 
-const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-const BASE_URL = 'http://127.0.0.1:5173'
-const ADMIN = { username: 'admin', password: '1059412135' }
+const CHROME_PATH = process.env.SUSUMONITOR_UI_E2E_CHROME_PATH ||
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+const BASE_URL = (process.env.SUSUMONITOR_UI_E2E_BASE_URL || 'http://127.0.0.1:5173')
+  .replace(/\/+$/, '')
+const adminUsername = process.env.SUSUMONITOR_UI_E2E_ADMIN_USERNAME
+const adminPassword = process.env.SUSUMONITOR_UI_E2E_ADMIN_PASSWORD
+
+if (!adminUsername || !adminPassword) {
+  console.error(
+    'Set SUSUMONITOR_UI_E2E_ADMIN_USERNAME and SUSUMONITOR_UI_E2E_ADMIN_PASSWORD.'
+  )
+  process.exit(2)
+}
+
+const ADMIN = { username: adminUsername, password: adminPassword }
 
 const findings = []
 const consoleErrors = []
@@ -80,17 +93,6 @@ async function testLogin(page) {
   await page.keyboard.type(ADMIN.password, { delay: 50 })
 
   await new Promise(r => setTimeout(r, 500))
-
-  // debug
-  const uVal = await page.evaluate(() => {
-    const inputs = document.querySelectorAll('input')
-    for (const inp of inputs) {
-      if (inp.type !== 'password' && inp.type !== 'checkbox') return inp.value
-    }
-    return ''
-  })
-  const pVal = await page.$eval('input[type="password"]', el => el.value)
-  console.log(`  [debug] username="${uVal}" password="${pVal ? '***len=' + pVal.length : 'EMPTY'}"`)
 
   // 等登录按钮(class 选择器最稳)
   await page.waitForSelector('.login-view__submit', { timeout: 5000 }).catch(() => {})
@@ -460,7 +462,7 @@ async function main() {
   console.log('================================')
   console.log(`Chrome: ${CHROME_PATH}`)
   console.log(`目标: ${BASE_URL}`)
-  console.log(`凭据: ${ADMIN.username} / ${'*'.repeat(ADMIN.password.length)}`)
+  console.log('凭据:由运行时环境变量提供')
   console.log('')
 
   const browser = await puppeteer.launch({
@@ -487,10 +489,10 @@ async function main() {
       failedRequests.push({ url, error: req.failure()?.errorText })
     }
   })
-  // 捕获 auth API 请求 body(debug)
+  // 认证请求只记录方法和 URL，禁止输出可能包含凭据的请求体。
   page.on('request', req => {
     if (req.url().includes('/api/auth/')) {
-      console.log(`  [net] ${req.method()} ${req.url()} body=${req.postData()?.substring(0, 200) || 'null'}`)
+      console.log(`  [net] ${req.method()} ${req.url()}`)
     }
   })
 

@@ -241,3 +241,33 @@ npm run api:e2e
 | `api:e2e` | HTTP API 层 | 运行时 bug(4xx / 5xx / 字段命名 / 权限) |
 
 两套互补:`audit:catchup` 防代码层错,`api:e2e` 防接口层错。
+
+---
+
+## ui-e2e-test.mjs
+
+使用 `puppeteer-core` 驱动系统 Chrome，覆盖登录、退出、Dashboard、侧栏、服务器列表、
+告警入口和管理员页面等真实浏览器路径。脚本不会保存或输出管理员密码、Token 和认证请求体。
+
+### 运行参数
+
+| 环境变量 | 必填 | 默认值 | 说明 |
+|---|---|---|---|
+| `SUSUMONITOR_UI_E2E_ADMIN_USERNAME` | 是 | 无 | 隔离验收管理员用户名 |
+| `SUSUMONITOR_UI_E2E_ADMIN_PASSWORD` | 是 | 无 | 隔离验收管理员密码 |
+| `SUSUMONITOR_UI_E2E_BASE_URL` | 否 | `http://127.0.0.1:5173` | 已启动的 Web 地址 |
+| `SUSUMONITOR_UI_E2E_CHROME_PATH` | 否 | Windows Chrome 默认路径 | Chrome 可执行文件路径 |
+
+缺少任一管理员凭据时，脚本在启动浏览器前以退出码 `2` 终止。浏览器场景失败返回 `1`，
+全部通过返回 `0`。
+
+### PowerShell 示例
+
+```powershell
+$env:SUSUMONITOR_UI_E2E_ADMIN_USERNAME='<validation-admin>'
+$env:SUSUMONITOR_UI_E2E_ADMIN_PASSWORD='<validation-password>'
+$env:SUSUMONITOR_UI_E2E_BASE_URL='http://127.0.0.1:5173'
+npm run ui:e2e
+```
+
+必须使用隔离验收账号；不要把真实凭据写入脚本、README、`.env` 或 Git 提交。
