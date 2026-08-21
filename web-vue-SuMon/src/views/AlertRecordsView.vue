@@ -48,7 +48,7 @@
     />
 
     <el-card
-      class="alert-records-view__card"
+      class="alert-records-view__card liquid-glass-card"
       shadow="never"
     >
       <div class="alert-records-view__filters">
@@ -175,28 +175,30 @@
         </el-table-column>
         <el-table-column
           label="操作"
-          width="180"
+          width="200"
           fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              size="small"
-              plain
-              :loading="notificationsLoadingId === row.id"
-              @click="handleShowNotifications(row as AlertRecord)"
-            >
-              通知详情
-            </el-button>
-            <el-button
-              v-if="row.status === 'unread'"
-              size="small"
-              type="primary"
-              plain
-              :loading="markingReadId === row.id"
-              @click="handleMarkRead(row as AlertRecord)"
-            >
-              标记已读
-            </el-button>
+            <div class="table-action-group">
+              <el-button
+                size="small"
+                plain
+                :loading="notificationsLoadingId === row.id"
+                @click="handleShowNotifications(row as AlertRecord)"
+              >
+                通知详情
+              </el-button>
+              <el-button
+                v-if="row.status === 'unread'"
+                size="small"
+                type="primary"
+                plain
+                :loading="markingReadId === row.id"
+                @click="handleMarkRead(row as AlertRecord)"
+              >
+                标记已读
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -566,17 +568,6 @@ onBeforeUnmount(() => {
 .alert-records-view {
   max-width: 1280px;
   margin: 0 auto;
-}
-
-.alert-records-view__card {
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 16px;
-  box-shadow:
-    0 12px 32px rgba(183, 50, 92, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .alert-records-view__card :deep(.el-card__body) {
