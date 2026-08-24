@@ -18,7 +18,7 @@
 | Web 前端 | 2026-08-21 完成克制玻璃设计系统、应用壳层、Dashboard 与列表页收口；恢复服务器列表 URL/防抖/自动刷新/SSH 错误映射，搜索收敛为 OpenAPI 的 keyword 契约；移动端表格不再被固定操作列覆盖；Vitest 133/133、typecheck/lint/build 通过。真实账号 UI E2E 待运行时隔离凭据与后端环境。 |
 | Android App | **阶段一+阶段二+Polish-7 已完整实现（2026-08-12）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情/排序、实时指标（WS + OkHttp pingInterval 心跳）、告警记录（通知深链到告警 Tab）、DataStore 通知开关持久化、前台服务告警通知、SSH 终端（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl + **自研 ANSI 终端模拟器**：增量 CSI 解析/双屏/滚动回退/256 色/备用屏，支持 top/htop 类 TUI + **断线自动重连**：指数退避自动重开）；`gradlew assembleDebug` + 85 单测全绿；云端全链路手测待真机 |
 | 首次上云端部署 | 腾讯云 OpenCloudOS 公网明文 HTTP 已跑通(2026-07-31,前端 5173 + 后端 18080 + Agent 8089 + RabbitMQ 5672,端到端联调 PASS),详见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md` |
-| 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、首管理员空库并发脚本、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；Android App 云端全链路手测（待设备）、数据库异地备份定时调度（crontab）仍属后续阶段（Docker 镜像实机构建已完成 2026-08-16；多实例化已落地——Redis ticket 共享 2026-08-17 + 双实例跨实例验收完成、JWT 黑名单与登录防爆破 2026-08-18，见 `docs-SuMon/Develop-log/20260818-WSL修复与Redis安全加固.md`）；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接为自研模拟器边界外 |
+| 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、真实 SMTP 发送均待 DB 管理员凭据/真实邮箱运行（脚本已备）；首管理员空库并发已真实验收（2026-08-24，独立空 MySQL schema 并发 8 与 20 均 PASS：全部注册成功、唯一 admin/approved、其余 user/pending、管理员可登录/待审核 403、DB auth_bootstrap_state 已初始化并指向唯一管理员，见 `docs-SuMon/Develop-log/20260824-首管理员空库并发真实验收.md`）；Android App 云端全链路手测（待设备）、数据库异地备份定时调度（crontab）仍属后续阶段（Docker 镜像实机构建已完成 2026-08-16；多实例化已落地——Redis ticket 共享 2026-08-17 + 双实例跨实例验收完成、JWT 黑名单与登录防爆破 2026-08-18，见 `docs-SuMon/Develop-log/20260818-WSL修复与Redis安全加固.md`）；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接为自研模拟器边界外 |
 
 > 本节反映 2026-08-21 的当前仓库基线；下方带日期的”对齐说明”和”收口”段落均为历史记录（原文保留，当前值以本快照为准）。
 
@@ -105,7 +105,7 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 
 ### 未验证（必须留痕，未来安排独立验证）
 
-1. **首管理员空库并发注册** — V7 行锁已实现但真实空库并发未跑。
+1. _(已通过：首管理员空库并发注册已于 2026-08-24 真实验收——独立空 MySQL schema 并发 8 与 20 均 PASS：全部注册成功、唯一 `admin/approved`、其余 `user/pending`、管理员可登录且 `/me` 返回 `admin/approved`、待审核用户登录 403、DB `auth_bootstrap_state` 已初始化并指向唯一管理员，见 `docs-SuMon/Develop-log/20260824-首管理员空库并发真实验收.md`)_
 2. _(已通过：真实 SSH `50003`/`50002` 分类已于 2026-07-25 通过 Apifox 受控 SSHD 真实验收，详见 `docs-SuMon/Develop-log/20260725-Apifox-SSH-50003-真实验收.md`、 `20260725-Apifox-SSH-50002-真实验收.md`)_
 3. _(已通过：公网明文 HTTP 云端部署已于 2026-07-31 跑通（前端+后端+Agent 端到端），见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md`；HTTPS/WSS 待域名备案后验证)_
 4. **多 JVM 实例下 AFTER_COMMIT 事件跨实例推送** — `MonitorTicketService` / `AgentConnectionRegistry` / `MetricsCleanupService` 全部为单 JVM 内存状态。
