@@ -1,5 +1,6 @@
 import apiClient from '@/api/client'
 import type {
+  AlertNotification,
   AlertPushPayload,
   AlertRecord,
   AlertRecordQuery,
@@ -108,6 +109,21 @@ export function listAlertRecords(
 export function markAlertRecordAsRead(id: number): Promise<ApiResponse<null>> {
   return apiClient
     .put<ApiResponse<null>>(`/alerts/records/${id}/read`)
+    .then((r) => r.data)
+}
+
+/**
+ * 调用 GET /api/alerts/records/{id}/notifications 查询某告警记录的
+ * 各渠道投递历史（status / attempts / last_error）。
+ *
+ * @param id 目标记录 ID
+ * @returns 通知投递记录数组（按 id 升序）
+ */
+export function listAlertRecordNotifications(
+  id: number
+): Promise<ApiResponse<AlertNotification[]>> {
+  return apiClient
+    .get<ApiResponse<AlertNotification[]>>(`/alerts/records/${id}/notifications`)
     .then((r) => r.data)
 }
 

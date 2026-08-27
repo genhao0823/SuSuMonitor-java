@@ -22,6 +22,11 @@ import org.mybatis.spring.annotation.MapperScan;
 @SpringBootApplication
 public class SuSuMonitorServerApplication {
 
+    /**
+     * 启动 Spring Boot 应用。
+     *
+     * @param args 命令行参数
+     */
     public static void main(String[] args) {
         SpringApplication.run(SuSuMonitorServerApplication.class, args);
     }

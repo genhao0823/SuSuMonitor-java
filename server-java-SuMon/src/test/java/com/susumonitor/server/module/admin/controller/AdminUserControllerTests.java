@@ -8,24 +8,33 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.susumonitor.server.module.admin.service.AdminUserService;
 import com.susumonitor.server.module.auth.entity.UserEntity;
-import com.susumonitor.server.module.admin.vo.PendingUserVo;
+import com.susumonitor.server.module.admin.vo.AdminUserVo;
 import com.susumonitor.server.module.auth.mapper.AuthBootstrapStateMapper;
 import com.susumonitor.server.module.auth.mapper.UserMapper;
 import com.susumonitor.server.module.auth.vo.CurrentUserVo;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
+import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsCleanupMapper;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationCleanupMapper;
+import com.susumonitor.server.module.metrics.outbox.OutboxCleanupMapper;
+import com.susumonitor.server.module.metrics.mapper.IngestionCleanupMapper;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.security.AuthenticatedUser;
 import com.susumonitor.server.security.JwtTokenService;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.consume.ConsumeRecordMapper;
+import com.susumonitor.server.module.alert.consume.ConsumeRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
+import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
 import com.susumonitor.server.module.terminal.mapper.TerminalSessionMapper;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import javax.sql.DataSource;
@@ -76,11 +85,36 @@ class AdminUserControllerTests {
     @MockitoBean
     private ServerMapper serverMapper;
 
+    // 替代全局 Mapper 扫描注册的 SSH 测试历史 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private SshTestHistoryMapper sshTestHistoryMapper;
+
     @MockitoBean
     private MetricsMapper metricsMapper;
 
     @MockitoBean
     private MetricsCleanupMapper metricsCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的指标幂等接收记录清理 Mapper。
+    @MockitoBean
+    private IngestionCleanupMapper ingestionCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的 Outbox 清理 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private OutboxCleanupMapper outboxCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的通知投递清理 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private AlertNotificationCleanupMapper alertNotificationCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的消费幂等记录清理 Mapper。
+    @MockitoBean
+    private ConsumeRecordCleanupMapper consumeRecordCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的告警记录清理 Mapper。
+    @MockitoBean
+    private AlertRecordCleanupMapper alertRecordCleanupMapper;
+
 
     // 使用模拟告警 Mapper，避免告警模块 Mapper 扫描后创建真实 MyBatis 会话依赖。
     @MockitoBean
@@ -88,6 +122,8 @@ class AdminUserControllerTests {
 
     @MockitoBean
     private AlertRecordMapper alertRecordMapper;
+    @MockitoBean
+    private AlertNotificationMapper alertNotificationMapper;
 
     @MockitoBean
     private AlertStateMapper alertStateMapper;
@@ -109,37 +145,96 @@ class AdminUserControllerTests {
 
 
 
-    // 验证管理员可以获取待审核用户列表并返回统一成功响应。
+    // 验证管理员可以获取用户分页列表并返回统一成功响应（status/keyword/page 参数透传）。
     @Test
-    void pendingUsersShouldReturnSuccess() throws Exception {
-        PendingUserVo pendingUserVo = new PendingUserVo();
-        pendingUserVo.setId(2L);
-        pendingUserVo.setUsername("pending_user");
-        pendingUserVo.setRole("user");
-        pendingUserVo.setReviewStatus("pending");
-        pendingUserVo.setCreatedAt(OffsetDateTime.now());
-        Mockito.when(adminUserService.listPendingUsers()).thenReturn(List.of(pendingUserVo));
+    void listUsersShouldReturnSuccess() throws Exception {
+        com.susumonitor.server.module.admin.vo.AdminUserVo adminUserVo = new com.susumonitor.server.module.admin.vo.AdminUserVo();
+        adminUserVo.setId(2L);
+        adminUserVo.setUsername("pending_user");
+        adminUserVo.setRole("user");
+        adminUserVo.setReviewStatus("pending");
+        adminUserVo.setCreatedAt(OffsetDateTime.now());
+        com.susumonitor.server.common.vo.PageResult<com.susumonitor.server.module.admin.vo.AdminUserVo> page =
+                new com.susumonitor.server.common.vo.PageResult<>();
+        page.setItems(List.of(adminUserVo));
+        page.setTotal(1);
+        page.setPage(1);
+        page.setPageSize(20);
+        Mockito.when(adminUserService.pageUsers("pending", "user", 1, 20)).thenReturn(page);
         Mockito.when(jwtTokenService.parseToken("admin-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
 
-        mockMvc.perform(get("/api/admin/users/pending")
+        mockMvc.perform(get("/api/admin/users")
+                        .param("status", "pending")
+                        .param("keyword", "user")
+                        .param("page", "1")
+                        .param("page_size", "20")
                         .header("Authorization", "Bearer admin-token")
                         .header("X-Correlation-ID", "admin-pending-1"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Request-ID", not(blankOrNullString())))
                 .andExpect(header().string("X-Correlation-ID", "admin-pending-1"))
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data[0].id").value(2L))
-                .andExpect(jsonPath("$.data[0].reviewStatus").value("pending"))
-                .andExpect(jsonPath("$.data[0].passwordHash").doesNotExist());
+                .andExpect(jsonPath("$.data.items[0].id").value(2L))
+                .andExpect(jsonPath("$.data.items[0].reviewStatus").value("pending"))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].passwordHash").doesNotExist());
+    }
+
+    // 验证非法 status 值返回参数错误 40002。
+    @Test
+    void invalidStatusShouldReturnBadRequest() throws Exception {
+        authenticateAdmin();
+
+        mockMvc.perform(get("/api/admin/users")
+                        .param("status", "banned")
+                        .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40002));
+    }
+
+    // 验证批量审核通过返回处理统计（含失败明细）。
+    @Test
+    void batchApproveUsersShouldReturnResult() throws Exception {
+        authenticateAdmin();
+        com.susumonitor.server.module.admin.vo.BatchReviewResult result =
+                new com.susumonitor.server.module.admin.vo.BatchReviewResult();
+        result.setProcessed(2);
+        result.setFailed(0);
+        result.setFailedIds(List.of());
+        Mockito.when(adminUserService.batchUpdateReviewStatus(List.of(2L, 3L), "approved", 1L))
+                .thenReturn(result);
+
+        mockMvc.perform(put("/api/admin/users/batch-approve")
+                        .header("Authorization", "Bearer admin-token")
+                        .contentType("application/json")
+                        .content("{\"user_ids\":[2,3]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.processed").value(2))
+                .andExpect(jsonPath("$.data.failed").value(0))
+                .andExpect(jsonPath("$.data.failed_ids").isArray());
+    }
+
+    // 验证批量拒绝空列表返回参数错误。
+    @Test
+    void batchReviewEmptyIdsShouldReturnBadRequest() throws Exception {
+        authenticateAdmin();
+
+        mockMvc.perform(put("/api/admin/users/batch-approve")
+                        .header("Authorization", "Bearer admin-token")
+                        .contentType("application/json")
+                        .content("{\"user_ids\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40002));
     }
 
     // 验证管理员可以批准待审核用户并返回统一成功响应。
     @Test
     void approveUserShouldReturnSuccess() throws Exception {
         Mockito.when(jwtTokenService.parseToken("admin-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
         Mockito.when(adminUserService.approveUser(2L, 1L)).thenReturn(reviewedUser(2L, "approved"));
 
@@ -156,7 +251,7 @@ class AdminUserControllerTests {
     @Test
     void rejectUserShouldReturnSuccess() throws Exception {
         Mockito.when(jwtTokenService.parseToken("admin-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
         Mockito.when(adminUserService.rejectUser(2L, 1L)).thenReturn(reviewedUser(2L, "rejected"));
 
@@ -172,7 +267,7 @@ class AdminUserControllerTests {
     // 验证未认证请求访问管理员接口返回统一 401。
     @Test
     void unauthenticatedRequestShouldReturnUnauthorized() throws Exception {
-        mockMvc.perform(get("/api/admin/users/pending"))
+        mockMvc.perform(get("/api/admin/users"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(40100));
     }
@@ -228,7 +323,7 @@ class AdminUserControllerTests {
     // 配置管理员 JWT 和数据库状态回查。
     private void authenticateAdmin() {
         Mockito.when(jwtTokenService.parseToken("admin-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         Mockito.when(userMapper.selectAuthenticationUserById(1L)).thenReturn(adminUser());
     }
 

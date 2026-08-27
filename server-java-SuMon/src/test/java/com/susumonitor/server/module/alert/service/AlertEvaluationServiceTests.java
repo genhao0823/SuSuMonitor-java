@@ -1,7 +1,10 @@
 package com.susumonitor.server.module.alert.service;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -14,6 +17,9 @@ import com.susumonitor.server.module.alert.entity.AlertStateEntity;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
+import com.susumonitor.server.module.alert.outbox.AlertResolvedEnvelopeFactory;
+import com.susumonitor.server.module.alert.outbox.AlertTriggeredEnvelopeFactory;
+import com.susumonitor.server.module.metrics.outbox.OutboxService;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -47,24 +53,32 @@ class AlertEvaluationServiceTests {
     private AlertRecordMapper recordMapper;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private OutboxService outboxService;
+    @Mock
+    private AlertTriggeredEnvelopeFactory envelopeFactory;
+    @Mock
+    private AlertResolvedEnvelopeFactory resolvedEnvelopeFactory;
     private final AlertStateMachine stateMachine = new AlertStateMachine();
 
     private AlertEvaluationService service;
 
-    /** 首次越界应创建 record + state 并发布事件。 */
+    /** 首次越界应创建 record + state 并发布事件与 Outbox 事件登记。 */
     @Test
     void firstBreachShouldInsertRecordStateAndPublishEvent() {
         setupService();
         AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
         MetricsLatestVo metrics = metrics(bd("90"));
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
 
         service.evaluate(metrics);
 
         verify(recordMapper).insertRecord(any(AlertRecordEntity.class));
         verify(stateMapper).insertState(any(AlertStateEntity.class));
         verify(eventPublisher).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService).enqueue(eq(AlertTriggeredEnvelopeFactory.EVENT_TYPE),
+                eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
     }
 
     /** 持续越界应更新 state 但不创建新 record 也不发布事件。 */
@@ -75,7 +89,7 @@ class AlertEvaluationServiceTests {
         MetricsLatestVo metrics = metrics(bd("95"));
         AlertStateEntity state = activeState(1L, 1L, 1L);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
         when(stateMapper.updateStateActive(anyLong(), anyLong(), any(LocalDateTime.class), eq(0))).thenReturn(1);
 
         service.evaluate(metrics);
@@ -83,9 +97,10 @@ class AlertEvaluationServiceTests {
         verify(stateMapper).updateStateActive(eq(1L), eq(1L), any(LocalDateTime.class), eq(0));
         verify(recordMapper, never()).insertRecord(any());
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
-    /** 恢复应标记 record resolved 并删除 state 行（恢复后 state 为 null 才能再次触发）。 */
+    /** 恢复应标记 record resolved 并删除 state 行，同时发布恢复事件与 Outbox 登记（与触发对称）。 */
     @Test
     void recoveryShouldMarkResolved() {
         setupService();
@@ -93,14 +108,37 @@ class AlertEvaluationServiceTests {
         MetricsLatestVo metrics = metrics(bd("50"));
         AlertStateEntity state = activeState(1L, 1L, 1L);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
+        when(recordMapper.updateStatusToResolved(eq(1L), any(LocalDateTime.class))).thenReturn(1);
         when(stateMapper.deleteState(eq(1L), eq(0))).thenReturn(1);
+        AlertRecordEntity record = resolvedRecord(1L);
+        when(recordMapper.selectRecordById(1L)).thenReturn(record);
 
         service.evaluate(metrics);
 
         verify(recordMapper).updateStatusToResolved(eq(1L), any(LocalDateTime.class));
         verify(stateMapper).deleteState(eq(1L), eq(0));
+        verify(eventPublisher).publishEvent(any(AlertResolvedEvent.class));
+        verify(outboxService).enqueue(eq(AlertResolvedEnvelopeFactory.EVENT_TYPE),
+                eq(AlertResolvedEnvelopeFactory.ROUTING_KEY), any(), any());
+    }
+
+    /** 记录未实际转为 resolved（已恢复/缺失）时不发恢复事件，避免重复恢复语义。 */
+    @Test
+    void resolveSkippedWhenRecordAlreadyResolved() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        MetricsLatestVo metrics = metrics(bd("50"));
+        AlertStateEntity state = activeState(1L, 1L, 1L);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
+        when(recordMapper.updateStatusToResolved(eq(1L), any(LocalDateTime.class))).thenReturn(0);
+
+        service.evaluate(metrics);
+
+        verify(stateMapper, never()).deleteState(anyLong(), anyInt());
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
     /** 恢复后再次越界（state 为 null）应创建新 record + state。 */
@@ -110,13 +148,15 @@ class AlertEvaluationServiceTests {
         AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
         MetricsLatestVo metrics = metrics(bd("90"));
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
 
         service.evaluate(metrics);
 
         verify(recordMapper).insertRecord(any(AlertRecordEntity.class));
         verify(stateMapper).insertState(any(AlertStateEntity.class));
         verify(eventPublisher).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService).enqueue(eq(AlertTriggeredEnvelopeFactory.EVENT_TYPE),
+                eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
     }
 
     /** 无启用规则时不执行任何操作。 */
@@ -128,9 +168,10 @@ class AlertEvaluationServiceTests {
 
         service.evaluate(metrics);
 
-        verify(stateMapper, never()).selectByRuleAndServer(anyLong(), anyLong());
+        verify(stateMapper, never()).selectByServerId(anyLong());
         verify(recordMapper, never()).insertRecord(any());
         verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
     /** 多规则同时命中应各自独立创建 record。 */
@@ -141,14 +182,15 @@ class AlertEvaluationServiceTests {
         AlertRuleEntity rule2 = rule(2L, "memory", ">=", bd("90"));
         MetricsLatestVo metrics = metrics(bd("90"), bd("95"));
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule1, rule2));
-        when(stateMapper.selectByRuleAndServer(eq(1L), eq(1L))).thenReturn(null);
-        when(stateMapper.selectByRuleAndServer(eq(2L), eq(1L))).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
 
         service.evaluate(metrics);
 
         verify(recordMapper, times(2)).insertRecord(any(AlertRecordEntity.class));
         verify(stateMapper, times(2)).insertState(any(AlertStateEntity.class));
         verify(eventPublisher, times(2)).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService, times(2)).enqueue(eq(AlertTriggeredEnvelopeFactory.EVENT_TYPE),
+                eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
     }
 
     /** 乐观锁冲突应跳过不抛异常。 */
@@ -159,7 +201,7 @@ class AlertEvaluationServiceTests {
         MetricsLatestVo metrics = metrics(bd("95"));
         AlertStateEntity state = activeState(1L, 1L, 1L);
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenReturn(state);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
         when(stateMapper.updateStateActive(anyLong(), anyLong(), any(LocalDateTime.class), eq(0))).thenReturn(0);
 
         service.evaluate(metrics);
@@ -168,7 +210,22 @@ class AlertEvaluationServiceTests {
         verify(recordMapper, never()).insertRecord(any());
     }
 
-    /** 评估失败应记录日志但不影响其他规则。 */
+    /** 批量状态查询失败应向上传播（由消息消费者重试整条消息），不再逐规则吞异常。 */
+    @Test
+    void stateQueryFailureShouldPropagate() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        MetricsLatestVo metrics = metrics(bd("90"));
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenThrow(new RuntimeException("DB error"));
+
+        assertThrows(RuntimeException.class, () -> service.evaluate(metrics));
+
+        verify(recordMapper, never()).insertRecord(any());
+        verify(stateMapper, never()).insertState(any());
+    }
+
+    /** 单规则评估/写入失败应记录日志但不影响其他规则（逐规则隔离保留）。 */
     @Test
     void evaluationFailureShouldNotAffectOtherRules() {
         setupService();
@@ -176,21 +233,115 @@ class AlertEvaluationServiceTests {
         AlertRuleEntity rule2 = rule(2L, "memory", ">=", bd("90"));
         MetricsLatestVo metrics = metrics(bd("90"), bd("95"));
         when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule1, rule2));
-        // rule1 的 stateMapper 抛异常，模拟 DB 错误。
-        when(stateMapper.selectByRuleAndServer(1L, 1L)).thenThrow(new RuntimeException("DB error"));
-        when(stateMapper.selectByRuleAndServer(2L, 1L)).thenReturn(null);
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
+        // rule1 的 record 写入抛异常，模拟单规则 DB 错误。
+        when(recordMapper.insertRecord(any(AlertRecordEntity.class)))
+                .thenThrow(new RuntimeException("DB error"))
+                .thenReturn(1);
 
         service.evaluate(metrics);
 
-        // rule2 仍应正常评估。
-        verify(recordMapper, times(1)).insertRecord(any(AlertRecordEntity.class));
+        // rule2 仍应正常评估（rule1 失败被隔离）。
+        verify(recordMapper, times(2)).insertRecord(any(AlertRecordEntity.class));
     }
 
     // --- 辅助方法 ---
 
     private void setupService() {
         service = new AlertEvaluationServiceImpl(ruleMapper, stateMapper, recordMapper,
-                stateMachine, eventPublisher, CLOCK);
+                stateMachine, eventPublisher, outboxService, envelopeFactory, resolvedEnvelopeFactory, CLOCK);
+    }
+
+    // ---- 逃逸窗口（confirm_count > 1）----
+
+    /** 首次越界确认数>1：创建计数行（active=false）不触发，不建 record 不发事件。 */
+    @Test
+    void firstBreachWithConfirmWindowCreatesCountingRowOnly() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of());
+
+        service.evaluate(metrics(bd("90")));
+
+        verify(stateMapper).insertState(argThat(state ->
+                !Boolean.TRUE.equals(state.getActive()) && state.getBreachCount() == 1));
+        verify(recordMapper, never()).insertRecord(any());
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
+    }
+
+    /** 计数未达阈值：仅递增 breach_count。 */
+    @Test
+    void countingBreachProgressIncrementsCountOnly() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity counting = new AlertStateEntity();
+        counting.setId(1L);
+        counting.setRuleId(1L);
+        counting.setActive(false);
+        counting.setBreachCount(1);
+        counting.setVersion(0);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(counting));
+        when(stateMapper.incrementBreachCount(eq(1L), any(LocalDateTime.class), eq(0))).thenReturn(1);
+
+        service.evaluate(metrics(bd("90")));
+
+        verify(stateMapper).incrementBreachCount(eq(1L), any(LocalDateTime.class), eq(0));
+        verify(recordMapper, never()).insertRecord(any());
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
+    }
+
+    /** 计数达阈值：升级活跃 + 建 record + 发事件（激活用 activateOnBreachThreshold）。 */
+    @Test
+    void countingReachingThresholdActivatesAndRecords() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity counting = new AlertStateEntity();
+        counting.setId(1L);
+        counting.setRuleId(1L);
+        counting.setActive(false);
+        counting.setBreachCount(2);
+        counting.setVersion(0);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(counting));
+        when(stateMapper.activateOnBreachThreshold(eq(1L), any(), any(LocalDateTime.class), eq(0)))
+                .thenReturn(1);
+
+        service.evaluate(metrics(bd("90")));
+
+        verify(recordMapper).insertRecord(any(AlertRecordEntity.class));
+        verify(stateMapper).activateOnBreachThreshold(eq(1L), any(), any(LocalDateTime.class), eq(0));
+        verify(eventPublisher).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService).enqueue(eq(AlertTriggeredEnvelopeFactory.EVENT_TYPE),
+                eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
+    }
+
+    /** 计数中断恢复：删除计数行。 */
+    @Test
+    void countingRecoveryDeletesCountingRow() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity counting = new AlertStateEntity();
+        counting.setId(1L);
+        counting.setRuleId(1L);
+        counting.setActive(false);
+        counting.setBreachCount(2);
+        counting.setVersion(0);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(counting));
+        when(stateMapper.deleteState(eq(1L), eq(0))).thenReturn(1);
+
+        service.evaluate(metrics(bd("50")));
+
+        verify(stateMapper).deleteState(eq(1L), eq(0));
+        verify(recordMapper, never()).insertRecord(any());
     }
 
     private AlertRuleEntity rule(Long id, String metric, String operator, BigDecimal threshold) {
@@ -230,6 +381,19 @@ class AlertEvaluationServiceTests {
         state.setLastTriggeredAt(LocalDateTime.now(CLOCK));
         state.setVersion(0);
         return state;
+    }
+
+    private AlertRecordEntity resolvedRecord(Long id) {
+        AlertRecordEntity record = new AlertRecordEntity();
+        record.setId(id);
+        record.setRuleId(1L);
+        record.setServerId(1L);
+        record.setMetric("cpu");
+        record.setLevel("warning");
+        record.setStatus("resolved");
+        record.setTriggeredAt(LocalDateTime.now(CLOCK));
+        record.setResolvedAt(LocalDateTime.now(CLOCK));
+        return record;
     }
 
     private BigDecimal bd(String value) {

@@ -2,13 +2,18 @@ package com.susumonitor.server.module.admin.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
+import com.susumonitor.server.common.vo.PageResult;
+import com.susumonitor.server.module.admin.vo.BatchReviewResult;
+import com.susumonitor.server.module.admin.vo.AdminUserVo;
 import com.susumonitor.server.module.auth.entity.UserEntity;
 import com.susumonitor.server.module.auth.service.UserService;
 import com.susumonitor.server.module.auth.vo.CurrentUserVo;
@@ -21,7 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * 验证管理员审核状态机和条件更新失败分支。
+ * 验证管理员审核状态机、分页搜索与批量审核分支。
  */
 // 启用 Mockito 扩展，为测试创建 Mapper 替身。
 @ExtendWith(MockitoExtension.class)
@@ -39,12 +44,68 @@ class AdminUserServiceTests {
         adminUserService = new AdminUserServiceImpl(userService);
     }
 
-    // 验证待审核列表返回安全 VO。
+    // 验证分页列表转换安全 VO 并透传分页信息与 status 过滤。
     @Test
-    void listPendingUsersShouldReturnUsers() {
-        when(userService.listPendingUsers()).thenReturn(List.of(user("pending", "user")));
+    void pageUsersShouldReturnMappedPage() {
+        PageResult<UserEntity> page = new PageResult<>();
+        page.setItems(List.of(user("pending", "user")));
+        page.setTotal(1);
+        page.setPage(1);
+        page.setPageSize(20);
+        when(userService.pageUsers("pending", "alice", 1, 20)).thenReturn(page);
 
-        assertEquals(1, adminUserService.listPendingUsers().size());
+        PageResult<AdminUserVo> result = adminUserService.pageUsers("pending", "alice", 1, 20);
+
+        assertEquals(1, result.getItems().size());
+        assertEquals(1, result.getTotal());
+        assertEquals(1, result.getPage());
+        assertEquals(20, result.getPageSize());
+    }
+
+    // 验证批量审核全部成功时 processed 计数且 failedIds 为空。
+    @Test
+    void batchApproveAllSuccessShouldCountProcessed() {
+        when(userService.getReviewUserById(2L)).thenReturn(user("pending", "user"));
+        when(userService.getReviewUserById(3L)).thenReturn(user("pending", "user"));
+        when(userService.updateReviewStatus(any(), anyString(), any(), any())).thenReturn(true);
+
+        BatchReviewResult result = adminUserService.batchUpdateReviewStatus(List.of(2L, 3L), "approved", 1L);
+
+        assertEquals(2, result.getProcessed());
+        assertEquals(0, result.getFailed());
+        assertTrue(result.getFailedIds().isEmpty());
+    }
+
+    // 验证批量审核单个失败（状态已变/不存在）累计到 failed/failedIds 不中断整体。
+    @Test
+    void batchApprovePartialFailureShouldCountFailed() {
+        when(userService.getReviewUserById(2L)).thenReturn(user("approved", "user"));
+        when(userService.getReviewUserById(3L)).thenReturn(user("pending", "user"));
+        when(userService.updateReviewStatus(eq(3L), any(), any(), any())).thenReturn(true);
+
+        BatchReviewResult result = adminUserService.batchUpdateReviewStatus(List.of(2L, 3L), "approved", 1L);
+
+        assertEquals(1, result.getProcessed());
+        assertEquals(1, result.getFailed());
+        assertEquals(List.of(2L), result.getFailedIds());
+    }
+
+    // 验证批量审核空列表返回参数错误。
+    @Test
+    void batchReviewEmptyListShouldThrow() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> adminUserService.batchUpdateReviewStatus(List.of(), "approved", 1L));
+
+        assertEquals(ErrorCode.INVALID_REQUEST_PARAMETER, exception.getErrorCode());
+    }
+
+    // 验证批量审核非法操作人返回未授权。
+    @Test
+    void batchReviewInvalidOperatorShouldThrow() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> adminUserService.batchUpdateReviewStatus(List.of(2L), "approved", null));
+
+        assertEquals(ErrorCode.UNAUTHORIZED, exception.getErrorCode());
     }
 
     // 验证批准用户记录审核状态和时间。

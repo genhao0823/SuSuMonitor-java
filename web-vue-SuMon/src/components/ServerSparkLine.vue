@@ -52,7 +52,7 @@
       <span
         class="server-spark-line__delta"
         :class="delta >= 0 ? 'server-spark-line__delta--up' : 'server-spark-line__delta--down'"
-      >{{ delta >= 0 ? '+' : '' }}{{ delta }}</span>
+      >{{ delta >= 0 ? '+' : '' }}{{ deltaLabel }}</span>
     </div>
   </div>
 </template>
@@ -120,8 +120,12 @@ const delta = computed<number>(() => {
   if (data.length < 2) {
     return 0
   }
-  return data[data.length - 1] - data[0]
+  return Math.round((data[data.length - 1] - data[0]) * 10) / 10
 })
+
+const deltaLabel = computed<string>(() =>
+  Number.isInteger(delta.value) ? delta.value.toFixed(0) : delta.value.toFixed(1)
+)
 </script>
 
 <style scoped>
@@ -145,7 +149,7 @@ const delta = computed<number>(() => {
   justify-content: space-between;
   gap: 4px;
   font-size: 10px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .server-spark-line__label {

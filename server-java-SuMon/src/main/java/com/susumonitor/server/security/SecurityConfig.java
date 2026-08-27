@@ -1,6 +1,7 @@
 package com.susumonitor.server.security;
 
 import com.susumonitor.server.module.auth.mapper.UserMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ public class SecurityConfig {
      * @param jwtTokenService JWT 服务
      * @param userMapper 用户 Mapper
      * @param securityErrorHandler 安全错误处理器
+     * @param tokenBlacklist Redis 黑名单（可选，Redis 未启用时为空）
      * @return JWT 认证过滤器
      */
     // 将 JWT 过滤器注册为 Spring Bean，供安全链引用。
@@ -35,8 +37,9 @@ public class SecurityConfig {
     public JwtAuthenticationFilter jwtAuthenticationFilter(
             JwtTokenService jwtTokenService,
             UserMapper userMapper,
-            SecurityErrorHandler securityErrorHandler) {
-        return new JwtAuthenticationFilter(jwtTokenService, userMapper, securityErrorHandler);
+            SecurityErrorHandler securityErrorHandler,
+            ObjectProvider<RedisTokenBlacklist> tokenBlacklist) {
+        return new JwtAuthenticationFilter(jwtTokenService, userMapper, securityErrorHandler, tokenBlacklist);
     }
 
     /**
@@ -88,6 +91,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(registry -> registry
                         .requestMatchers(HttpMethod.GET, "/api/health", "/api/ready").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        // Swagger UI 与 OpenAPI 文档为只读开发/联调资产，公开放行（仅 GET）。
+                        .requestMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**",
+                                "/api-docs", "/api-docs/**", "/webjars/**").permitAll()
                          .requestMatchers("/api/admin/**").hasRole("ADMIN")
                          .requestMatchers(HttpMethod.POST, "/api/servers").hasRole("ADMIN")
                          .requestMatchers("/api/servers/*/agent/**").hasRole("ADMIN")
@@ -103,6 +109,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/alerts/records", "/api/alerts/records/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/alerts/records/*/read").authenticated()
                          .requestMatchers(HttpMethod.GET, "/api/servers", "/api/servers/**").authenticated()
+                         // RabbitMQ 运行监控快照仅管理员可见（MVP-14 监控收尾）。
+                         .requestMatchers(HttpMethod.GET, "/api/system/rabbitmq/**").hasRole("ADMIN")
                          .requestMatchers("/ws/agent", "/ws/monitor").permitAll()
                          .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

@@ -22,6 +22,9 @@ public class OutboxEnvelopeFactory {
     /** 契约事件类型（消费侧校验复用）。 */
     public static final String EVENT_TYPE = "metrics.reported";
 
+    /** 契约路由键（版本化名，发布器按行路由复用）。 */
+    public static final String ROUTING_KEY = "metrics.reported.v1";
+
     static final String PRODUCER = "metrics-service";
 
     /** 契约 schema 版本（消费侧校验复用）。 */
@@ -60,6 +63,13 @@ public class OutboxEnvelopeFactory {
         return envelope.toString();
     }
 
+    /**
+     * 构建载荷 JSON 节点，映射指标实体的全部字段。
+     *
+     * @param entity 已落库的指标实体
+     * @param messageId Agent 上报消息 UUID
+     * @return 载荷 JSON 节点
+     */
     private ObjectNode buildPayload(MetricsEntity entity, String messageId) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("server_id", entity.getServerId());
@@ -79,6 +89,13 @@ public class OutboxEnvelopeFactory {
         return payload;
     }
 
+    /**
+     * 向 JSON 节点写入可空十进制字段，null 时写入 JSON null。
+     *
+     * @param node 目标 JSON 节点
+     * @param field 字段名
+     * @param value 十进制数值，允许 null
+     */
     private void putNullableDecimal(ObjectNode node, String field, java.math.BigDecimal value) {
         if (value == null) {
             node.putNull(field);

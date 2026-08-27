@@ -15,6 +15,7 @@ import (
 
 	"agent-go-SuMon/internal/collector"
 	"agent-go-SuMon/internal/config"
+	"agent-go-SuMon/internal/metricbuffer"
 	"agent-go-SuMon/internal/reporter"
 	"agent-go-SuMon/internal/wsclient"
 )
@@ -49,15 +50,30 @@ func main() {
 		logger.Error("terminal initialization failed", "error", err)
 		os.Exit(1)
 	}
+	metricsBuffer, err := metricbuffer.Open(cfg.MetricsBufferPath, cfg.ServerID, cfg.MetricsBufferMaxEntries, cfg.MetricsBufferMaxBytes)
+	if err != nil {
+		logger.Error("metrics buffer initialization failed", "error", err)
+		os.Exit(1)
+	}
+	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, newReporterOptions(cfg))
 	client.SetMessageHandler(terminalAgent.handle)
+	client.SetMetricsAckHandler(metricsReporter.HandleMetricsAck)
+	client.SetMetricsNackHandler(metricsReporter.HandleMetricsNack)
+	client.SetHeartbeatStatsProvider(func() wsclient.HeartbeatPayload {
+		stats := metricsBuffer.Stats()
+		return wsclient.NewHeartbeatPayloadWithDeliveryStats(stats.PendingCount, stats.PendingBytes,
+			stats.OldestCollectedAt, stats.DropCount, stats.DeadLetterCount, stats.DeadLetterBytes)
+	})
+	client.SetAuthenticatedHandler(metricsReporter.HandleAuthenticated)
 	client.SetDisconnectHandler(func() {
+		metricsReporter.HandleDisconnect()
 		terminalAgent.manager.CloseAll("agent_disconnected")
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, cfg, logger, client); err != nil {
+	if err := runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(), metricsReporter); err != nil {
 		logger.Error("agent exited with error", "error", err)
 		os.Exit(1)
 	}
@@ -65,10 +81,39 @@ func main() {
 	logger.Info("agent shutdown complete")
 }
 
+// newReporterOptions converts validated Agent configuration into the single
+// Reporter option set used by both the production and test-support paths.
+func newReporterOptions(cfg *config.Config) reporter.Options {
+	return reporter.Options{
+		AckTimeout:        time.Duration(cfg.MetricsAckTimeoutSeconds) * time.Second,
+		RetryInitial:      time.Duration(cfg.MetricsRetryInitialSeconds) * time.Second,
+		RetryMax:          time.Duration(cfg.MetricsRetryMaxSeconds) * time.Second,
+		RetryJitter:       cfg.MetricsRetryJitterEnabled,
+		ReplayMinInterval: time.Duration(cfg.MetricsReplayMinIntervalMillis) * time.Millisecond,
+		NackRetryMax:      cfg.MetricsNackRetryMax,
+		NackRetryInitial:  time.Duration(cfg.MetricsNackRetryInitialSeconds) * time.Second,
+		NackRetryMaxDelay: time.Duration(cfg.MetricsNackRetryMaxSeconds) * time.Second,
+	}
+}
+
+// metricsReporter 定义 Agent 运行循环所需的最小指标上报能力。
+type metricsReporter interface {
+	Report(collector.Metrics) error
+}
+
 // run 在同一可取消生命周期内运行 WebSocket、指标采集和上报。
 func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *wsclient.Client) error {
-	metricsCollector := collector.NewGopsutilCollector()
-	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client)
+	metricsBuffer, err := metricbuffer.Open(cfg.MetricsBufferPath, cfg.ServerID, cfg.MetricsBufferMaxEntries, cfg.MetricsBufferMaxBytes)
+	if err != nil {
+		return fmt.Errorf("open metrics buffer: %w", err)
+	}
+	return runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(),
+		reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, newReporterOptions(cfg)))
+}
+
+// runWithDependencies 允许测试替换采集器和上报器，生产环境由 run 注入真实实现。
+func runWithDependencies(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *wsclient.Client,
+	metricsCollector collector.Collector, metricsReporter metricsReporter) error {
 	collectTicker := time.NewTicker(time.Duration(cfg.CollectIntervalSeconds) * time.Second)
 	defer collectTicker.Stop()
 
@@ -77,6 +122,7 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *w
 		clientErrCh <- client.Run(ctx)
 	}()
 
+	reportMetrics(metricsCollector, metricsReporter, logger)
 	for {
 		select {
 		case <-ctx.Done():
@@ -91,15 +137,20 @@ func run(ctx context.Context, cfg *config.Config, logger *slog.Logger, client *w
 			}
 			return err
 		case <-collectTicker.C:
-			metrics, err := metricsCollector.Collect()
-			if err != nil {
-				logger.Warn("metrics collection failed", "error", err)
-				continue
-			}
-			if err := metricsReporter.Report(metrics); err != nil {
-				logger.Warn("metrics report failed", "error", err)
-			}
+			reportMetrics(metricsCollector, metricsReporter, logger)
 		}
+	}
+}
+
+// reportMetrics 采集并尽力上报一次指标；采集或发送失败不会停止 Agent。
+func reportMetrics(metricsCollector collector.Collector, metricsReporter metricsReporter, logger *slog.Logger) {
+	metrics, err := metricsCollector.Collect()
+	if err != nil {
+		logger.Warn("metrics collection failed", "error", err)
+		return
+	}
+	if err := metricsReporter.Report(metrics); err != nil {
+		logger.Warn("metrics report failed", "error", err)
 	}
 }
 

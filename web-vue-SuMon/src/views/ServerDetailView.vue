@@ -52,6 +52,17 @@
         </el-button>
         <el-button
           v-if="auth.isAdmin"
+          type="success"
+          plain
+          :disabled="!data || agentBusy"
+          :loading="agentBusy"
+          class="server-detail-view__host-key-trust"
+          @click="trustHostKeyOneClick"
+        >
+          一键信任主机
+        </el-button>
+        <el-button
+          v-if="auth.isAdmin"
           type="info"
           plain
           :disabled="!data"
@@ -225,6 +236,30 @@
               </span>
             </div>
             <div class="server-detail-view__status-item">
+              <span class="server-detail-view__status-label">投递积压</span>
+              <span class="server-detail-view__status-value">
+                {{ formatDeliveryPending(status) }}
+              </span>
+            </div>
+            <div class="server-detail-view__status-item">
+              <span class="server-detail-view__status-label">最旧积压采样</span>
+              <span class="server-detail-view__status-value">
+                {{ formatDateTime(status.delivery_oldest_collected_at) }}
+              </span>
+            </div>
+            <div class="server-detail-view__status-item">
+              <span class="server-detail-view__status-label">缓冲丢弃</span>
+              <span class="server-detail-view__status-value">
+                {{ status.delivery_drop_count ?? '-' }}
+              </span>
+            </div>
+            <div class="server-detail-view__status-item">
+              <span class="server-detail-view__status-label">本地死信</span>
+              <span class="server-detail-view__status-value">
+                {{ formatDeliveryDeadLetter(status) }}
+              </span>
+            </div>
+            <div class="server-detail-view__status-item">
               <span class="server-detail-view__status-label">查询时间</span>
               <span class="server-detail-view__status-value">
                 {{ formatDateTime(status.checked_at) }}
@@ -312,7 +347,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
@@ -320,12 +355,12 @@ import ServerFormDialog from '@/components/ServerFormDialog.vue'
 import AgentTokenDialog from '@/components/AgentTokenDialog.vue'
 import TushanFoxMark from '@/components/TushanFoxMark.vue'
 import { ApiBusinessError } from '@/api/client'
-import { confirmSshHostKey, deleteServer, getServer, getServerStatus, testSshConnection } from '@/api/server'
+import { confirmSshHostKey, deleteServer, getServer, getServerStatus, observeSshHostKey, testSshConnection } from '@/api/server'
 import { revokeAgentToken } from '@/api/agent-token'
 import { ErrorCode } from '@/types/error-code'
 import { useAuthStore } from '@/stores/auth'
 import type { Server, ServerStatus, SshHostKey, SshTestResult } from '@/types/api'
-import { formatDateTime, serverStatusLabel } from '@/utils/format'
+import { formatBytes, formatDateTime, serverStatusLabel } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -338,6 +373,8 @@ const editOpen = ref(false)
 const agentDialogOpen = ref(false)
 const agentDialogMode = ref<'register' | 'rotate'>('register')
 const agentBusy = ref(false)
+const STATUS_REFRESH_INTERVAL_MS = 30_000
+let statusRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 /**
  * 解析路由参数 id(只接受数字,非法 id 直接跳回列表)。
@@ -380,6 +417,37 @@ async function reload(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+/** 每 30 秒刷新状态快照，失败时保留最后一次成功结果。 */
+function startStatusRefresh(): void {
+  statusRefreshTimer = setInterval(() => {
+    const id = parseId()
+    if (id === null) return
+    void getServerStatus(id)
+      .then((response) => {
+        status.value = response.data
+      })
+      .catch(() => {
+        // 自动刷新失败时不打断当前页面，也不重复弹出错误提示。
+      })
+  }, STATUS_REFRESH_INTERVAL_MS)
+}
+
+/** 投递积压展示:条数 + 字节;统计缺失(老版本 Agent)时显示 '-'. */
+function formatDeliveryPending(snapshot: ServerStatus | null): string {
+  if (!snapshot || snapshot.delivery_pending_count === null) {
+    return '-'
+  }
+  return `${snapshot.delivery_pending_count} 条 / ${formatBytes(snapshot.delivery_pending_bytes)}`
+}
+
+/** 本地死信展示:条数 + 字节;统计缺失(老版本 Agent)时显示 '-'. */
+function formatDeliveryDeadLetter(snapshot: ServerStatus | null): string {
+  if (!snapshot || snapshot.delivery_dead_letter_count === null) {
+    return '-'
+  }
+  return `${snapshot.delivery_dead_letter_count} 条 / ${formatBytes(snapshot.delivery_dead_letter_bytes)}`
 }
 
 function goBack(): void {
@@ -467,6 +535,55 @@ async function handleDelete(): Promise<void> {
     goBack()
   } catch (error) {
     ElMessage.error(explainError(error))
+  }
+}
+
+/**
+ * 一键信任主机密钥：观察目标主机当前公钥 → 弹窗核对 → 确认后登记。
+ *
+ * 由后端只读握手读取实际公钥，前端展示算法与指纹供管理员显式确认
+ * （等同 SSH 客户端首次连接的 yes/no）；已登记指纹不同时提示"密钥已变更"
+ * 并携带 replace=true 完成显式轮换。
+ */
+async function trustHostKeyOneClick(): Promise<void> {
+  if (!data.value) {
+    ElMessage.warning('服务器数据未加载')
+    return
+  }
+  agentBusy.value = true
+  try {
+    const observation = (await observeSshHostKey(data.value.id)).data
+    const registered = observation.registered_fingerprint
+    const changed = registered !== null && registered !== observation.host_key_fingerprint
+    const message = changed
+      ? `目标主机当前公钥与已登记的不一致（可能重装系统或密钥被替换）。\n\n算法: ${observation.host_key_algorithm}\n指纹: ${observation.host_key_fingerprint}\n\n确认以新密钥替换并信任？`
+      : `检测到目标主机公钥。\n\n算法: ${observation.host_key_algorithm}\n指纹: ${observation.host_key_fingerprint}\n\n确认信任该主机？`
+    let confirmed = false
+    try {
+      await ElMessageBox.confirm(message, changed ? '主机密钥已变更' : '确认信任主机密钥', {
+        confirmButtonText: '确认信任',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      confirmed = true
+    } catch {
+      // 管理员取消，不登记。
+    }
+    if (!confirmed) {
+      return
+    }
+    const response = await confirmSshHostKey(data.value.id, {
+      expected_fingerprint: observation.host_key_fingerprint,
+      replace: changed
+    })
+    const resultData: SshHostKey = response.data
+    ElMessage.success(
+      `指纹已${operationLabel(resultData.operation)}(算法 ${resultData.host_key_algorithm})`
+    )
+  } catch (error) {
+    ElMessage.error(explainSshHostKeyError(error))
+  } finally {
+    agentBusy.value = false
   }
 }
 
@@ -631,7 +748,16 @@ watch(
 )
 
 onMounted(() => {
-  void reload()
+  void reload().finally(() => {
+    startStatusRefresh()
+  })
+})
+
+onBeforeUnmount(() => {
+  if (statusRefreshTimer !== null) {
+    clearInterval(statusRefreshTimer)
+    statusRefreshTimer = null
+  }
 })
 </script>
 

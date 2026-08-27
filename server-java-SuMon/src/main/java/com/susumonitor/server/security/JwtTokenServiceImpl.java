@@ -108,7 +108,7 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         Long userId = parseUserId(subject);
         validateTokenId(tokenId);
         validateTimeRange(issuedAt, expiresAt);
-        return new ParsedToken(userId, username, tokenId);
+        return new ParsedToken(userId, username, tokenId, expiresAt.toInstant());
     }
 
     /**

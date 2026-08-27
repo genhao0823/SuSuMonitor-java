@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func setValidEnvironment(t *testing.T) {
 	t.Helper()
@@ -11,6 +14,13 @@ func setValidEnvironment(t *testing.T) {
 	t.Setenv("SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS", "30")
 	t.Setenv("SUSUMONITOR_RECONNECT_INITIAL_SECONDS", "5")
 	t.Setenv("SUSUMONITOR_RECONNECT_MAX_SECONDS", "60")
+	t.Setenv("SUSUMONITOR_METRICS_BUFFER_PATH", filepath.Join(t.TempDir(), "metrics-buffer.json"))
+	t.Setenv("SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES", "720")
+	t.Setenv("SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS", "15")
+	t.Setenv("SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS", "2")
+	t.Setenv("SUSUMONITOR_METRICS_RETRY_MAX_SECONDS", "60")
+	t.Setenv("SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS", "2500")
+	t.Setenv("SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED", "true")
 	t.Setenv("SUSUMONITOR_LOG_LEVEL", "debug")
 	t.Setenv("SUSUMONITOR_TERMINAL_ENABLED", "false")
 	t.Setenv("SUSUMONITOR_TERMINAL_SHELL", "/bin/bash")
@@ -50,6 +60,25 @@ func TestLoadUsesTerminalOutputRateDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadUsesByteCapDefaultAndValidValue(t *testing.T) {
+	setValidEnvironment(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MetricsBufferMaxBytes != 0 {
+		t.Fatalf("default metrics buffer max bytes = %d, want 0 (unlimited)", cfg.MetricsBufferMaxBytes)
+	}
+	t.Setenv("SUSUMONITOR_METRICS_BUFFER_MAX_BYTES", "262144")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() with byte cap error = %v", err)
+	}
+	if cfg.MetricsBufferMaxBytes != 262144 {
+		t.Fatalf("metrics buffer max bytes = %d, want 262144", cfg.MetricsBufferMaxBytes)
+	}
+}
+
 func TestLoadRejectsInvalidInteger(t *testing.T) {
 	setValidEnvironment(t)
 	t.Setenv("SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS", "not-a-number")
@@ -70,6 +99,14 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"zero collect interval", "SUSUMONITOR_COLLECT_INTERVAL_SECONDS", "0"},
 		{"zero heartbeat interval", "SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS", "0"},
 		{"zero reconnect initial", "SUSUMONITOR_RECONNECT_INITIAL_SECONDS", "0"},
+		{"metrics buffer relative path", "SUSUMONITOR_METRICS_BUFFER_PATH", "metrics-buffer.json"},
+		{"metrics buffer capacity zero", "SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES", "0"},
+		{"metrics acknowledgement timeout zero", "SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS", "0"},
+		{"metrics retry initial zero", "SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS", "0"},
+		{"metrics retry max below initial", "SUSUMONITOR_METRICS_RETRY_MAX_SECONDS", "1"},
+		{"metrics replay interval too large", "SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS", "60001"},
+		{"metrics buffer bytes below minimum", "SUSUMONITOR_METRICS_BUFFER_MAX_BYTES", "1023"},
+		{"metrics retry jitter invalid", "SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED", "sometimes"},
 		{"terminal sessions too large", "SUSUMONITOR_TERMINAL_MAX_SESSIONS", "5"},
 		{"terminal input too large", "SUSUMONITOR_TERMINAL_MAX_INPUT_BYTES", "16385"},
 		{"terminal output rate zero", "SUSUMONITOR_TERMINAL_OUTPUT_RATE_BYTES_PER_SECOND", "0"},

@@ -25,49 +25,81 @@
   "paths": {
     "/api/servers": {
       "get": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "List servers",
         "description": "Available to any authenticated user. Returns non-deleted servers without credential plaintext or ciphertext.",
         "operationId": "listServers",
         "parameters": [
-          {"$ref": "#/components/parameters/Page"},
-          {"$ref": "#/components/parameters/PageSize"},
-          {"$ref": "#/components/parameters/Keyword"},
-          {"$ref": "#/components/parameters/SortBy"},
-          {"$ref": "#/components/parameters/SortOrder"},
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/Keyword"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          },
+          {
+            "$ref": "#/components/parameters/SortOrder"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Server page returned",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/ServerPageResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/ServerPageResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "500": {"$ref": "#/components/responses/InternalServerError"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
         }
       },
       "post": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Create server",
         "description": "Admin only. The primary credential matching ssh_auth_type is required. password and private_key are mutually exclusive, blank credentials are invalid, and responses never contain credential plaintext or ciphertext.",
         "operationId": "createServer",
         "parameters": [
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"$ref": "#/components/schemas/CreateServerRequest"},
+              "schema": {
+                "$ref": "#/components/schemas/CreateServerRequest"
+              },
               "examples": {
                 "passwordAuthentication": {
                   "value": {
@@ -101,66 +133,110 @@
           "200": {
             "description": "Server created",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/ServerResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/ServerResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "409": {"$ref": "#/components/responses/Conflict"},
-          "500": {"$ref": "#/components/responses/InternalServerError"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
         }
       }
     },
     "/api/servers/{id}": {
       "get": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Get server",
         "description": "Available to any authenticated user. Returns a non-deleted server without credential plaintext or ciphertext.",
         "operationId": "getServer",
         "parameters": [
-          {"$ref": "#/components/parameters/ServerId"},
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Server returned",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/ServerResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/ServerResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "500": {"$ref": "#/components/responses/InternalServerError"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
         }
       },
       "put": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Update server",
         "description": "Admin only. All basic fields are required. Omitting password and private_key retains the stored primary credential when ssh_auth_type is unchanged. Blank credentials and submitting both credential types are invalid. Changing ssh_auth_type requires the new matching primary credential. Responses never contain credential plaintext or ciphertext.",
         "operationId": "updateServer",
         "parameters": [
-          {"$ref": "#/components/parameters/ServerId"},
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"$ref": "#/components/schemas/UpdateServerRequest"}
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServerRequest"
+              }
             }
           }
         },
@@ -168,101 +244,175 @@
           "200": {
             "description": "Server updated",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/ServerResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/ServerResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/Conflict"},
-          "500": {"$ref": "#/components/responses/InternalServerError"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
         }
       },
       "delete": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Delete server",
         "description": "Admin only. Soft-deletes the server; no credential plaintext or ciphertext is returned.",
         "operationId": "deleteServer",
         "parameters": [
-          {"$ref": "#/components/parameters/ServerId"},
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Server deleted",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/EmptyResponse"},
-                "example": {"code": 0, "message": "success", "data": null}
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": null
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/Conflict"},
-          "500": {"$ref": "#/components/responses/InternalServerError"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
         }
       }
     },
     "/api/servers/{id}/status": {
       "get": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Get server status snapshot",
         "description": "Available to any authenticated user. Returns the latest status snapshot stored in the database. It does not trigger and must not be interpreted as a real-time probe.",
         "operationId": "getServerStatus",
         "parameters": [
-          {"$ref": "#/components/parameters/ServerId"},
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Stored server status snapshot returned",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/ServerStatusResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/ServerStatusResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "500": {"$ref": "#/components/responses/InternalServerError"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
         }
       }
     },
     "/api/servers/{id}/ssh/host-key": {
       "put": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Confirm or rotate SSH host key",
         "description": "Admin only. Performs target validation and an SSH handshake to compare the observed host key with expected_fingerprint, but never sends password, private key, passphrase, or any other login credential. A first confirmation stores the key, replace=true explicitly rotates a different stored key, and confirming the currently stored key is an idempotent review.",
         "operationId": "confirmServerSshHostKey",
         "x-required-role": "admin",
         "parameters": [
-          {"$ref": "#/components/parameters/ServerId"},
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"$ref": "#/components/schemas/ConfirmSshHostKeyRequest"},
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmSshHostKeyRequest"
+              },
               "example": {
                 "expected_fingerprint": "SHA256:REPLACEWITHBASE64FINGERPRINT",
                 "replace": false
@@ -274,165 +424,523 @@
           "200": {
             "description": "Host key confirmed, rotated, or reviewed without change",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/SshHostKeyResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/SshHostKeyResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/SshForbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/SshHostKeyConflict"},
-          "429": {"$ref": "#/components/responses/SshConnectionLimitExceeded"},
-          "500": {"$ref": "#/components/responses/DatabaseError"},
-          "502": {"$ref": "#/components/responses/SshConnectionFailed"},
-          "504": {"$ref": "#/components/responses/SshTimeout"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SshForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/SshHostKeyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/SshConnectionLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/DatabaseError"
+          },
+          "502": {
+            "$ref": "#/components/responses/SshConnectionFailed"
+          },
+          "504": {
+            "$ref": "#/components/responses/SshTimeout"
+          }
         }
       }
     },
     "/api/servers/{id}/ssh/test": {
       "post": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Test SSH authentication",
         "description": "Admin only. Accepts no request body. Requires an already registered host key, validates the handshake against that exact key, and then tests the server's stored password or private_key credential. It never registers, replaces, or updates a host key and closes the connection without executing a command or creating a PTY.",
         "operationId": "testServerSshConnection",
         "x-required-role": "admin",
         "parameters": [
-          {"$ref": "#/components/parameters/ServerId"},
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "SSH host key and stored credential verified",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/SshConnectionTestResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/SshConnectionTestResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/SshForbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/SshHostKeyConflict"},
-          "429": {"$ref": "#/components/responses/SshConnectionLimitExceeded"},
-          "500": {"$ref": "#/components/responses/DatabaseError"},
-          "502": {"$ref": "#/components/responses/SshConnectionFailed"},
-          "504": {"$ref": "#/components/responses/SshTimeout"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SshForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/SshHostKeyConflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/SshConnectionLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/DatabaseError"
+          },
+          "502": {
+            "$ref": "#/components/responses/SshConnectionFailed"
+          },
+          "504": {
+            "$ref": "#/components/responses/SshTimeout"
+          }
         }
       }
     },
     "/api/servers/{id}/agent/register": {
       "post": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Register Agent Token",
         "description": "Admin only. Generates a one-time Agent Token. The database stores only its SHA-256 hash.",
         "operationId": "registerAgentToken",
-        "security": [{"bearerAuth": []}],
-        "parameters": [{"$ref": "#/components/parameters/ServerId"}, {"$ref": "#/components/parameters/XCorrelationId"}],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
         "responses": {
-          "200": {"description": "Token generated", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AgentTokenResponse"}}}},
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/Conflict"}
+          "200": {
+            "description": "Token generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
         }
       }
     },
     "/api/servers/{id}/agent/rotate": {
       "post": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Rotate Agent Token",
         "description": "Admin only. Replaces the existing Agent Token and immediately invalidates the old token.",
         "operationId": "rotateAgentToken",
-        "security": [{"bearerAuth": []}],
-        "parameters": [{"$ref": "#/components/parameters/ServerId"}, {"$ref": "#/components/parameters/XCorrelationId"}],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
         "responses": {
-          "200": {"description": "Token rotated", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AgentTokenResponse"}}}},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/Conflict"}
+          "200": {
+            "description": "Token rotated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
         }
       }
     },
     "/api/servers/{id}/agent/revoke": {
       "delete": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Revoke Agent Token",
         "description": "Admin only. Revokes the current Agent Token and marks the Agent offline.",
         "operationId": "revokeAgentToken",
-        "security": [{"bearerAuth": []}],
-        "parameters": [{"$ref": "#/components/parameters/ServerId"}, {"$ref": "#/components/parameters/XCorrelationId"}],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
         "responses": {
-          "200": {"description": "Token revoked", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/EmptyResponse"}}}},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/Conflict"}
+          "200": {
+            "description": "Token revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
         }
       }
     },
     "/api/ws/monitor-ticket": {
       "post": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Issue Monitor WebSocket ticket",
         "description": "Issues a one-time ticket for /ws/monitor. The ticket expires exactly at expires_at, 30 seconds after issue. A long-lived JWT and Agent Token are never placed in the WebSocket URL.",
         "operationId": "issueMonitorTicket",
-        "security": [{"bearerAuth": []}],
-        "parameters": [{"$ref": "#/components/parameters/XCorrelationId"}],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
         "responses": {
-          "200": {"description": "Ticket issued", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MonitorTicketResponse"}}}},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"}
+          "200": {
+            "description": "Ticket issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorTicketResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
     "/api/servers/{id}/metrics/latest": {
       "get": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Get latest fixed-width metrics",
         "operationId": "getLatestMetrics",
-        "security": [{"bearerAuth": []}],
-        "parameters": [{"$ref": "#/components/parameters/ServerId"}, {"$ref": "#/components/parameters/XCorrelationId"}],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
         "responses": {
-          "200": {"description": "Latest metrics", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MetricsLatestResponse"}}}},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"}
+          "200": {
+            "description": "Latest metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsLatestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/api/servers/{id}/metrics": {
       "get": {
-        "tags": ["servers"],
+        "tags": [
+          "servers"
+        ],
         "summary": "Get historical fixed-width metrics",
         "operationId": "getMetricsHistory",
-        "security": [{"bearerAuth": []}],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
-          {"$ref": "#/components/parameters/ServerId"},
-          {"name": "start_time", "in": "query", "required": true, "schema": {"type": "string", "format": "date-time"}},
-          {"name": "end_time", "in": "query", "required": true, "schema": {"type": "string", "format": "date-time"}},
-          {"$ref": "#/components/parameters/Page"},
-          {"$ref": "#/components/parameters/PageSize"},
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "responses": {
-          "200": {"description": "Metrics page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MetricsHistoryResponse"}}}},
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"}
+          "200": {
+            "description": "Metrics page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsHistoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/servers/{id}/ssh/test/history": {
+      "get": {
+        "tags": [
+          "servers"
+        ],
+        "summary": "List SSH test history",
+        "description": "Admin only. Returns the most recent SSH connection test records (success and failure) for a server, newest first.",
+        "operationId": "listServerSshTestHistory",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent SSH test history",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SshTestHistoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/DatabaseError"
+          }
+        }
+      }
+    },
+    "/api/servers/{id}/ssh/host-key/observe": {
+      "post": {
+        "tags": [
+          "servers"
+        ],
+        "summary": "Observe SSH host key",
+        "description": "Admin only. Connects to the target host and reads its actual host public key without registering or sending credentials. Returns the observed algorithm and fingerprint for the administrator to confirm before trusting.",
+        "operationId": "observeServerSshHostKey",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ServerId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observed host public key",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SshHostKeyObservationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SshForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/SshConnectionLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/DatabaseError"
+          },
+          "502": {
+            "$ref": "#/components/responses/SshConnectionFailed"
+          },
+          "504": {
+            "$ref": "#/components/responses/SshTimeout"
+          }
         }
       }
     }
@@ -452,28 +960,47 @@
         "in": "path",
         "required": true,
         "description": "Server ID.",
-        "schema": {"type": "integer", "format": "int64", "minimum": 1}
+        "schema": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        }
       },
       "Page": {
         "name": "page",
         "in": "query",
         "required": false,
         "description": "One-based page number.",
-        "schema": {"type": "integer", "format": "int32", "minimum": 1, "default": 1}
+        "schema": {
+          "type": "integer",
+          "format": "int32",
+          "minimum": 1,
+          "default": 1
+        }
       },
       "PageSize": {
         "name": "page_size",
         "in": "query",
         "required": false,
         "description": "Number of items per page.",
-        "schema": {"type": "integer", "format": "int32", "minimum": 1, "maximum": 100, "default": 20}
+        "schema": {
+          "type": "integer",
+          "format": "int32",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
       },
       "Keyword": {
         "name": "keyword",
         "in": "query",
         "required": false,
         "description": "Optional keyword matched against server name, host or description.",
-        "schema": {"type": "string", "minLength": 1, "maxLength": 100}
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
       },
       "SortBy": {
         "name": "sort_by",
@@ -482,7 +1009,14 @@
         "description": "Sort field whitelist.",
         "schema": {
           "type": "string",
-          "enum": ["id", "name", "host", "status", "created_at", "updated_at"],
+          "enum": [
+            "id",
+            "name",
+            "host",
+            "status",
+            "created_at",
+            "updated_at"
+          ],
           "default": "id"
         }
       },
@@ -491,7 +1025,14 @@
         "in": "query",
         "required": false,
         "description": "Sort direction.",
-        "schema": {"type": "string", "enum": ["asc", "desc"], "default": "desc"}
+        "schema": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "desc"
+        }
       },
       "XCorrelationId": {
         "name": "X-Correlation-ID",
@@ -509,7 +1050,11 @@
     "headers": {
       "XRequestId": {
         "description": "UUID request ID generated by the server. Client-provided X-Request-ID values are ignored.",
-        "schema": {"type": "string", "format": "uuid", "readOnly": true}
+        "schema": {
+          "type": "string",
+          "format": "uuid",
+          "readOnly": true
+        }
       },
       "XCorrelationId": {
         "description": "Optional validated client correlation ID, returned only when a valid request header was provided.",
@@ -525,35 +1070,104 @@
       "ApiResponse": {
         "type": "object",
         "description": "Unified API response envelope. Concrete responses specialize data with allOf.",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
-          "code": {"type": "integer", "format": "int32"},
-          "message": {"type": "string"},
-          "data": {"nullable": true}
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true
+          }
         }
       },
       "PageResult": {
         "type": "object",
         "description": "Unified pagination result. Concrete page responses specialize items with allOf.",
-        "required": ["items", "total", "page", "page_size"],
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
         "properties": {
-          "items": {"type": "array", "items": {}},
-          "total": {"type": "integer", "format": "int64", "minimum": 0},
-          "page": {"type": "integer", "format": "int32", "minimum": 1},
-          "page_size": {"type": "integer", "format": "int32", "minimum": 1, "maximum": 100}
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "maximum": 100
+          }
         }
       },
       "ServerBasicFields": {
         "type": "object",
-        "required": ["name", "host", "ssh_host", "ssh_port", "ssh_user", "ssh_auth_type"],
+        "required": [
+          "name",
+          "host",
+          "ssh_host",
+          "ssh_port",
+          "ssh_user",
+          "ssh_auth_type"
+        ],
         "properties": {
-          "name": {"type": "string", "minLength": 1, "maxLength": 100},
-          "host": {"type": "string", "minLength": 1, "maxLength": 255},
-          "description": {"type": "string", "maxLength": 500},
-          "ssh_host": {"type": "string", "minLength": 1, "maxLength": 255},
-          "ssh_port": {"type": "integer", "format": "int32", "minimum": 1, "maximum": 65535},
-          "ssh_user": {"type": "string", "minLength": 1, "maxLength": 100},
-          "ssh_auth_type": {"type": "string", "enum": ["password", "private_key"]}
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "ssh_host": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "ssh_port": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "ssh_user": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "ssh_auth_type": {
+            "type": "string",
+            "enum": [
+              "password",
+              "private_key"
+            ]
+          }
         }
       },
       "CredentialFields": {
@@ -581,22 +1195,51 @@
             "description": "Optional non-blank private key passphrase. Never returned or logged."
           }
         },
-        "not": {"required": ["ssh_password", "ssh_private_key"]}
+        "not": {
+          "required": [
+            "ssh_password",
+            "ssh_private_key"
+          ]
+        }
       },
       "CreateServerRequest": {
         "description": "Create request. Exactly one matching primary credential is required; submitting both types is invalid.",
         "allOf": [
-          {"$ref": "#/components/schemas/ServerBasicFields"},
-          {"$ref": "#/components/schemas/CredentialFields"},
+          {
+            "$ref": "#/components/schemas/ServerBasicFields"
+          },
+          {
+            "$ref": "#/components/schemas/CredentialFields"
+          },
           {
             "anyOf": [
               {
-                "required": ["ssh_auth_type", "ssh_password"],
-                "properties": {"ssh_auth_type": {"type": "string", "enum": ["password"]}}
+                "required": [
+                  "ssh_auth_type",
+                  "ssh_password"
+                ],
+                "properties": {
+                  "ssh_auth_type": {
+                    "type": "string",
+                    "enum": [
+                      "password"
+                    ]
+                  }
+                }
               },
               {
-                "required": ["ssh_auth_type", "ssh_private_key"],
-                "properties": {"ssh_auth_type": {"type": "string", "enum": ["private_key"]}}
+                "required": [
+                  "ssh_auth_type",
+                  "ssh_private_key"
+                ],
+                "properties": {
+                  "ssh_auth_type": {
+                    "type": "string",
+                    "enum": [
+                      "private_key"
+                    ]
+                  }
+                }
               }
             ]
           }
@@ -605,18 +1248,42 @@
       "UpdateServerRequest": {
         "description": "All basic fields are required. Credentials may be omitted only to retain the existing credential when ssh_auth_type is unchanged. If ssh_auth_type changes, the service must require the matching new primary credential. Submitting both credential types or an empty credential is invalid.",
         "allOf": [
-          {"$ref": "#/components/schemas/ServerBasicFields"},
-          {"$ref": "#/components/schemas/CredentialFields"},
           {
-            "required": ["description"],
+            "$ref": "#/components/schemas/ServerBasicFields"
+          },
+          {
+            "$ref": "#/components/schemas/CredentialFields"
+          },
+          {
+            "required": [
+              "description"
+            ],
             "anyOf": [
               {
-                "required": ["ssh_auth_type"],
-                "properties": {"ssh_auth_type": {"type": "string", "enum": ["password"]}}
+                "required": [
+                  "ssh_auth_type"
+                ],
+                "properties": {
+                  "ssh_auth_type": {
+                    "type": "string",
+                    "enum": [
+                      "password"
+                    ]
+                  }
+                }
               },
               {
-                "required": ["ssh_auth_type"],
-                "properties": {"ssh_auth_type": {"type": "string", "enum": ["private_key"]}}
+                "required": [
+                  "ssh_auth_type"
+                ],
+                "properties": {
+                  "ssh_auth_type": {
+                    "type": "string",
+                    "enum": [
+                      "private_key"
+                    ]
+                  }
+                }
               }
             ]
           }
@@ -624,142 +1291,428 @@
       },
       "AgentTokenResult": {
         "type": "object",
-        "required": ["server_id", "agent_token", "created_at"],
+        "required": [
+          "server_id",
+          "agent_token",
+          "created_at"
+        ],
         "properties": {
-          "server_id": {"type": "integer", "format": "int64", "minimum": 1},
-          "agent_token": {"type": "string", "readOnly": true, "description": "Returned only once during register or rotate; never returned by server query endpoints."},
-          "created_at": {"type": "string", "format": "date-time"}
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "agent_token": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Returned only once during register or rotate; never returned by server query endpoints."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "AgentTokenResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
-          {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/AgentTokenResult"}}}
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AgentTokenResult"
+              }
+            }
+          }
         ]
       },
       "MonitorTicketResult": {
         "type": "object",
-        "required": ["ticket", "expires_at"],
+        "required": [
+          "ticket",
+          "expires_at"
+        ],
         "properties": {
-          "ticket": {"type": "string", "readOnly": true, "description": "One-time ticket returned by this endpoint and consumed during /ws/monitor handshake."},
-          "expires_at": {"type": "string", "format": "date-time"}
+          "ticket": {
+            "type": "string",
+            "readOnly": true,
+            "description": "One-time ticket returned by this endpoint and consumed during /ws/monitor handshake."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "MonitorTicketResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
-          {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/MonitorTicketResult"}}}
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MonitorTicketResult"
+              }
+            }
+          }
         ]
       },
       "MetricsResult": {
         "type": "object",
-        "required": ["server_id", "collected_at"],
+        "required": [
+          "server_id",
+          "collected_at"
+        ],
         "properties": {
-          "server_id": {"type": "integer", "format": "int64", "minimum": 1},
-          "cpu_percent": {"type": "number", "minimum": 0, "maximum": 100, "nullable": true},
-          "memory_percent": {"type": "number", "minimum": 0, "maximum": 100, "nullable": true},
-          "memory_used": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
-          "memory_total": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
-          "disk_percent": {"type": "number", "minimum": 0, "maximum": 100, "nullable": true},
-          "disk_used": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
-          "disk_total": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
-          "net_rx": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
-          "net_tx": {"type": "integer", "format": "int64", "minimum": 0, "nullable": true},
-          "temperature": {"type": "number", "nullable": true},
-          "load_avg": {"type": "number", "minimum": 0, "nullable": true},
-          "collected_at": {"type": "string", "format": "date-time"}
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "cpu_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "nullable": true
+          },
+          "memory_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "nullable": true
+          },
+          "memory_used": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "memory_total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "disk_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "nullable": true
+          },
+          "disk_used": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "disk_total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "net_rx": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "net_tx": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "temperature": {
+            "type": "number",
+            "nullable": true
+          },
+          "load_avg": {
+            "type": "number",
+            "minimum": 0,
+            "nullable": true
+          },
+          "collected_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "MetricsLatestResponse": {
-        "allOf": [{"$ref": "#/components/schemas/ApiResponse"}, {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/MetricsResult"}}}]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MetricsResult"
+              }
+            }
+          }
+        ]
       },
       "MetricsPage": {
         "type": "object",
-        "required": ["items", "total", "page", "page_size"],
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
         "properties": {
-          "items": {"type": "array", "items": {"$ref": "#/components/schemas/MetricsResult"}},
-          "total": {"type": "integer", "format": "int64", "minimum": 0},
-          "page": {"type": "integer", "minimum": 1},
-          "page_size": {"type": "integer", "minimum": 1, "maximum": 100}
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricsResult"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
         }
       },
       "MetricsHistoryResponse": {
-        "allOf": [{"$ref": "#/components/schemas/ApiResponse"}, {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/MetricsPage"}}}]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MetricsPage"
+              }
+            }
+          }
+        ]
       },
       "Server": {
         "type": "object",
         "description": "Safe server representation. Credential plaintext and ciphertext fields are deliberately absent.",
-        "required": ["id", "name", "host", "ssh_host", "ssh_port", "ssh_user", "ssh_auth_type", "status", "agent_status", "created_at", "updated_at"],
+        "required": [
+          "id",
+          "name",
+          "host",
+          "ssh_host",
+          "ssh_port",
+          "ssh_user",
+          "ssh_auth_type",
+          "status",
+          "agent_status",
+          "created_at",
+          "updated_at"
+        ],
         "properties": {
-          "id": {"type": "integer", "format": "int64", "minimum": 1},
-          "name": {"type": "string"},
-          "host": {"type": "string"},
-          "description": {"type": "string", "nullable": true},
-          "ssh_host": {"type": "string"},
-          "ssh_port": {"type": "integer", "format": "int32"},
-          "ssh_user": {"type": "string"},
-          "ssh_auth_type": {"type": "string", "enum": ["password", "private_key"]},
-          "status": {"type": "string", "description": "Latest status value stored in the database; not a real-time probe."},
-          "agent_id": {"type": "string", "nullable": true},
-          "agent_status": {"type": "string"},
-          "last_heartbeat_at": {"type": "string", "format": "date-time", "nullable": true},
-          "created_at": {"type": "string", "format": "date-time"},
-          "updated_at": {"type": "string", "format": "date-time"}
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "ssh_host": {
+            "type": "string"
+          },
+          "ssh_port": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ssh_user": {
+            "type": "string"
+          },
+          "ssh_auth_type": {
+            "type": "string",
+            "enum": [
+              "password",
+              "private_key"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "Latest status value stored in the database; not a real-time probe."
+          },
+          "agent_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "agent_status": {
+            "type": "string"
+          },
+          "last_heartbeat_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ServerStatus": {
         "type": "object",
         "description": "Database status snapshot. Reading it does not perform a real-time probe.",
-        "required": ["server_id", "status", "agent_status", "checked_at"],
+        "required": [
+          "server_id",
+          "status",
+          "agent_status",
+          "checked_at"
+        ],
         "properties": {
-          "server_id": {"type": "integer", "format": "int64", "minimum": 1},
-          "status": {"type": "string"},
-          "agent_status": {"type": "string"},
-          "last_heartbeat_at": {"type": "string", "format": "date-time", "nullable": true},
-          "checked_at": {"type": "string", "format": "date-time"}
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string"
+          },
+          "agent_status": {
+            "type": "string"
+          },
+          "last_heartbeat_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "delivery_pending_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "delivery_pending_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "delivery_oldest_collected_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "delivery_drop_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "delivery_dead_letter_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "delivery_dead_letter_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ServerPageResult": {
         "allOf": [
-          {"$ref": "#/components/schemas/PageResult"},
+          {
+            "$ref": "#/components/schemas/PageResult"
+          },
           {
             "type": "object",
             "properties": {
-              "items": {"type": "array", "items": {"$ref": "#/components/schemas/Server"}}
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Server"
+                }
+              }
             }
           }
         ]
       },
       "ServerResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
           {
             "type": "object",
-            "properties": {"data": {"$ref": "#/components/schemas/Server"}}
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/Server"
+              }
+            }
           }
         ]
       },
       "ServerPageResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
           {
             "type": "object",
-            "properties": {"data": {"$ref": "#/components/schemas/ServerPageResult"}}
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ServerPageResult"
+              }
+            }
           }
         ]
       },
       "ServerStatusResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
           {
             "type": "object",
-            "properties": {"data": {"$ref": "#/components/schemas/ServerStatus"}}
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ServerStatus"
+              }
+            }
           }
         ]
       },
       "ConfirmSshHostKeyRequest": {
         "type": "object",
-        "required": ["expected_fingerprint"],
+        "required": [
+          "expected_fingerprint"
+        ],
         "properties": {
           "expected_fingerprint": {
             "type": "string",
@@ -777,63 +1730,272 @@
       },
       "SshHostKeyResult": {
         "type": "object",
-        "required": ["server_id", "host_key_algorithm", "host_key_fingerprint", "operation", "verified_at"],
+        "required": [
+          "server_id",
+          "host_key_algorithm",
+          "host_key_fingerprint",
+          "operation",
+          "verified_at"
+        ],
         "properties": {
-          "server_id": {"type": "integer", "format": "int64", "minimum": 1},
-          "host_key_algorithm": {"type": "string", "example": "ssh-ed25519"},
-          "host_key_fingerprint": {"type": "string", "example": "SHA256:REPLACEWITHBASE64FINGERPRINT"},
-          "operation": {"type": "string", "enum": ["confirmed", "rotated", "unchanged"]},
-          "verified_at": {"type": "string", "format": "date-time"}
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "host_key_algorithm": {
+            "type": "string",
+            "example": "ssh-ed25519"
+          },
+          "host_key_fingerprint": {
+            "type": "string",
+            "example": "SHA256:REPLACEWITHBASE64FINGERPRINT"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "rotated",
+              "unchanged"
+            ]
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "SshConnectionTestResult": {
         "type": "object",
-        "required": ["server_id", "connected", "host_key_algorithm", "host_key_fingerprint", "auth_type", "duration_ms", "tested_at"],
+        "required": [
+          "server_id",
+          "connected",
+          "host_key_algorithm",
+          "host_key_fingerprint",
+          "auth_type",
+          "duration_ms",
+          "tested_at"
+        ],
         "properties": {
-          "server_id": {"type": "integer", "format": "int64", "minimum": 1},
-          "connected": {"type": "boolean", "enum": [true]},
-          "host_key_algorithm": {"type": "string", "example": "ssh-ed25519"},
-          "host_key_fingerprint": {"type": "string", "example": "SHA256:REPLACEWITHBASE64FINGERPRINT"},
-          "auth_type": {"type": "string", "enum": ["password", "private_key"]},
-          "duration_ms": {"type": "integer", "format": "int64", "minimum": 0},
-          "tested_at": {"type": "string", "format": "date-time"}
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "connected": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "host_key_algorithm": {
+            "type": "string",
+            "example": "ssh-ed25519"
+          },
+          "host_key_fingerprint": {
+            "type": "string",
+            "example": "SHA256:REPLACEWITHBASE64FINGERPRINT"
+          },
+          "auth_type": {
+            "type": "string",
+            "enum": [
+              "password",
+              "private_key"
+            ]
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "tested_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "SshHostKeyResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
           {
             "type": "object",
-            "properties": {"data": {"$ref": "#/components/schemas/SshHostKeyResult"}}
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SshHostKeyResult"
+              }
+            }
           }
         ]
       },
       "SshConnectionTestResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
           {
             "type": "object",
-            "properties": {"data": {"$ref": "#/components/schemas/SshConnectionTestResult"}}
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SshConnectionTestResult"
+              }
+            }
           }
         ]
       },
       "EmptyResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
           {
             "type": "object",
-            "properties": {"data": {"nullable": true, "example": null}}
+            "properties": {
+              "data": {
+                "nullable": true,
+                "example": null
+              }
+            }
           }
         ]
       },
       "ErrorResponse": {
         "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
           {
             "type": "object",
             "properties": {
-              "code": {"type": "integer", "format": "int32", "enum": [40002, 40100, 40300, 40301, 40400, 40900, 40901, 40902, 42900, 50000, 50001, 50002, 50003, 50400]},
-              "data": {"nullable": true, "example": null}
+              "code": {
+                "type": "integer",
+                "format": "int32",
+                "enum": [
+                  40002,
+                  40100,
+                  40300,
+                  40301,
+                  40400,
+                  40900,
+                  40901,
+                  40902,
+                  42900,
+                  50000,
+                  50001,
+                  50002,
+                  50003,
+                  50400
+                ]
+              },
+              "data": {
+                "nullable": true,
+                "example": null
+              }
+            }
+          }
+        ]
+      },
+      "SshTestHistoryResult": {
+        "type": "object",
+        "properties": {
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "测试的服务器 ID"
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "连接测试是否成功"
+          },
+          "error_code": {
+            "type": "integer",
+            "nullable": true,
+            "description": "失败时的业务错误码(50002/50003/50400 等)，成功为 NULL"
+          },
+          "host_key_algorithm": {
+            "type": "string",
+            "nullable": true,
+            "description": "成功时的远端主机公钥算法"
+          },
+          "host_key_fingerprint": {
+            "type": "string",
+            "nullable": true,
+            "description": "成功时的远端主机公钥指纹"
+          },
+          "auth_type": {
+            "type": "string",
+            "description": "认证方式: password / private_key"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "测试耗时毫秒"
+          },
+          "tested_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "测试发生时间"
+          }
+        }
+      },
+      "SshTestHistoryResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SshTestHistoryResult"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SshHostKeyObservationResult": {
+        "type": "object",
+        "properties": {
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "服务器 ID"
+          },
+          "host_key_algorithm": {
+            "type": "string",
+            "description": "观察到的远端主机公钥算法"
+          },
+          "host_key_fingerprint": {
+            "type": "string",
+            "description": "观察到的远端主机公钥 SHA-256 指纹"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "观察时间"
+          },
+          "registered_fingerprint": {
+            "type": "string",
+            "nullable": true,
+            "description": "当前已登记的主机公钥指纹，未确认过为 null；与观察指纹不同表示密钥已变更"
+          }
+        }
+      },
+      "SshHostKeyObservationResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SshHostKeyObservationResult"
+              }
             }
           }
         ]
@@ -843,54 +2005,102 @@
       "InvalidRequestParameter": {
         "description": "Invalid request parameter or credential combination",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40002, "message": "invalid request parameter", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40002,
+              "message": "invalid request parameter",
+              "data": null
+            }
           }
         }
       },
       "Unauthorized": {
         "description": "Bearer JWT is missing, invalid, expired, or no longer authorized",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40100, "message": "unauthorized", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40100,
+              "message": "unauthorized",
+              "data": null
+            }
           }
         }
       },
       "Forbidden": {
         "description": "Authenticated user is not an admin",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40300, "message": "forbidden", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40300,
+              "message": "forbidden",
+              "data": null
+            }
           }
         }
       },
       "SshForbidden": {
         "description": "The caller is not an admin or the SSH target violates the outbound access policy",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
             "examples": {
-              "adminRequired": {"value": {"code": 40300, "message": "forbidden", "data": null}},
-              "targetForbidden": {"value": {"code": 40301, "message": "ssh target forbidden", "data": null}}
+              "adminRequired": {
+                "value": {
+                  "code": 40300,
+                  "message": "forbidden",
+                  "data": null
+                }
+              },
+              "targetForbidden": {
+                "value": {
+                  "code": 40301,
+                  "message": "ssh target forbidden",
+                  "data": null
+                }
+              }
             }
           }
         }
@@ -898,42 +2108,86 @@
       "NotFound": {
         "description": "Server does not exist or has been deleted",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40400, "message": "resource not found", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40400,
+              "message": "resource not found",
+              "data": null
+            }
           }
         }
       },
       "Conflict": {
         "description": "Server name, host, concurrent state, or delete constraint conflicts with the request",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40900, "message": "resource conflict", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40900,
+              "message": "resource conflict",
+              "data": null
+            }
           }
         }
       },
       "SshHostKeyConflict": {
         "description": "The host key is not registered, does not match, or changed concurrently",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
             "examples": {
-              "concurrentUpdate": {"value": {"code": 40900, "message": "resource conflict", "data": null}},
-              "notConfirmed": {"value": {"code": 40901, "message": "ssh host key not confirmed", "data": null}},
-              "fingerprintMismatch": {"value": {"code": 40902, "message": "ssh host key mismatch", "data": null}}
+              "concurrentUpdate": {
+                "value": {
+                  "code": 40900,
+                  "message": "resource conflict",
+                  "data": null
+                }
+              },
+              "notConfirmed": {
+                "value": {
+                  "code": 40901,
+                  "message": "ssh host key not confirmed",
+                  "data": null
+                }
+              },
+              "fingerprintMismatch": {
+                "value": {
+                  "code": 40902,
+                  "message": "ssh host key mismatch",
+                  "data": null
+                }
+              }
             }
           }
         }
@@ -941,41 +2195,79 @@
       "SshConnectionLimitExceeded": {
         "description": "SSH connection test concurrency limit reached",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 42900, "message": "ssh connection limit reached", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 42900,
+              "message": "ssh connection limit reached",
+              "data": null
+            }
           }
         }
       },
       "DatabaseError": {
         "description": "Database operation failed",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 50001, "message": "database error", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 50001,
+              "message": "database error",
+              "data": null
+            }
           }
         }
       },
       "SshConnectionFailed": {
         "description": "The SSH handshake or stored credential authentication could not be completed",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
             "examples": {
-              "connectionFailed": {"value": {"code": 50002, "message": "ssh connection failed", "data": null}},
-              "authenticationFailed": {"value": {"code": 50003, "message": "ssh authentication failed", "data": null}}
+              "connectionFailed": {
+                "value": {
+                  "code": 50002,
+                  "message": "ssh connection failed",
+                  "data": null
+                }
+              },
+              "authenticationFailed": {
+                "value": {
+                  "code": 50003,
+                  "message": "ssh authentication failed",
+                  "data": null
+                }
+              }
             }
           }
         }
@@ -983,31 +2275,55 @@
       "SshTimeout": {
         "description": "SSH DNS resolution, TCP connection, handshake, authentication, or total operation timed out",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 50400, "message": "ssh connection timeout", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 50400,
+              "message": "ssh connection timeout",
+              "data": null
+            }
           }
         }
       },
       "InternalServerError": {
         "description": "Internal server or database error",
         "headers": {
-          "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-          "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
             "examples": {
               "internalError": {
-                "value": {"code": 50000, "message": "internal server error", "data": null}
+                "value": {
+                  "code": 50000,
+                  "message": "internal server error",
+                  "data": null
+                }
               },
               "databaseError": {
-                "value": {"code": 50001, "message": "database error", "data": null}
+                "value": {
+                  "code": 50001,
+                  "message": "database error",
+                  "data": null
+                }
               }
             }
           }

@@ -20,6 +20,7 @@ public class TerminalRelayLifecycleService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    /** 注入终端会话服务、内存路由注册表、Agent 连接注册表、输出限流器、JSON 序列化器和时钟。 */
     public TerminalRelayLifecycleService(TerminalSessionService terminalSessionService, TerminalRelayRegistry relayRegistry,
             AgentConnectionRegistry agentRegistry, TerminalOutputRateLimiter outputRateLimiter, ObjectMapper objectMapper,
             Clock clock) {
@@ -50,6 +51,7 @@ public class TerminalRelayLifecycleService {
             return;
         }
         for (TerminalRelayRegistry.TerminalRelayBinding binding : relayRegistry.removeByServerId(agentSession.serverId())) {
+            sendClosedToMonitor(binding);
             closeBinding(binding, TerminalSessionStatus.ERROR.value(), "agent_disconnected");
         }
     }
@@ -83,6 +85,22 @@ public class TerminalRelayLifecycleService {
             agentRegistry.sendToServer(binding.serverId(), new TextMessage(body));
         } catch (IOException ignored) {
             // Agent 已断开时仍应关闭元数据，避免遗留可操作会话。
+        }
+    }
+
+    /** Agent 断开时向发起会话的浏览器推送服务端生成的关闭帧，失败不阻断元数据收口。 */
+    private void sendClosedToMonitor(TerminalRelayRegistry.TerminalRelayBinding binding) {
+        if (!binding.monitorSession().socketSession().isOpen()) {
+            return;
+        }
+        String body = objectMapper.createObjectNode().put("type", TerminalMessageType.TERMINAL_CLOSED.value())
+                .put("message_id", UUID.randomUUID().toString()).put("timestamp", OffsetDateTime.now(clock).toString())
+                .set("payload", objectMapper.createObjectNode().put("server_id", binding.serverId())
+                        .put("session_id", binding.sessionId()).put("reason", "agent_disconnected")).toString();
+        try {
+            binding.monitorSession().send(new TextMessage(body));
+        } catch (IOException ignored) {
+            // 浏览器已断开、I/O 失败或慢消费者背压：推送失败仍须完成会话元数据收口。
         }
     }
 }

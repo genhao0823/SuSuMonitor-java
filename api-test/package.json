@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "verify:agent-ws": "node verify-agent-ws.mjs",
-    "verify:monitor-ws": "node verify-monitor-ws.mjs"
+    "verify:monitor-ws": "node verify-monitor-ws.mjs",
+    "verify:agent-reliable-e2e": "node verify-agent-reliable-delivery-e2e.mjs"
   },
   "dependencies": {
     "ws": "^8.18.3"

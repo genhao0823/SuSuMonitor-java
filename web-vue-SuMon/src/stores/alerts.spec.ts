@@ -21,6 +21,10 @@ function makeRule(overrides: Partial<AlertRule> = {}): AlertRule {
     operator: '>',
     threshold_value: 80,
     level: 'warning',
+    confirm_count: 1,
+    notify_email: null,
+    notify_dingtalk: null,
+    notify_webhook: null,
     enabled: true,
     created_by: 1,
     created_at: '2026-07-22T00:00:00Z',
@@ -48,6 +52,8 @@ function makeRecord(overrides: Partial<AlertRecord> = {}): AlertRecord {
     read_by: null,
     read_at: null,
     triggered_at: '2026-07-22T00:00:00Z',
+    notified_at: null,
+    notify_channels: null,
     created_at: '2026-07-22T00:00:00Z',
     ...overrides
   }

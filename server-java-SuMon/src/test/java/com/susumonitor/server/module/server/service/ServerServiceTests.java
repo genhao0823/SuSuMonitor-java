@@ -437,7 +437,7 @@ class ServerServiceTests {
         assertError(ErrorCode.INTERNAL_SERVER_ERROR, () -> serverService.create(request));
     }
 
-    /** 验证状态快照映射 Agent 字段并生成当前检查时间。 */
+    /** 验证状态快照映射 Agent 与投递遥测字段并生成当前检查时间。 */
     @Test
     void statusShouldReturnSnapshotAndCheckedTime() {
         ServerEntity snapshot = new ServerEntity();
@@ -445,6 +445,12 @@ class ServerServiceTests {
         snapshot.setStatus("online");
         snapshot.setAgentStatus("online");
         snapshot.setLastHeartbeatAt(LocalDateTime.now().minusMinutes(1));
+        snapshot.setDeliveryPendingCount(3L);
+        snapshot.setDeliveryPendingBytes(456L);
+        snapshot.setDeliveryOldestCollectedAt(LocalDateTime.now().minusHours(1));
+        snapshot.setDeliveryDropCount(2L);
+        snapshot.setDeliveryDeadLetterCount(1L);
+        snapshot.setDeliveryDeadLetterBytes(789L);
         when(serverMapper.selectActiveServerStatusById(7L)).thenReturn(snapshot);
         OffsetDateTime before = OffsetDateTime.now();
 
@@ -454,6 +460,12 @@ class ServerServiceTests {
         assertEquals("online", result.getAgentStatus());
         assertNotNull(result.getLastHeartbeatAt());
         assertTrue(!result.getCheckedAt().isBefore(before.minusSeconds(1)));
+        assertEquals(3L, result.getDeliveryPendingCount());
+        assertEquals(456L, result.getDeliveryPendingBytes());
+        assertNotNull(result.getDeliveryOldestCollectedAt());
+        assertEquals(2L, result.getDeliveryDropCount());
+        assertEquals(1L, result.getDeliveryDeadLetterCount());
+        assertEquals(789L, result.getDeliveryDeadLetterBytes());
     }
 
     /** 安排创建基础记录、密文更新和公开记录回读均成功。 */

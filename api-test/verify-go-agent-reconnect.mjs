@@ -115,8 +115,10 @@ function assertBackoffSequence() {
   const firstAt = Date.parse(first.time)
   const secondAt = Date.parse(second.time)
   const thirdAt = Date.parse(third.time)
-  assert(secondAt - firstAt >= 800, '1s backoff elapsed too early')
-  assert(thirdAt - secondAt >= 1800, '2s backoff elapsed too early')
+  // equal jitter 使实际等待范围为退避值的 [1/2, 1]：1s 退避下限 0.5s、2s 退避下限 1.0s，
+  // 断言按下限放宽并留调度余量。
+  assert(secondAt - firstAt >= 400, '1s backoff elapsed too early')
+  assert(thirdAt - secondAt >= 900, '2s backoff elapsed too early')
 }
 
 try {

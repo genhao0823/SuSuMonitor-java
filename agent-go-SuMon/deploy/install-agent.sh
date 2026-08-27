@@ -14,7 +14,7 @@ readonly SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly LOG_DIR="/var/log/susumonitor"
 readonly LOGROTATE_FILE="/etc/logrotate.d/${SERVICE_NAME}"
 
-: "${AGENT_BASE_URL:=https://monitor.example.com}"
+: "${AGENT_BASE_URL:=https://genhaosan.online}"
 : "${AGENT_VERSION:=1.0.0}"
 : "${AGENT_NAME:=}"
 : "${AGENT_SERVER_ID:=}"
@@ -75,13 +75,13 @@ for command_name in curl python3 sha256sum install systemctl; do
 done
 
 if [[ "${AGENT_ALLOW_INSECURE_HTTP}" == true ]]; then
-    [[ "${AGENT_BASE_URL}" == "http://82.156.245.102" ]] \
-        || die "Insecure HTTP is allowed only for the authorized temporary IPv4 test host."
-    warn "INSECURE TEMPORARY MODE: credentials and downloads use plain HTTP."
+    [[ "${AGENT_BASE_URL}" =~ ^http://[^/]+$ ]] \
+        || die "AGENT_ALLOW_INSECURE_HTTP=true requires an http:// origin without a path."
+    warn "INSECURE TEMPORARY MODE: credentials and downloads use plain HTTP. Intended only for authorized temporary IPv4 test hosts (e.g. the historical 82.156.245.102)."
     CURL_TRANSPORT=(--proto '=http' --http1.1)
 else
     [[ "${AGENT_BASE_URL}" =~ ^https://[^/]+$ ]] \
-        || die "AGENT_BASE_URL must be an HTTPS origin without a path. Set AGENT_ALLOW_INSECURE_HTTP=true only for the temporary IPv4 test."
+        || die "AGENT_BASE_URL must be an HTTPS origin without a path. Set AGENT_ALLOW_INSECURE_HTTP=true only for authorized temporary IPv4 tests."
     CURL_TRANSPORT=(--proto '=https' --tlsv1.2)
 fi
 [[ "${AGENT_VERSION}" =~ ^[0-9A-Za-z._-]+$ ]] || die "AGENT_VERSION contains unsupported characters."
@@ -163,6 +163,7 @@ if [[ -z "${AGENT_SERVER_ID}" ]]; then
 
     TOKEN_JSON="$(curl --fail --silent --show-error --location "${CURL_TRANSPORT[@]}" \
         --retry 2 --connect-timeout 10 --max-time 30 \
+        -X POST \
         -H "Authorization: Bearer ${JWT}" \
         "${AGENT_BASE_URL}/api/servers/${AGENT_SERVER_ID}/agent/register")" \
         || die "Agent token request failed."

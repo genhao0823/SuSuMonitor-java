@@ -5,4 +5,11 @@ collect_interval_seconds: 5
 heartbeat_interval_seconds: 30
 reconnect_initial_seconds: 5
 reconnect_max_seconds: 60
+metrics_buffer_path: "/var/lib/susumonitor/metrics-buffer.json"
+metrics_buffer_max_entries: 720
+metrics_ack_timeout_seconds: 15
+metrics_retry_initial_seconds: 2
+metrics_retry_max_seconds: 60
+metrics_replay_min_interval_millis: 2500
+metrics_retry_jitter_enabled: true
 log_level: "info"

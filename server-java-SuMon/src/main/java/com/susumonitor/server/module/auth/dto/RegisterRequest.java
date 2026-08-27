@@ -6,7 +6,12 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.ToString;
 
-// 自动生成当前 DTO 的 getter、setter、toString、equals 和 hashCode 方法。
+/**
+ * 注册请求 DTO，接收用户名和密码并触发 Bean Validation 校验。
+ *
+ * <p>用户名仅允许英文字母、数字和下划线，长度为 3-50；
+ * 密码长度 8-64，toString 排除密码哈希。</p>
+ */
 @Data
 public class RegisterRequest {
 

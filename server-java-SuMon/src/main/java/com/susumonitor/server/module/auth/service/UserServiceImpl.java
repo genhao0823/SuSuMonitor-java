@@ -15,13 +15,14 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 将当前类注册为 Spring Service Bean，承载用户相关业务逻辑。
+/**
+ * 用户认证业务实现，承载注册、登录、分页查询与审核状态管理逻辑。
+ */
 @Service
 public class UserServiceImpl implements UserService {
 
@@ -50,13 +51,27 @@ public class UserServiceImpl implements UserService {
     private final String dummyPasswordHash;
 
     /**
-     * 查询所有待审核用户（users 表所有权契约，管理面通过本接口访问）。
+     * 分页查询普通用户（users 表所有权契约，管理面通过本接口访问）。
      *
-     * @return 待审核用户实体列表
+     * @param status   审核状态过滤（pending/approved/rejected），null/空白时不过滤
+     * @param keyword  用户名模糊关键字，null/空白时不过滤
+     * @param page     页码（从 1 起）
+     * @param pageSize 每页大小
+     * @return 分页结果（items/total/page/page_size）
      */
     @Override
-    public List<UserEntity> listPendingUsers() {
-        return userMapper.selectPendingUsers();
+    public com.susumonitor.server.common.vo.PageResult<UserEntity> pageUsers(
+            String status, String keyword, int page, int pageSize) {
+        String normalizedStatus = status == null ? null : status.trim();
+        String normalizedKeyword = keyword == null ? null : keyword.trim();
+        int offset = (page - 1) * pageSize;
+        com.susumonitor.server.common.vo.PageResult<UserEntity> result =
+                new com.susumonitor.server.common.vo.PageResult<>();
+        result.setItems(userMapper.selectPageUsers(normalizedStatus, normalizedKeyword, offset, pageSize));
+        result.setTotal(userMapper.countUsers(normalizedStatus, normalizedKeyword));
+        result.setPage(page);
+        result.setPageSize(pageSize);
+        return result;
     }
 
     /**
@@ -116,7 +131,12 @@ public class UserServiceImpl implements UserService {
         this.dummyPasswordHash = passwordEncoder.encode(DUMMY_LOGIN_PASSWORD);
     }
 
-    // 在事务中锁定初始化状态并创建用户，保证并发注册最多产生一个首管理员。
+    /**
+     * 在事务中锁定初始化状态并创建用户，保证并发注册最多产生一个首管理员。
+     *
+     * @param request 注册请求
+     * @return 当前用户公开信息
+     */
     @Transactional
     public CurrentUserVo register(RegisterRequest request) {
         UserEntity existingUser = userMapper.selectByUsername(request.getUsername());
@@ -192,6 +212,12 @@ public class UserServiceImpl implements UserService {
         return ADMIN_ROLE.equals(role) || USER_ROLE.equals(role);
     }
 
+    /**
+     * 将用户实体转换为当前用户公开响应对象，避免暴露密码哈希等敏感字段。
+     *
+     * @param userEntity 用户实体
+     * @return 当前用户公开信息
+     */
     private CurrentUserVo toCurrentUserVo(UserEntity userEntity) {
         CurrentUserVo currentUserVo = new CurrentUserVo();
         currentUserVo.setId(userEntity.getId());
@@ -203,6 +229,12 @@ public class UserServiceImpl implements UserService {
         return currentUserVo;
     }
 
+    /**
+     * 按应用时区将数据库时间转换为接口时间。
+     *
+     * @param dateTime 数据库本地时间
+     * @return 接口偏移时间，null 时返回 null
+     */
     private OffsetDateTime toOffsetDateTime(java.time.LocalDateTime dateTime) {
         if (dateTime == null) {
             return null;

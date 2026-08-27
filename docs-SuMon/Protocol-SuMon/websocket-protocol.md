@@ -1,6 +1,6 @@
 # SuSuMonitor WebSocket Protocol
 
-**Version**: 1.1
+**Version**: 1.3
 
 **Time standard**: UTC ISO-8601, for example `2026-07-21T12:00:00Z`
 
@@ -13,9 +13,11 @@
 /ws/monitor Browser metrics subscription, metrics.update delivery and terminal requests
 ```
 
-The legacy requirement aliases `/api/ws/agent` and `/api/ws/client` map to the current Spring WebSocket paths above. Long-lived JWT and Agent Token must not be placed in a URL. `/ws/monitor` accepts only a one-time 30-second Monitor ticket obtained from `POST /api/ws/monitor-ticket`.
+Only the two paths above are registered; the historical aliases `/api/ws/agent` and `/api/ws/client` are not supported. Long-lived JWT and Agent Token must not be placed in a URL. `/ws/monitor` accepts only a one-time 30-second Monitor ticket obtained from `POST /api/ws/monitor-ticket`.
 
 ## Common Message
+
+Most frames use the following outer structure. `metrics.subscribe` and `metrics.unsubscribe` currently require only `type`, UUID `message_id`, and `payload`; their `timestamp` is optional for compatibility with the shipped browser client. Agent authentication, terminal frames, and server-generated update/error frames use UTC ISO-8601 `timestamp`.
 
 ```json
 {
@@ -41,9 +43,15 @@ The first Agent message must be `agent.authenticate`:
 
 Successful authentication returns `agent.authenticated` with payload `{"server_id": <id>, "authenticated_at": "<UTC ISO-8601>"}`. Authentication expires after 10 seconds if no valid first frame is received. A valid heartbeat updates `servers.last_heartbeat_at` and `agent_status=online`. The `heartbeat.ack` response payload is `{"server_id": <id>, "last_heartbeat_at": "<UTC ISO-8601>"}`. No heartbeat for 90 seconds marks the Agent offline. A newly authenticated connection replaces the previous connection for the same server.
 
+The heartbeat payload may carry Agent delivery telemetry, all fields optional: `pending_count`, `pending_bytes`, `oldest_collected_at`, `drop_count`, `dead_letter_count`, `dead_letter_bytes`. Older Agents send an empty object; the server stores present fields in `servers.delivery_*` for the REST status snapshot and keeps absent fields unchanged.
+
 The Agent message limit is 64 KiB. Invalid JSON uses close code `1007`; oversized messages use `1009`; policy/authentication failures use `1008`. The `error` message payload is `{"code": <int>, "message": "<string>"}`, where `code` uses the same numeric business error codes as the REST API (e.g. `40100` unauthorized, `40002` invalid request parameter). A connection or unauthenticated-session limit returns `42901` and closes with `1008`; heartbeat or metrics rate exhaustion returns `42902` followed by `1008`. Agent upgrade requests are limited per resolved client IP and receive HTTP `429` with `Retry-After: 60` before a WebSocket is created.
 
-`metrics.report` contains one fixed-width `metrics` row, including `server_id`, `collected_at`, `cpu_percent`, `memory_percent`, `memory_used`, `memory_total`, `disk_percent`, `disk_used`, `disk_total`, `net_rx`, `net_tx`, `temperature`, and `load_avg`. Its `message_id` is a required UUID idempotency key. Retrying one report must reuse its original `message_id`; a duplicate is silently accepted without inserting another row or publishing `metrics.update` or `alert.push`. For one server, accepted `collected_at` values must be strictly increasing. A report with a timestamp less than or equal to the most recently accepted sample is rejected with the standard `error` payload and code `40002`; it is not persisted and emits no event. `metrics.report` has no acknowledgement frame.
+`metrics.report` contains one fixed-width `metrics` row, including `server_id`, `collected_at`, `cpu_percent`, `memory_percent`, `memory_used`, `memory_total`, `disk_percent`, `disk_used`, `disk_total`, `net_rx`, `net_tx`, `temperature`, and `load_avg`. Its `message_id` is a required UUID idempotency key. Retrying one report must reuse its original `message_id`; a duplicate is silently accepted without inserting another row or publishing `metrics.update` or `alert.push`. For one server, accepted `collected_at` values must be strictly increasing. A report whose `collected_at` is not strictly greater than the most recently accepted sample is permanently rejected with `metrics.nack` (reason `stale_collected_at`); it is not persisted and emits no event.
+
+After the metrics ingress transaction has committed, the server returns `metrics.ack` with the request `message_id` and payload `{"server_id": <id>, "collected_at": "<accepted UTC ISO-8601>"}`. The acknowledgement confirms only that the server accepted the ingress transaction (including idempotent duplicate acceptance). It does **not** confirm RabbitMQ publication, Monitor frame delivery, or asynchronous alert evaluation. A failed validation or persistence transaction returns the standard `error` frame and never returns `metrics.ack`. Agents that do not consume this optional frame remain compatible. An Agent that has not received `metrics.ack` by its configured acknowledgement deadline may retransmit the unchanged complete `metrics.report` frame with its original `message_id`; the ingress idempotency key makes this retry safe.
+
+A report that the server can correlate and classifies as deterministically permanent is rejected with `metrics.nack` carrying the original `message_id` and payload `{"server_id": <id>, "code": <int>, "reason": "invalid_metrics_payload|stale_collected_at|server_not_found", "message": "<string>"}`. The server returns `metrics.nack` **only** for permanent rejections; uncertain or transient failures (database, internal, rate limit) still return the generic `error` frame. On a correlated `metrics.nack` the Agent moves the rejected FIFO head into its local durable dead-letter and never retries it; generic `error` frames never remove the queue head. Agents that do not consume `metrics.nack` remain compatible but keep retrying a permanently rejected head until they upgrade.
 
 ## Monitor Messages
 
@@ -53,7 +61,6 @@ After ticket-authenticated handshake, a browser sends:
 {
   "type": "metrics.subscribe",
   "message_id": "uuid",
-  "timestamp": "2026-07-21T12:00:00Z",
   "payload": {"server_id": 1}
 }
 ```
@@ -74,6 +81,24 @@ After a committed Metrics transaction, subscribers receive:
 }
 ```
 
+After a successful Agent online/offline state transition, subscribers of the affected server receive `server.status.update`:
+
+```json
+{
+  "type": "server.status.update",
+  "message_id": "uuid",
+  "timestamp": "2026-08-01T12:00:00Z",
+  "payload": {
+    "server_id": 1,
+    "status": "offline",
+    "agent_status": "offline",
+    "last_heartbeat_at": "2026-08-01T11:59:30.123456Z"
+  }
+}
+```
+
+The server sends this frame only when persisted Agent state changes between online and offline, never for an ordinary heartbeat. Delivery is best-effort and can be duplicated or delayed; clients must ignore a frame whose non-null `last_heartbeat_at` is older than their current snapshot. Only sessions subscribed to the affected `server_id` receive the frame.
+
 The broadcast never contains Agent Token, Token hash, SSH credentials, database credentials, or private keys.
 
 ## Security and Lifecycle
@@ -88,7 +113,7 @@ The broadcast never contains Agent Token, Token hash, SSH credentials, database 
 
 ## Error Messages
 
-Both Agent and Monitor channels use the same `error` message shape:
+Both Agent and Monitor channels use the same `error` message shape. Server-generated errors may use `message_id: null` when no client frame can be correlated; clients must accept either a UUID or `null`.
 
 ```json
 {
@@ -119,6 +144,8 @@ After an alert is triggered and the alert evaluation transaction commits, subscr
 
 `alert.push` reuses the `/ws/monitor` channel and `MonitorSubscriptionRegistry`. Only sessions subscribed to the affected `server_id` receive the push. The broadcast never contains Agent Token, SSH credentials, or database credentials.
 
+When an alert recovers (the evaluation transaction marks the record `resolved`), the same `alert.push` frame is sent with `payload.alert.status` set to `resolved` and `payload.alert.resolved_at` carrying the recovery time (2026-08-15); clients treat it as the same push signal (e.g. refresh the records list) rather than a new alert. Recovery is additionally published as the `alert.resolved.v1` broker event (see message-contracts-v1.md §五) for outbound recovery notifications.
+
 ## Terminal Messages
 
 Terminal messages use the common outer structure, require a UUID `message_id`, and use a UTC ISO-8601 `timestamp`. Java routes browser control frames to the matching authenticated Agent and routes Agent responses only to the browser connection that created the session.
@@ -145,7 +172,7 @@ Agent to `/ws/agent`:
 ```text
 terminal.opened  payload: server_id, session_id, shell
 terminal.output  payload: server_id, session_id, data (Base64, decoded 1-16 KiB)
-terminal.closed  payload: server_id, session_id, reason (1-128 chars)
+terminal.closed  payload: server_id, session_id, reason (1-128 chars), optional exit_code (integer)
 terminal.error   payload: server_id, optional session_id, code, message (1-256 chars)
 ```
 
@@ -153,13 +180,13 @@ The browser must never send `terminal.opened`, `terminal.output`, `terminal.clos
 
 Before forwarding an Agent terminal response, Java validates its protocol payload, verifies payload `server_id` matches the authenticated Agent connection, and verifies that `session_id` is bound to that same server. `terminal.opened` transitions metadata to `open`; normal `terminal.closed` persists closure, removes the in-memory relay binding, and releases the output bucket.
 
-When the originating Monitor connection disconnects, Java removes its relay bindings, sends a server-generated `terminal.close` to each reachable Agent, marks the related metadata closed with `monitor_disconnected`, and releases output buckets. If the protected outbound session detects backpressure first, the reason is instead `monitor_backpressure`; this reason is not overwritten by the later WebSocket close callback. When the current Agent connection disconnects, Java marks its routed sessions as `error` with `agent_disconnected` and releases output buckets; a superseded Agent connection cannot close sessions owned by its replacement.
+When the originating Monitor connection disconnects, Java removes its relay bindings, sends a server-generated `terminal.close` to each reachable Agent, marks the related metadata closed with `monitor_disconnected`, and releases output buckets. If the protected outbound session detects backpressure first, the reason is instead `monitor_backpressure`; this reason is not overwritten by the later WebSocket close callback. When the current Agent connection disconnects, Java marks its routed sessions as `error` with `agent_disconnected`, releases output buckets, and sends a server-generated `terminal.closed` frame (payload `server_id`, `session_id`, `reason: "agent_disconnected"`) to each still-open originating browser session; this frame lets Web and Android clients surface the disconnect immediately (Android may auto-reconnect with backoff). Delivery is best-effort and never blocks session metadata cleanup; a superseded Agent connection cannot close or notify sessions owned by its replacement.
 
 Terminal-specific error codes are `40003` invalid payload, `40302` access denied, `40403` session not found, `40903` session state conflict, `40904` Agent offline, `42903` session limit reached, and `42904` terminal message limit reached.
 
 ## Runtime Validation
 
-The following paths were validated against the isolated MySQL database `susumonitor_agent_ws_validation_20260721` and an application instance on port 18081:
+（2026-08-16 注：本节为 2026-07-21 历史快照。）The following paths were validated against the isolated MySQL database `susumonitor_agent_ws_validation_20260721` and an application instance on port 18081:
 
 ```text
 Agent Token REST       19 checks passed

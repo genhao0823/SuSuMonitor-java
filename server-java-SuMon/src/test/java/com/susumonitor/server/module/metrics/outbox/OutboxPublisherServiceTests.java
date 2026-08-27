@@ -51,7 +51,6 @@ class OutboxPublisherServiceTests {
     void setUp() {
         properties = new AppProperties();
         properties.getRabbitmq().setExchange(EXCHANGE);
-        properties.getRabbitmq().setRoutingKey(ROUTING_KEY);
         properties.getRabbitmq().setBatchSize(100);
         properties.getRabbitmq().setPublishTimeoutMs(1000);
         properties.getRabbitmq().setMaxBackoffSeconds(300);
@@ -66,6 +65,7 @@ class OutboxPublisherServiceTests {
         OutboxEntity row = new OutboxEntity();
         row.setId(id);
         row.setEventId("event-" + id);
+        row.setRoutingKey(ROUTING_KEY);
         row.setPayload("{}");
         row.setAttempts(attempts);
         row.setStatus(OutboxStatus.PENDING.ruleValue());
@@ -77,7 +77,7 @@ class OutboxPublisherServiceTests {
             CorrelationData correlationData = invocation.getArgument(3);
             correlationData.getFuture().complete(new CorrelationData.Confirm(ack, ack ? null : "nack reason"));
             return null;
-        }).when(rabbitTemplate).convertAndSend(eq(EXCHANGE), eq(ROUTING_KEY), anyString(), any(CorrelationData.class));
+        }).when(rabbitTemplate).convertAndSend(eq(EXCHANGE), anyString(), anyString(), any(CorrelationData.class));
     }
 
     /** Broker ack 时标记 published，参数为行 id 与当前时钟时刻。 */
@@ -146,12 +146,31 @@ class OutboxPublisherServiceTests {
             }
             correlationData.getFuture().complete(new CorrelationData.Confirm(true, null));
             return null;
-        }).when(rabbitTemplate).convertAndSend(eq(EXCHANGE), eq(ROUTING_KEY), anyString(), any(CorrelationData.class));
+        }).when(rabbitTemplate).convertAndSend(eq(EXCHANGE), anyString(), anyString(), any(CorrelationData.class));
 
         int published = service.publishOnce();
 
         assertEquals(1, published);
         verify(outboxMapper).markRetry(eq(1L), eq(1), any(), eq("connection refused"));
+        verify(outboxMapper).markPublished(eq(2L), any());
+    }
+
+    /** 同一批内不同行按各自 routing_key（V25）路由到对应队列。 */
+    @Test
+    void rowsShouldPublishWithPerRowRoutingKey() {
+        OutboxEntity metricsRow = row(1L, 0);
+        metricsRow.setRoutingKey("metrics.reported.v1");
+        OutboxEntity alertRow = row(2L, 0);
+        alertRow.setRoutingKey("alert.triggered.v1");
+        stubRows(metricsRow, alertRow);
+        confirmWith(true);
+
+        int published = service.publishOnce();
+
+        assertEquals(2, published);
+        verify(rabbitTemplate).convertAndSend(eq(EXCHANGE), eq("metrics.reported.v1"), eq("{}"), any(CorrelationData.class));
+        verify(rabbitTemplate).convertAndSend(eq(EXCHANGE), eq("alert.triggered.v1"), eq("{}"), any(CorrelationData.class));
+        verify(outboxMapper).markPublished(eq(1L), any());
         verify(outboxMapper).markPublished(eq(2L), any());
     }
 

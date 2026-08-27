@@ -38,6 +38,7 @@ public class AgentAuthenticationServiceImpl implements AgentAuthenticationServic
         return server;
     }
 
+    /** 比较存储的 Token 哈希与明文 Token 的 SHA-256 摘要。 */
     private boolean matches(String storedHash, String token) {
         if (!storedHash.startsWith(HASH_PREFIX)) {
             return false;
@@ -47,6 +48,7 @@ public class AgentAuthenticationServiceImpl implements AgentAuthenticationServic
         return MessageDigest.isEqual(expected, actual);
     }
 
+    /** 计算字符串的 SHA-256 摘要。 */
     private byte[] sha256(String token) {
         try {
             return MessageDigest.getInstance("SHA-256")

@@ -6,6 +6,7 @@ import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.module.server.entity.ServerEntity;
 import com.susumonitor.server.module.metrics.dto.MetricsReportPayload;
+import com.susumonitor.server.module.metrics.service.MetricsRejectedException;
 import com.susumonitor.server.module.metrics.service.MetricsService;
 import java.io.IOException;
 import java.time.Clock;
@@ -128,7 +129,10 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
                             ErrorCode.AGENT_MESSAGE_RATE_LIMIT_REACHED);
                     return;
                 }
-                heartbeatService.heartbeat(session);
+                // 心跳可携带投递遥测统计；老版本 Agent 载荷为空对象，字段全部为 null。
+                AgentHeartbeatPayload deliveryStats = objectMapper.treeToValue(
+                        agentMessage.payload(), AgentHeartbeatPayload.class);
+                heartbeatService.heartbeat(session, deliveryStats);
                 // 冻结 heartbeat.ack payload，返回确认的心跳时间，供 Agent 校验心跳周期。
                 var ackPayload = objectMapper.createObjectNode()
                         .put("server_id", session.serverId())
@@ -147,7 +151,22 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
                 }
                 MetricsReportPayload reportPayload = objectMapper.treeToValue(
                         agentMessage.payload(), MetricsReportPayload.class);
-                metricsService.report(session.serverId(), agentMessage.messageId(), reportPayload);
+                try {
+                    metricsService.report(session.serverId(), agentMessage.messageId(), reportPayload);
+                    // 仅在指标事务成功返回后确认入口持久化；异步 Outbox 发布和告警评估不属于本帧语义。
+                    var ackPayload = objectMapper.createObjectNode()
+                            .put("server_id", session.serverId())
+                            .put("collected_at", reportPayload.getCollectedAt().toString());
+                    send(session.socketSession(), AgentMessageType.METRICS_ACK, agentMessage.messageId(), ackPayload);
+                } catch (MetricsRejectedException exception) {
+                    // 只有可关联且永久无效的指标才返回 NACK；泛化 error 不能触发 Agent 删除队首。
+                    var nackPayload = objectMapper.createObjectNode()
+                            .put("server_id", session.serverId())
+                            .put("code", exception.getErrorCode().getCode())
+                            .put("reason", exception.getReason().value())
+                            .put("message", exception.getErrorCode().getMessage());
+                    send(session.socketSession(), AgentMessageType.METRICS_NACK, agentMessage.messageId(), nackPayload);
+                }
             } else if (agentMessage.type() != null && agentMessage.type().startsWith("terminal.")
                     && session.authenticated()) {
                 if (terminalRelayService == null) {
@@ -197,6 +216,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /** 处理 Agent 认证首帧，校验 Token 后注册已认证会话并替换旧连接。 */
     private void authenticate(AgentWebSocketSession session, JsonNode payload) throws IOException {
         if (session.authenticated() || payload == null
                 || !payload.hasNonNull("server_id") || !payload.hasNonNull("token")
@@ -236,6 +256,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         });
     }
 
+    /** 向 Agent WebSocket 会话发送指定类型和载荷的消息帧。 */
     private void send(WebSocketSession session, AgentMessageType type, String messageId, JsonNode payload)
             throws IOException {
         if (session.isOpen()) {
@@ -288,6 +309,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         close(session, CloseStatus.POLICY_VIOLATION);
     }
 
+    /** 安全关闭 WebSocket 会话，忽略已关闭或关闭失败异常。 */
     private void close(WebSocketSession session, CloseStatus status) {
         try {
             if (session.isOpen()) {

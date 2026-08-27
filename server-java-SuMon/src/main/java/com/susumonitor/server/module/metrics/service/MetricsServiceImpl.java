@@ -7,6 +7,7 @@ import com.susumonitor.server.module.metrics.dto.MetricsReportPayload;
 import com.susumonitor.server.module.metrics.entity.MetricsEntity;
 import com.susumonitor.server.module.metrics.entity.MetricsIngestionEntity;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
+import com.susumonitor.server.module.metrics.outbox.OutboxEnvelopeFactory;
 import com.susumonitor.server.module.metrics.outbox.OutboxService;
 import com.susumonitor.server.module.metrics.vo.MetricsHistoryVo;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
@@ -18,6 +19,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -33,14 +35,17 @@ public class MetricsServiceImpl implements MetricsService {
     private final MetricsMapper metricsMapper;
     private final ServerService serverService;
     private final OutboxService outboxService;
+    private final OutboxEnvelopeFactory outboxEnvelopeFactory;
     private final ApplicationEventPublisher eventPublisher;
 
-    /** 注入指标数据访问组件、服务器契约与 Outbox 登记服务（servers 表访问统一走 ServerService）。 */
+    /** 注入指标数据访问组件、服务器契约、Outbox 登记服务与信封工厂（servers 表访问统一走 ServerService）。 */
     public MetricsServiceImpl(MetricsMapper metricsMapper, ServerService serverService,
-            OutboxService outboxService, ApplicationEventPublisher eventPublisher) {
+            OutboxService outboxService, OutboxEnvelopeFactory outboxEnvelopeFactory,
+            ApplicationEventPublisher eventPublisher) {
         this.metricsMapper = metricsMapper;
         this.serverService = serverService;
         this.outboxService = outboxService;
+        this.outboxEnvelopeFactory = outboxEnvelopeFactory;
         this.eventPublisher = eventPublisher;
     }
 
@@ -53,26 +58,43 @@ public class MetricsServiceImpl implements MetricsService {
      *
      * <p>指标入库成功后，与指标同事务登记 Outbox 待发布事件（MVP-10）：
      * 事务回滚时 outbox 行一并回滚，保证"已入库指标必有待发布事件"。</p>
+     *
+     * <p>入库阶段的可恢复数据库故障（连接/锁等）包装为
+     * {@link MetricsRejectionReason#RETRIABLE_SERVER_ERROR}，Agent 有限重试后死信；
+     * 永久拒绝（载荷/采样时间/服务器不存在）维持原语义。</p>
      */
     @Transactional
     public void report(Long authenticatedServerId, String messageId, MetricsReportPayload payload) {
         validatePayload(authenticatedServerId, messageId, payload);
-        if (!serverService.existsActiveForUpdate(authenticatedServerId)) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        try {
+            if (!serverService.existsActiveForUpdate(authenticatedServerId)) {
+                throw new MetricsRejectedException(MetricsRejectionReason.SERVER_NOT_FOUND);
+            }
+            if (isDuplicateIngestion(authenticatedServerId, messageId, payload.getCollectedAt())) {
+                return;
+            }
+            MetricsEntity entity = toEntity(payload);
+            LocalDateTime latestCollectedAt = metricsMapper.selectLatestCollectedAt(authenticatedServerId);
+            if (latestCollectedAt != null && !entity.getCollectedAt().isAfter(latestCollectedAt)) {
+                throw new MetricsRejectedException(MetricsRejectionReason.STALE_COLLECTED_AT);
+            }
+            if (metricsMapper.insertMetric(entity) != 1) {
+                throw new BusinessException(ErrorCode.DATABASE_ERROR);
+            }
+            // 与指标同事务登记 Outbox 待发布事件：eventId 由本处生成并写入信封，
+            // 保证行内 event_id 与 payload 中 event_id 一致（消费侧幂等主键）。
+            String eventId = UUID.randomUUID().toString();
+            String envelope = outboxEnvelopeFactory.build(entity, messageId, eventId);
+            outboxService.enqueue(OutboxEnvelopeFactory.EVENT_TYPE, OutboxEnvelopeFactory.ROUTING_KEY,
+                    envelope, eventId);
+            eventPublisher.publishEvent(new MetricsReportedEvent(toLatestVo(entity)));
+        } catch (DuplicateKeyException exception) {
+            // 重复投递竞态（isDuplicateIngestion 预检查兜底）：数据级冲突，重发不会改变结果
+            throw exception;
+        } catch (DataAccessException exception) {
+            // 可恢复入库故障 → retriable nack，Agent 有限重试后仍未成功再死信
+            throw new MetricsRejectedException(MetricsRejectionReason.RETRIABLE_SERVER_ERROR);
         }
-        if (isDuplicateIngestion(authenticatedServerId, messageId, payload.getCollectedAt())) {
-            return;
-        }
-        MetricsEntity entity = toEntity(payload);
-        LocalDateTime latestCollectedAt = metricsMapper.selectLatestCollectedAt(authenticatedServerId);
-        if (latestCollectedAt != null && !entity.getCollectedAt().isAfter(latestCollectedAt)) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
-        }
-        if (metricsMapper.insertMetric(entity) != 1) {
-            throw new BusinessException(ErrorCode.DATABASE_ERROR);
-        }
-        outboxService.enqueue(entity, messageId);
-        eventPublisher.publishEvent(new MetricsReportedEvent(toLatestVo(entity)));
     }
 
     /** 查询服务器最新指标；无记录时返回资源不存在。 */
@@ -109,6 +131,11 @@ public class MetricsServiceImpl implements MetricsService {
         return result;
     }
 
+    /**
+     * 验证服务器存在且有效，不存在时抛出资源不存在异常。
+     *
+     * @param serverId 服务器 ID
+     */
     private void ensureServerExists(Long serverId) {
         if (serverId == null || serverId <= 0 || !serverService.existsActive(serverId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
@@ -128,12 +155,19 @@ public class MetricsServiceImpl implements MetricsService {
         }
     }
 
+    /**
+     * 校验指标上报载荷的全部字段合法性，非法时抛出永久拒绝异常。
+     *
+     * @param authenticatedServerId 已认证服务器 ID
+     * @param messageId 消息幂等 UUID
+     * @param payload 指标上报载荷
+     */
     private void validatePayload(Long authenticatedServerId, String messageId, MetricsReportPayload payload) {
         if (payload == null || authenticatedServerId == null || !isUuid(messageId)
                 || !authenticatedServerId.equals(payload.getServerId())
                 || payload.getCollectedAt() == null
                 || payload.getCollectedAt().isAfter(OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5))) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
         validatePercent(payload.getCpuPercent());
         validatePercent(payload.getMemoryPercent());
@@ -149,7 +183,7 @@ public class MetricsServiceImpl implements MetricsService {
                 && payload.getMemoryUsed() > payload.getMemoryTotal()
                 || payload.getDiskUsed() != null && payload.getDiskTotal() != null
                 && payload.getDiskUsed() > payload.getDiskTotal()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
     }
 
@@ -166,18 +200,34 @@ public class MetricsServiceImpl implements MetricsService {
         }
     }
 
+    /**
+     * 校验百分比值在 0-100 范围内。
+     *
+     * @param value 百分比值，允许 null
+     */
     private void validatePercent(BigDecimal value) {
         if (value != null && (value.signum() < 0 || value.compareTo(BigDecimal.valueOf(100)) > 0)) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
     }
 
+    /**
+     * 校验数值为非负数。
+     *
+     * @param value 数值，允许 null
+     */
     private void validateNonNegative(Number value) {
         if (value != null && value.doubleValue() < 0) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+            throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }
     }
 
+    /**
+     * 将上报载荷转换为指标实体。
+     *
+     * @param payload 指标上报载荷
+     * @return 指标实体
+     */
     private MetricsEntity toEntity(MetricsReportPayload payload) {
         MetricsEntity entity = new MetricsEntity();
         entity.setServerId(payload.getServerId());
@@ -196,6 +246,12 @@ public class MetricsServiceImpl implements MetricsService {
         return entity;
     }
 
+    /**
+     * 将指标实体转换为最新指标视图对象。
+     *
+     * @param entity 指标实体
+     * @return 最新指标视图对象
+     */
     private MetricsLatestVo toLatestVo(MetricsEntity entity) {
         MetricsLatestVo result = new MetricsLatestVo();
         result.setServerId(entity.getServerId());
@@ -214,6 +270,12 @@ public class MetricsServiceImpl implements MetricsService {
         return result;
     }
 
+    /**
+     * 将指标实体转换为历史指标视图对象。
+     *
+     * @param entity 指标实体
+     * @return 历史指标视图对象
+     */
     private MetricsHistoryVo toHistoryVo(MetricsEntity entity) {
         MetricsHistoryVo result = new MetricsHistoryVo();
         MetricsLatestVo latest = toLatestVo(entity);

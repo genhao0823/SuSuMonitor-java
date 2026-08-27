@@ -20,6 +20,7 @@ public class TerminalMonitorRelayService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    /** 注入终端会话服务、路由注册表、Agent 连接注册表、JSON 序列化器和时钟。 */
     public TerminalMonitorRelayService(TerminalSessionService terminalSessionService, TerminalRelayRegistry relayRegistry,
             AgentConnectionRegistry agentRegistry, ObjectMapper objectMapper, Clock clock) {
         this.terminalSessionService = terminalSessionService;

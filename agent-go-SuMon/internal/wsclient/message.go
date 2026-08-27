@@ -27,8 +27,48 @@ type AuthPayload struct {
 	Token    string `json:"token"`
 }
 
-// HeartbeatPayload 是 heartbeat 消息的 payload，为空对象。
-type HeartbeatPayload struct{}
+// HeartbeatPayload 是 heartbeat 消息的 payload。
+//
+// 投递遥测字段仅在提供时出现；未注入统计提供器时序列化为空对象，保持
+// 与旧协议兼容。
+type HeartbeatPayload struct {
+	PendingCount      *int    `json:"pending_count,omitempty"`
+	PendingBytes      *int    `json:"pending_bytes,omitempty"`
+	OldestCollectedAt *string `json:"oldest_collected_at,omitempty"`
+	DropCount         *uint64 `json:"drop_count,omitempty"`
+	DeadLetterCount   *int    `json:"dead_letter_count,omitempty"`
+	DeadLetterBytes   *int    `json:"dead_letter_bytes,omitempty"`
+}
+
+// NewHeartbeatPayloadWithDeliveryStats 将投递遥测快照转换为心跳载荷。
+//
+// oldestCollectedAt 为空时省略，其余计数始终携带（0 表示无积压/无丢弃）。
+func NewHeartbeatPayloadWithDeliveryStats(pendingCount, pendingBytes int, oldestCollectedAt string,
+	dropCount uint64, deadLetterCount, deadLetterBytes int) HeartbeatPayload {
+	payload := HeartbeatPayload{
+		PendingCount:    &pendingCount,
+		PendingBytes:    &pendingBytes,
+		DropCount:       &dropCount,
+		DeadLetterCount: &deadLetterCount,
+		DeadLetterBytes: &deadLetterBytes,
+	}
+	if oldestCollectedAt != "" {
+		payload.OldestCollectedAt = &oldestCollectedAt
+	}
+	return payload
+}
+
+// MetricsNack 是服务端对永久无效 metrics.report 的拒绝载荷。
+//
+// 服务端仅对可关联且永久无效的指标返回 metrics.nack（reason 为
+// invalid_metrics_payload / stale_collected_at / server_not_found），
+// Agent 收到后将队首移入本地 dead-letter 而不重试。
+type MetricsNack struct {
+	ServerID int64  `json:"server_id"`
+	Code     int    `json:"code"`
+	Reason   string `json:"reason"`
+	Message  string `json:"message"`
+}
 
 // MetricsPayload 是 metrics.report 消息的指标载荷，与后端固定宽表一一对应。
 //

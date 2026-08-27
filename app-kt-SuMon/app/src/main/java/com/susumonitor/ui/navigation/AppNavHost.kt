@@ -1,0 +1,212 @@
+package com.susumonitor.ui.navigation
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Rule
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.susumonitor.ui.admin.AdminUsersScreen
+import com.susumonitor.ui.alerts.AlertListScreen
+import com.susumonitor.ui.alerts.AlertRulesScreen
+import com.susumonitor.ui.dashboard.DashboardScreen
+import com.susumonitor.ui.servers.ServerDetailScreen
+import com.susumonitor.ui.servers.ServerFormScreen
+import com.susumonitor.ui.servers.ServerListScreen
+import com.susumonitor.ui.servers.ServerMetricsScreen
+import com.susumonitor.ui.terminal.TerminalScreen
+import kotlinx.coroutines.flow.Flow
+
+/** 底部导航目的地。 */
+enum class BottomTab(val route: String, val label: String, val icon: ImageVector) {
+    DASHBOARD("dashboard", "仪表盘", Icons.Filled.Dashboard),
+    SERVERS("servers", "服务器", Icons.Filled.Dashboard),
+    ALERTS("alerts", "告警", Icons.Filled.Notifications),
+    SETTINGS("settings", "设置", Icons.Filled.Settings),
+}
+
+/**
+ * 主导航：底部 Tab + 全功能路由。
+ * - 底部 Tab：仪表盘 / 服务器 / 告警 / 设置
+ * - 详情/表单/监控/规则/审核为堆栈页（无底部栏）
+ */
+@Composable
+fun AppNavHost(
+    isAdmin: Boolean,
+    isApproved: Boolean,
+    openAlertsRequest: Flow<Unit>,
+    onLogout: () -> Unit,
+) {
+    val navController = rememberNavController()
+
+    /** 切到指定底部 Tab（与底部栏点击一致的导航配置）。 */
+    fun navigateToTab(tab: BottomTab) {
+        navController.navigate(tab.route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    // 告警通知点击深链：切到告警 Tab
+    LaunchedEffect(openAlertsRequest) {
+        openAlertsRequest.collect { navigateToTab(BottomTab.ALERTS) }
+    }
+
+    Scaffold(
+        bottomBar = {
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentDestination = navBackStackEntry?.destination
+            val stackRoutes = setOf(
+                "serverDetail/{serverId}",
+                "serverForm/{serverId}",
+                "serverMetrics/{serverId}",
+                "serverTerminal/{serverId}",
+                "alertRules",
+                "adminUsers",
+            )
+            val showBottomBar = stackRoutes.none { route ->
+                currentDestination?.hierarchy?.any { it.route == route } == true
+            }
+            if (showBottomBar) {
+                NavigationBar {
+                    BottomTab.entries.forEach { tab ->
+                        val selected = currentDestination?.hierarchy?.any {
+                            it.route == tab.route
+                        } == true
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { navigateToTab(tab) },
+                            icon = {
+                                Icon(
+                                    tab.icon,
+                                    contentDescription = tab.label,
+                                    tint = if (selected) Color(0xFF9C7BD8) else Color.Gray,
+                                )
+                            },
+                            label = { Text(tab.label) },
+                        )
+                    }
+                }
+            }
+        },
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = BottomTab.DASHBOARD.route,
+            modifier = Modifier.padding(innerPadding),
+        ) {
+            composable(BottomTab.DASHBOARD.route) {
+                DashboardScreen(
+                    isAdmin = isAdmin,
+                    onServerClick = { serverId ->
+                        navController.navigate("serverDetail/$serverId")
+                    },
+                    onViewAlerts = { navController.navigate(BottomTab.ALERTS.route) },
+                    onViewAdmin = { navController.navigate("adminUsers") },
+                )
+            }
+            composable(BottomTab.SERVERS.route) {
+                ServerListScreen(
+                    onServerClick = { serverId ->
+                        navController.navigate("serverDetail/$serverId")
+                    },
+                    onCreateServer = {
+                        navController.navigate("serverForm/0")
+                    },
+                    onEditServer = { serverId ->
+                        navController.navigate("serverForm/$serverId")
+                    },
+                )
+            }
+            composable(BottomTab.ALERTS.route) {
+                AlertListScreen(
+                    onViewRules = { navController.navigate("alertRules") },
+                )
+            }
+            composable(BottomTab.SETTINGS.route) {
+                SettingsScreen(onLogout = onLogout)
+            }
+            composable(
+                route = "serverDetail/{serverId}",
+                arguments = listOf(navArgument("serverId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getLong("serverId") ?: 0L
+                ServerDetailScreen(
+                    serverId = serverId,
+                    isAdmin = isAdmin,
+                    isApproved = isApproved,
+                    onBack = { navController.popBackStack() },
+                    onEdit = {
+                        navController.navigate("serverForm/$serverId")
+                    },
+                    onMetrics = {
+                        navController.navigate("serverMetrics/$serverId")
+                    },
+                    onTerminal = {
+                        navController.navigate("serverTerminal/$serverId")
+                    },
+                )
+            }
+            composable(
+                route = "serverTerminal/{serverId}",
+                arguments = listOf(navArgument("serverId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getLong("serverId") ?: 0L
+                TerminalScreen(
+                    serverId = serverId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = "serverForm/{serverId}",
+                arguments = listOf(navArgument("serverId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getLong("serverId") ?: 0L
+                ServerFormScreen(
+                    serverId = serverId,
+                    onBack = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = "serverMetrics/{serverId}",
+                arguments = listOf(navArgument("serverId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                val serverId = backStackEntry.arguments?.getLong("serverId") ?: 0L
+                ServerMetricsScreen(
+                    serverId = serverId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("alertRules") {
+                AlertRulesScreen(onBack = { navController.popBackStack() })
+            }
+            composable("adminUsers") {
+                AdminUsersScreen(onBack = { navController.popBackStack() })
+            }
+        }
+    }
+}

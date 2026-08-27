@@ -8,6 +8,9 @@ public interface AgentHeartbeatService {
     /** 处理已认证 Agent 心跳。 */
     void heartbeat(AgentWebSocketSession session);
 
+    /** 处理已认证 Agent 心跳，并持久化心跳携带的投递遥测统计。 */
+    void heartbeat(AgentWebSocketSession session, AgentHeartbeatPayload deliveryStats);
+
     /** 扫描过期会话并标记对应服务器离线。 */
     void markExpiredSessionsOffline();
 

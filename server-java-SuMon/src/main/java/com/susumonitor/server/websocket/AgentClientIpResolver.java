@@ -48,6 +48,7 @@ public class AgentClientIpResolver {
         return peer.getHostAddress();
     }
 
+    /** 将纯数字格式的 IP 地址字符串解析为 InetAddress，非法格式返回 null。 */
     private static InetAddress numericAddress(String value) {
         if (value.isBlank() || !(value.matches("^[0-9.]+$") || value.matches("^[0-9A-Fa-f:.]+$"))) {
             return null;
@@ -62,6 +63,7 @@ public class AgentClientIpResolver {
     /** 保存已解析的 IPv4 或 IPv6 CIDR。 */
     private record CidrRange(byte[] network, int prefixLength) {
 
+        /** 从 "网络地址/前缀长度" 字符串解析 CIDR 段。 */
         private static CidrRange parse(String value) {
             String[] parts = value.trim().split("/", -1);
             InetAddress address = parts.length == 2 ? numericAddress(parts[0]) : null;
@@ -82,6 +84,7 @@ public class AgentClientIpResolver {
             }
         }
 
+        /** 判断目标 IP 地址是否在此 CIDR 范围内。 */
         private boolean contains(InetAddress address) {
             byte[] candidate = address.getAddress().clone();
             if (candidate.length != network.length) {
@@ -91,6 +94,7 @@ public class AgentClientIpResolver {
             return Arrays.equals(network, candidate);
         }
 
+        /** 将地址中超出前缀长度的主机位置零。 */
         private static void clearHostBits(byte[] address, int prefixLength) {
             int fullBytes = prefixLength / Byte.SIZE;
             int remainingBits = prefixLength % Byte.SIZE;

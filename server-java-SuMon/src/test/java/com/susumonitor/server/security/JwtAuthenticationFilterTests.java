@@ -12,11 +12,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.susumonitor.server.module.auth.entity.UserEntity;
 import com.susumonitor.server.module.auth.mapper.UserMapper;
 import io.jsonwebtoken.MalformedJwtException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -41,7 +43,10 @@ class JwtAuthenticationFilterTests {
         jwtTokenService = mock(JwtTokenService.class);
         userMapper = mock(UserMapper.class);
         SecurityErrorHandler errorHandler = new SecurityErrorHandler(new ObjectMapper());
-        filter = new JwtAuthenticationFilter(jwtTokenService, userMapper, errorHandler);
+        // 默认无 Redis 黑名单（Redis 未启用场景）：ObjectProvider 返回空。
+        ObjectProvider<RedisTokenBlacklist> emptyProvider = mock(ObjectProvider.class);
+        when(emptyProvider.getIfAvailable()).thenReturn(null);
+        filter = new JwtAuthenticationFilter(jwtTokenService, userMapper, errorHandler, emptyProvider);
         SecurityContextHolder.clearContext();
     }
 
@@ -76,7 +81,7 @@ class JwtAuthenticationFilterTests {
         request.addHeader("Authorization", "Bearer valid-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
         when(jwtTokenService.parseToken("valid-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(user("approved", "admin"));
         AtomicReference<Authentication> authentication = new AtomicReference<>();
 
@@ -107,11 +112,33 @@ class JwtAuthenticationFilterTests {
      * 验证 JWT 解析失败不回查数据库并返回统一 401。
      */
     @Test
-    void invalidJwtShouldReturnUnauthorized() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
+    void invalidJwtShouldReturnUnauthorized() throws Exception {        MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer invalid-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
         when(jwtTokenService.parseToken("invalid-token")).thenThrow(new MalformedJwtException("invalid"));
+
+        filter.doFilter(request, response, (servletRequest, servletResponse) -> { });
+
+        assertEquals(401, response.getStatus());
+        verify(userMapper, never()).selectAuthenticationUserById(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /**
+     * 验证已被吊销（登出）的 token 在过滤器阶段直接 401，不回查数据库。
+     */
+    @Test
+    void revokedTokenShouldReturnUnauthorized() throws Exception {
+        RedisTokenBlacklist blacklist = mock(RedisTokenBlacklist.class);
+        when(blacklist.isRevoked("token-id")).thenReturn(true);
+        ObjectProvider<RedisTokenBlacklist> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(blacklist);
+        filter = new JwtAuthenticationFilter(jwtTokenService, userMapper,
+                new SecurityErrorHandler(new ObjectMapper()), provider);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer valid-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtTokenService.parseToken("valid-token"))
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", Instant.parse("2026-08-18T00:00:00Z")));
 
         filter.doFilter(request, response, (servletRequest, servletResponse) -> { });
 
@@ -128,7 +155,7 @@ class JwtAuthenticationFilterTests {
         request.addHeader("Authorization", "Bearer valid-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
         when(jwtTokenService.parseToken("valid-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(user("pending", "admin"));
 
         filter.doFilter(request, response, (servletRequest, servletResponse) -> { });
@@ -145,7 +172,7 @@ class JwtAuthenticationFilterTests {
         request.addHeader("Authorization", "Bearer valid-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
         when(jwtTokenService.parseToken("valid-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(user("approved", "admin"));
 
         assertThrows(IllegalStateException.class, () -> filter.doFilter(

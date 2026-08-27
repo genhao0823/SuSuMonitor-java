@@ -1,0 +1,90 @@
+package com.susumonitor.server.module.alert.service;
+
+import com.susumonitor.server.config.AppProperties;
+import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
+import com.susumonitor.server.module.metrics.service.MetricsCleanupService.CleanupResult;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * 分批清理超过保留期的告警记录（alert_records），并保证同一 JVM 内定时任务不重叠。
+ */
+@Slf4j
+@Service
+@ConditionalOnProperty(name = "susumonitor.alert.record-cleanup-enabled", havingValue = "true")
+public class AlertRecordCleanupServiceImpl implements AlertRecordCleanupService {
+
+    private final AlertRecordCleanupMapper alertRecordCleanupMapper;
+    private final AppProperties appProperties;
+    private final TransactionTemplate transactionTemplate;
+    private final AtomicBoolean running = new AtomicBoolean(false);
+
+    /**
+     * 构造告警记录清理服务。
+     *
+     * @param alertRecordCleanupMapper 告警记录清理 Mapper
+     * @param appProperties 应用配置
+     * @param transactionTemplate 每批独立事务模板
+     */
+    public AlertRecordCleanupServiceImpl(AlertRecordCleanupMapper alertRecordCleanupMapper,
+            AppProperties appProperties, TransactionTemplate transactionTemplate) {
+        this.alertRecordCleanupMapper = alertRecordCleanupMapper;
+        this.appProperties = appProperties;
+        this.transactionTemplate = transactionTemplate;
+    }
+
+    /**
+     * 清理当前保留周期之前的告警记录；已有任务运行时立即跳过。
+     *
+     * @return 实际执行时返回结果，重叠触发时返回空
+     */
+    @Override
+    public Optional<CleanupResult> cleanupExpiredAlertRecords() {
+        LocalDateTime cutoffTime = LocalDateTime.now(ZoneOffset.UTC)
+                .minusDays(appProperties.getAlert().getRecordRetentionDays());
+        return cleanupExpiredAlertRecords(cutoffTime);
+    }
+
+    /**
+     * 按指定边界执行清理，供独立数据库验收固定 cutoff 边界。
+     *
+     * @param cutoffTime 过期边界，严格早于该时间才删除
+     * @return 实际执行时返回结果，重叠触发时返回空
+     */
+    @Override
+    public Optional<CleanupResult> cleanupExpiredAlertRecords(LocalDateTime cutoffTime) {
+        if (!running.compareAndSet(false, true)) {
+            return Optional.empty();
+        }
+
+        long startedAt = System.nanoTime();
+        int batchCount = 0;
+        int deletedRows = 0;
+        try {
+            int maxBatches = appProperties.getAlert().getRecordCleanupMaxBatchesPerRun();
+            int batchSize = appProperties.getAlert().getRecordCleanupBatchSize();
+            while (batchCount < maxBatches) {
+                Integer deleted = transactionTemplate.execute(status ->
+                        alertRecordCleanupMapper.deleteExpiredBatch(cutoffTime, batchSize));
+                int currentDeleted = deleted == null ? 0 : deleted;
+                if (currentDeleted == 0) {
+                    break;
+                }
+                batchCount++;
+                deletedRows += currentDeleted;
+            }
+            long durationMs = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+            return Optional.of(new CleanupResult(cutoffTime, batchCount, deletedRows, durationMs));
+        } finally {
+            running.set(false);
+        }
+    }
+
+}

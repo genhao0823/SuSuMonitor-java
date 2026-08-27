@@ -13,7 +13,9 @@ import com.susumonitor.server.module.server.service.ServerService;
 import com.susumonitor.server.module.server.service.ServerSshService;
 import com.susumonitor.server.module.server.vo.ServerStatusVo;
 import com.susumonitor.server.module.server.vo.ServerVo;
+import com.susumonitor.server.module.server.vo.SshHostKeyObservationVo;
 import com.susumonitor.server.module.server.vo.SshHostKeyVo;
+import com.susumonitor.server.module.server.vo.SshTestHistoryVo;
 import com.susumonitor.server.module.server.vo.SshTestVo;
 import com.susumonitor.server.security.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -23,6 +25,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -212,6 +215,22 @@ public class ServerController {
     }
 
     /**
+     * 只读观察目标主机当前公钥，供管理员"一键信任"前核对。
+     *
+     * @param serverId 服务器 ID
+     * @return 观察到的远端主机公钥信息
+     */
+    // 将 POST /api/servers/{id}/ssh/host-key/observe 映射到主机公钥观察方法。
+    @PostMapping("/{id}/ssh/host-key/observe")
+    public ApiResponse<SshHostKeyObservationVo> observeSshHostKey(
+            // 将 id 路径参数绑定为服务器 ID。
+            @PathVariable("id")
+            // 限制服务器 ID 必须大于 0。
+            @Positive Long serverId) {
+        return ApiResponse.success(serverSshService.observeHostKey(serverId));
+    }
+
+    /**
      * 使用已登记主机身份和服务器存储凭据执行一次无命令 SSH 认证测试。
      *
      * @param serverId 服务器 ID
@@ -231,5 +250,21 @@ public class ServerController {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
         }
         return ApiResponse.success(serverSshService.testConnection(serverId));
+    }
+
+    /**
+     * 按正数 ID 查询某服务器最近的 SSH 连接测试历史。
+     *
+     * @param serverId 服务器 ID
+     * @return 最近测试历史列表
+     */
+    // 将 GET /api/servers/{id}/ssh/test/history 映射到测试历史查询方法。
+    @GetMapping("/{id}/ssh/test/history")
+    public ApiResponse<List<SshTestHistoryVo>> listSshTestHistory(
+            // 将 id 路径参数绑定为服务器 ID。
+            @PathVariable("id")
+            // 限制服务器 ID 必须大于 0。
+            @Positive Long serverId) {
+        return ApiResponse.success(serverSshService.listTestHistory(serverId));
     }
 }

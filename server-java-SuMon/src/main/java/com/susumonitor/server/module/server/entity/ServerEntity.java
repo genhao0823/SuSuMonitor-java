@@ -141,6 +141,36 @@ public class ServerEntity {
     @TableField("last_heartbeat_at")
     private LocalDateTime lastHeartbeatAt;
 
+    /** Agent 投递积压条数，来自心跳携带的遥测。 */
+    // 将 Java 属性映射到 servers.delivery_pending_count 字段。
+    @TableField("delivery_pending_count")
+    private Long deliveryPendingCount;
+
+    /** Agent 投递积压字节数，来自心跳携带的遥测。 */
+    // 将 Java 属性映射到 servers.delivery_pending_bytes 字段。
+    @TableField("delivery_pending_bytes")
+    private Long deliveryPendingBytes;
+
+    /** Agent 积压最旧采样时间，来自心跳携带的遥测。 */
+    // 将 Java 属性映射到 servers.delivery_oldest_collected_at 字段。
+    @TableField("delivery_oldest_collected_at")
+    private LocalDateTime deliveryOldestCollectedAt;
+
+    /** Agent 因缓冲满丢弃的采样计数，来自心跳携带的遥测。 */
+    // 将 Java 属性映射到 servers.delivery_drop_count 字段。
+    @TableField("delivery_drop_count")
+    private Long deliveryDropCount;
+
+    /** Agent 本地死信条数，来自心跳携带的遥测。 */
+    // 将 Java 属性映射到 servers.delivery_dead_letter_count 字段。
+    @TableField("delivery_dead_letter_count")
+    private Long deliveryDeadLetterCount;
+
+    /** Agent 本地死信字节数，来自心跳携带的遥测。 */
+    // 将 Java 属性映射到 servers.delivery_dead_letter_bytes 字段。
+    @TableField("delivery_dead_letter_bytes")
+    private Long deliveryDeadLetterBytes;
+
     /** 软删除标记，0 表示有效，1 表示已删除。 */
     private Boolean deleted;
 

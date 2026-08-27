@@ -2,6 +2,7 @@ package com.susumonitor.server.module.alert.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.susumonitor.server.module.alert.entity.AlertRecordEntity;
 import com.susumonitor.server.module.alert.entity.AlertStateEntity;
@@ -9,6 +10,7 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.apache.ibatis.datasource.pooled.PooledDataSource;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
@@ -49,6 +51,9 @@ class AlertRecordStateMapperMybatisTests {
                         read_by BIGINT,
                         read_at TIMESTAMP,
                         triggered_at TIMESTAMP NOT NULL,
+                        resolved_at TIMESTAMP,
+                        notified_at TIMESTAMP,
+                        notify_channels VARCHAR(100),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -59,6 +64,7 @@ class AlertRecordStateMapperMybatisTests {
                         rule_id BIGINT NOT NULL,
                         server_id BIGINT NOT NULL,
                         active BOOLEAN NOT NULL,
+                        breach_count INT NOT NULL DEFAULT 0,
                         alert_record_id BIGINT,
                         first_triggered_at TIMESTAMP,
                         last_triggered_at TIMESTAMP,
@@ -115,7 +121,53 @@ class AlertRecordStateMapperMybatisTests {
             // 版本不匹配：不删除（乐观锁）。
             assertEquals(0, mapper.deleteState(state.getId(), 99));
             assertEquals(1, mapper.deleteState(state.getId(), state.getVersion()));
-            assertEquals(null, mapper.selectByRuleAndServer(1L, 1L));
+            assertTrue(mapper.selectByServerId(1L).isEmpty());
+        }
+    }
+
+    /** 批量查询只返回该 server 的状态行，且字段映射正确（S2 按 server 批量查状态）。 */
+    @Test
+    void selectByServerIdShouldReturnOnlyThatServersStates() {
+        AlertStateMapper mapper;
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            mapper = session.getMapper(AlertStateMapper.class);
+            assertEquals(1, mapper.insertState(newState(1L, 1L)));
+            assertEquals(1, mapper.insertState(newState(2L, 1L)));
+            assertEquals(1, mapper.insertState(newState(3L, 2L)));
+        }
+
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            List<AlertStateEntity> server1 = session.getMapper(AlertStateMapper.class).selectByServerId(1L);
+            assertEquals(2, server1.size());
+            assertTrue(server1.stream().anyMatch(state -> state.getRuleId() == 1L));
+            assertTrue(server1.stream().anyMatch(state -> state.getRuleId() == 2L));
+            server1.forEach(state -> {
+                assertEquals(1L, state.getServerId());
+                assertTrue(state.getActive());
+                assertEquals(0, state.getBreachCount());
+            });
+
+            List<AlertStateEntity> server2 = session.getMapper(AlertStateMapper.class).selectByServerId(2L);
+            assertEquals(1, server2.size());
+            assertEquals(3L, server2.get(0).getRuleId());
+        }
+    }
+
+    /** 恢复 UPDATE 应把 status 置为 resolved 并写入 resolved_at（V26）。 */
+    @Test
+    void updateStatusToResolvedShouldPersistResolvedAt() {
+        AlertRecordMapper mapper;
+        AlertRecordEntity record = newRecord();
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            mapper = session.getMapper(AlertRecordMapper.class);
+            assertEquals(1, mapper.insertRecord(record));
+            LocalDateTime resolvedAt = LocalDateTime.of(2026, 8, 15, 10, 0);
+            assertEquals(1, mapper.updateStatusToResolved(record.getId(), resolvedAt));
+            AlertRecordEntity loaded = mapper.selectRecordById(record.getId());
+            assertEquals("resolved", loaded.getStatus());
+            assertEquals(resolvedAt, loaded.getResolvedAt());
+            // 已 resolved 的记录再次恢复不更新（status != 'resolved' 守卫）。
+            assertEquals(0, mapper.updateStatusToResolved(record.getId(), resolvedAt.plusHours(1)));
         }
     }
 
@@ -141,10 +193,15 @@ class AlertRecordStateMapperMybatisTests {
     }
 
     private AlertStateEntity newState() {
+        return newState(1L, 1L);
+    }
+
+    private AlertStateEntity newState(Long ruleId, Long serverId) {
         AlertStateEntity state = new AlertStateEntity();
-        state.setRuleId(1L);
-        state.setServerId(1L);
+        state.setRuleId(ruleId);
+        state.setServerId(serverId);
         state.setActive(true);
+        state.setBreachCount(0);
         state.setAlertRecordId(1L);
         state.setFirstTriggeredAt(LocalDateTime.now());
         state.setLastTriggeredAt(LocalDateTime.now());

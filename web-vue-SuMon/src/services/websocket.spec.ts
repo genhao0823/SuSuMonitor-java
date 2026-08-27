@@ -123,6 +123,26 @@ describe('MonitorWebSocket', () => {
     expect(onAlertPush.mock.calls[0]?.[0].server_id).toBe(1)
   })
 
+  it('server.status.update 帧调 onServerStatus，非法 payload 被忽略', async () => {
+    const onServerStatus = vi.fn()
+    const ws = new MonitorWebSocket(vi.fn(), vi.fn(), undefined, undefined, undefined, onServerStatus)
+    ws.connect(1)
+    await new Promise((r) => setTimeout(r, 0))
+    lastSocket?.emitOpen()
+
+    const payload = {
+      server_id: 1,
+      status: 'offline',
+      agent_status: 'offline',
+      last_heartbeat_at: '2026-08-01T12:00:00.123456Z'
+    }
+    lastSocket?.emitMessage({ type: 'server.status.update', payload })
+    expect(onServerStatus).toHaveBeenCalledWith(payload)
+
+    lastSocket?.emitMessage({ type: 'server.status.update', payload: { server_id: 1 } })
+    expect(onServerStatus).toHaveBeenCalledOnce()
+  })
+
   it('未传 onAlertPush 时收到 alert.push 帧不会抛错', async () => {
     const ws = new MonitorWebSocket(vi.fn(), vi.fn())
     ws.connect(1)

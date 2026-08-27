@@ -1,6 +1,7 @@
 package com.susumonitor.server.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.susumonitor.server.module.alert.service.AlertResolvedEvent;
 import com.susumonitor.server.module.alert.service.AlertTriggeredEvent;
 import com.susumonitor.server.module.alert.vo.AlertRecordVo;
 import java.io.IOException;
@@ -39,9 +40,25 @@ public class AlertPushPublisher {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAlertTriggered(AlertTriggeredEvent event) {
-        for (MonitorWebSocketSession subscriber : registry.subscribers(event.serverId())) {
+        push(event.serverId(), event.record());
+    }
+
+    /**
+     * 消费 AlertResolvedEvent，在恢复事务提交后推送。
+     *
+     * <p>帧格式与触发一致（type=alert.push，payload.alert.status=resolved），
+     * 前端按既有 alert.push 语义处理（待刷新计数），无需区分事件来源。</p>
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAlertResolved(AlertResolvedEvent event) {
+        push(event.serverId(), event.record());
+    }
+
+    /** 向订阅了该服务器的 Monitor 会话推送 alert.push 帧；失败收口订阅会话不影响其他订阅者。 */
+    private void push(Long serverId, AlertRecordVo record) {
+        for (MonitorWebSocketSession subscriber : registry.subscribers(serverId)) {
             try {
-                if (!subscriber.send(new TextMessage(message(event)))) {
+                if (!subscriber.send(new TextMessage(message(serverId, record)))) {
                     terminationService.terminateNormally(subscriber);
                 }
             } catch (MonitorBackpressureException exception) {
@@ -53,10 +70,9 @@ public class AlertPushPublisher {
     }
 
     /** 构建 alert.push WebSocket 消息帧。 */
-    private String message(AlertTriggeredEvent event) throws IOException {
-        AlertRecordVo record = event.record();
+    private String message(Long serverId, AlertRecordVo record) throws IOException {
         var alertPayload = objectMapper.createObjectNode()
-                .put("server_id", event.serverId())
+                .put("server_id", serverId)
                 .set("alert", objectMapper.valueToTree(record));
         return objectMapper.createObjectNode()
                 .put("type", "alert.push")

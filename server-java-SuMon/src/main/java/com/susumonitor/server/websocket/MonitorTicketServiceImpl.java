@@ -13,13 +13,18 @@ import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
  * 管理单 JVM 内存中的一次性 Monitor ticket，避免浏览器把长期 JWT 放入 WebSocket URL。
+ *
+ * <p>多实例化阶段一（2026-08-17）：Redis 关闭时（默认）注册本内存实现；
+ * Redis 启用时由 {@link RedisMonitorTicketServiceImpl} 取代（互斥条件）。</p>
  */
 @Service
+@ConditionalOnProperty(name = "susumonitor.redis.enabled", havingValue = "false", matchIfMissing = true)
 public class MonitorTicketServiceImpl implements MonitorTicketService {
 
     private static final Duration DEFAULT_TICKET_TTL = Duration.ofSeconds(30);

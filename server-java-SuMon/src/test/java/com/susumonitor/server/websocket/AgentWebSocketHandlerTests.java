@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import com.susumonitor.server.module.server.entity.ServerEntity;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
@@ -187,6 +189,42 @@ class AgentWebSocketHandlerTests {
         assertTrue(payload.get("payload").has("last_heartbeat_at"));
     }
 
+    /** 验证心跳携带投递遥测时解析并转发给心跳服务。 */
+    @Test
+    void heartbeatDeliveryStatsShouldBeForwarded() throws Exception {
+        MutableClock clock = new MutableClock(CONNECTED_AT);
+        WebSocketSession socket = socket("agent-heartbeat-stats");
+        AgentAuthenticationService authenticationService = mock(AgentAuthenticationService.class);
+        AgentHeartbeatService heartbeatService = mock(AgentHeartbeatService.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        when(registry.replace(any())).thenReturn(java.util.Optional.empty());
+        ServerEntity server = new ServerEntity();
+        server.setId(3003L);
+        when(authenticationService.authenticate(3003L, "test-token")).thenReturn(server);
+
+        AgentWebSocketHandler handler = new AgentWebSocketHandler(
+                new ObjectMapper().findAndRegisterModules(),
+                authenticationService, heartbeatService, registry, mock(MetricsService.class), clock);
+        handler.afterConnectionEstablished(socket);
+        handler.handleTextMessage(socket, new TextMessage(
+                "{\"type\":\"agent.authenticate\",\"payload\":{\"server_id\":3003,\"token\":\"test-token\"}}"));
+
+        handler.handleTextMessage(socket, new TextMessage("""
+                {"type":"heartbeat","message_id":"hb-stats","payload":{"pending_count":3,"pending_bytes":456,
+                 "oldest_collected_at":"2026-08-03T00:00:00Z","drop_count":2,"dead_letter_count":1,"dead_letter_bytes":789}}"""));
+
+        org.mockito.ArgumentCaptor<AgentHeartbeatPayload> captor =
+                org.mockito.ArgumentCaptor.forClass(AgentHeartbeatPayload.class);
+        verify(heartbeatService).heartbeat(any(AgentWebSocketSession.class), captor.capture());
+        AgentHeartbeatPayload stats = captor.getValue();
+        assertEquals(3L, stats.pendingCount());
+        assertEquals(456L, stats.pendingBytes());
+        assertEquals(OffsetDateTime.parse("2026-08-03T00:00:00Z"), stats.oldestCollectedAt());
+        assertEquals(2L, stats.dropCount());
+        assertEquals(1L, stats.deadLetterCount());
+        assertEquals(789L, stats.deadLetterBytes());
+    }
+
     /** 验证 metrics.report 缺少 UUID message_id 时被拒绝，且不会进入 Metrics 写入服务。 */
     @Test
     void metricsReportWithoutMessageIdShouldBeRejected() throws Exception {
@@ -245,6 +283,115 @@ class AgentWebSocketHandlerTests {
                 """));
 
         verify(metricsService).report(eq(5005L), eq(messageId), any());
+    }
+
+    /** 验证指标事务成功后返回关联请求 ID 的 metrics.ack，不承诺异步告警已完成。 */
+    @Test
+    void metricsReportShouldAcknowledgeCommittedIngress() throws Exception {
+        MutableClock clock = new MutableClock(CONNECTED_AT);
+        WebSocketSession socket = socket("agent-metrics-ack");
+        AgentAuthenticationService authenticationService = mock(AgentAuthenticationService.class);
+        AgentHeartbeatService heartbeatService = mock(AgentHeartbeatService.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        MetricsService metricsService = mock(MetricsService.class);
+        ServerEntity server = new ServerEntity();
+        server.setId(6006L);
+        when(authenticationService.authenticate(6006L, "test-token")).thenReturn(server);
+        when(registry.replace(any())).thenReturn(java.util.Optional.empty());
+        AgentWebSocketHandler handler = new AgentWebSocketHandler(new ObjectMapper().findAndRegisterModules(),
+                authenticationService, heartbeatService, registry, metricsService, clock);
+        handler.afterConnectionEstablished(socket);
+        handler.handleTextMessage(socket, new TextMessage(
+                "{\"type\":\"agent.authenticate\",\"payload\":{\"server_id\":6006,\"token\":\"test-token\"}}"));
+        org.mockito.Mockito.clearInvocations(socket);
+        String messageId = "2f9678a1-f5f0-4c6c-b9b0-2f9556b2f543";
+
+        handler.handleTextMessage(socket, new TextMessage("""
+                {"type":"metrics.report","message_id":"2f9678a1-f5f0-4c6c-b9b0-2f9556b2f543","payload":{"server_id":6006,"collected_at":"2026-07-22T00:00:00Z","cpu_percent":10}}
+                """));
+
+        org.mockito.ArgumentCaptor<TextMessage> captor =
+                org.mockito.ArgumentCaptor.forClass(TextMessage.class);
+        verify(socket).sendMessage(captor.capture());
+        JsonNode response = new ObjectMapper().readTree(captor.getValue().getPayload());
+        assertEquals("metrics.ack", response.get("type").asText());
+        assertEquals(messageId, response.get("message_id").asText());
+        assertEquals(6006L, response.get("payload").get("server_id").asLong());
+        assertEquals("2026-07-22T00:00Z", response.get("payload").get("collected_at").asText());
+        verify(metricsService).report(eq(6006L), eq(messageId), any());
+    }
+
+    /** 验证指标事务失败时只发送既有 error 帧，绝不确认尚未接受的指标。 */
+    @Test
+    void metricsReportShouldNotAcknowledgeFailedIngress() throws Exception {
+        MutableClock clock = new MutableClock(CONNECTED_AT);
+        WebSocketSession socket = socket("agent-metrics-error");
+        AgentAuthenticationService authenticationService = mock(AgentAuthenticationService.class);
+        AgentHeartbeatService heartbeatService = mock(AgentHeartbeatService.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        MetricsService metricsService = mock(MetricsService.class);
+        ServerEntity server = new ServerEntity();
+        server.setId(7007L);
+        when(authenticationService.authenticate(7007L, "test-token")).thenReturn(server);
+        when(registry.replace(any())).thenReturn(java.util.Optional.empty());
+        doThrow(new com.susumonitor.server.common.BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER))
+                .when(metricsService).report(eq(7007L), any(), any());
+        AgentWebSocketHandler handler = new AgentWebSocketHandler(new ObjectMapper().findAndRegisterModules(),
+                authenticationService, heartbeatService, registry, metricsService, clock);
+        handler.afterConnectionEstablished(socket);
+        handler.handleTextMessage(socket, new TextMessage(
+                "{\"type\":\"agent.authenticate\",\"payload\":{\"server_id\":7007,\"token\":\"test-token\"}}"));
+        org.mockito.Mockito.clearInvocations(socket);
+
+        handler.handleTextMessage(socket, new TextMessage("""
+                {"type":"metrics.report","message_id":"ad19a0dc-3ae2-46d7-8410-85ef50257eaf","payload":{"server_id":7007,"collected_at":"2026-07-22T00:00:00Z","cpu_percent":10}}
+                """));
+
+        org.mockito.ArgumentCaptor<TextMessage> captor =
+                org.mockito.ArgumentCaptor.forClass(TextMessage.class);
+        verify(socket).sendMessage(captor.capture());
+        JsonNode response = new ObjectMapper().readTree(captor.getValue().getPayload());
+        assertEquals("error", response.get("type").asText());
+        assertEquals(ErrorCode.INVALID_REQUEST_PARAMETER.getCode(), response.get("payload").get("code").asInt());
+    }
+
+    /** 验证可确定永久拒绝的指标返回关联请求 ID 的 metrics.nack，而非泛化 error。 */
+    @Test
+    void metricsReportShouldNackPermanentRejection() throws Exception {
+        MutableClock clock = new MutableClock(CONNECTED_AT);
+        WebSocketSession socket = socket("agent-metrics-nack");
+        AgentAuthenticationService authenticationService = mock(AgentAuthenticationService.class);
+        AgentHeartbeatService heartbeatService = mock(AgentHeartbeatService.class);
+        AgentConnectionRegistry registry = mock(AgentConnectionRegistry.class);
+        MetricsService metricsService = mock(MetricsService.class);
+        ServerEntity server = new ServerEntity();
+        server.setId(8008L);
+        when(authenticationService.authenticate(8008L, "test-token")).thenReturn(server);
+        when(registry.replace(any())).thenReturn(java.util.Optional.empty());
+        doThrow(new com.susumonitor.server.module.metrics.service.MetricsRejectedException(
+                com.susumonitor.server.module.metrics.service.MetricsRejectionReason.STALE_COLLECTED_AT))
+                .when(metricsService).report(eq(8008L), any(), any());
+        AgentWebSocketHandler handler = new AgentWebSocketHandler(new ObjectMapper().findAndRegisterModules(),
+                authenticationService, heartbeatService, registry, metricsService, clock);
+        handler.afterConnectionEstablished(socket);
+        handler.handleTextMessage(socket, new TextMessage(
+                "{\"type\":\"agent.authenticate\",\"payload\":{\"server_id\":8008,\"token\":\"test-token\"}}"));
+        org.mockito.Mockito.clearInvocations(socket);
+        String messageId = "6b8e58e1-d7a9-4b35-8c86-52a7ab5a337d";
+
+        handler.handleTextMessage(socket, new TextMessage("""
+                {"type":"metrics.report","message_id":"6b8e58e1-d7a9-4b35-8c86-52a7ab5a337d","payload":{"server_id":8008,"collected_at":"2026-07-22T00:00:00Z","cpu_percent":10}}
+                """));
+
+        org.mockito.ArgumentCaptor<TextMessage> captor =
+                org.mockito.ArgumentCaptor.forClass(TextMessage.class);
+        verify(socket).sendMessage(captor.capture());
+        JsonNode response = new ObjectMapper().readTree(captor.getValue().getPayload());
+        assertEquals("metrics.nack", response.get("type").asText());
+        assertEquals(messageId, response.get("message_id").asText());
+        assertEquals(8008L, response.get("payload").get("server_id").asLong());
+        assertEquals(ErrorCode.INVALID_REQUEST_PARAMETER.getCode(), response.get("payload").get("code").asInt());
+        assertEquals("stale_collected_at", response.get("payload").get("reason").asText());
     }
 
     /** 验证已建立连接因总连接配额耗尽时返回 42901 并以策略违规关闭。 */

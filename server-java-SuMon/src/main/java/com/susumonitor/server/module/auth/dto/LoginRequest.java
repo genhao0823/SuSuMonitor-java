@@ -8,7 +8,6 @@ import lombok.ToString;
 /**
  * 接收登录用户名和密码，并限制敏感字段进入字符串表示。
  */
-// 自动生成当前 DTO 的 getter、setter、toString、equals 和 hashCode 方法。
 @Data
 public class LoginRequest {
 

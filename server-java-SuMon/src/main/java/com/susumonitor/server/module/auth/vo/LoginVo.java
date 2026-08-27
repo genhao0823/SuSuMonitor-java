@@ -3,7 +3,11 @@ package com.susumonitor.server.module.auth.vo;
 import lombok.Data;
 import lombok.ToString;
 
-// 自动生成当前 VO 的 getter、setter、toString、equals 和 hashCode 方法。
+/**
+ * 登录结果 VO，包含 Token 类型、有效时长和当前用户信息。
+ *
+ * <p>Token 字段排除在 toString 之外，防止 JWT 泄露到日志。</p>
+ */
 @Data
 public class LoginVo {
 

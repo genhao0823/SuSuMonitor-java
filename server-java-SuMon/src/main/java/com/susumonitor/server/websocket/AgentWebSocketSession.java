@@ -28,22 +28,27 @@ public final class AgentWebSocketSession {
         this.connectedAt = Instant.now(clock);
     }
 
+    /** 返回底层 Spring WebSocket 会话。 */
     public WebSocketSession socketSession() {
         return socketSession;
     }
 
+    /** 返回 WebSocket 会话 ID。 */
     public String sessionId() {
         return sessionId;
     }
 
+    /** 返回连接建立的时刻。 */
     public Instant connectedAt() {
         return connectedAt;
     }
 
+    /** 返回 Agent 认证后关联的服务器 ID。 */
     public Long serverId() {
         return serverId;
     }
 
+    /** 完成认证，设置服务器 ID 和首次心跳时间。 */
     public void authenticate(Long serverId, LocalDateTime heartbeatAt) {
         this.serverId = serverId;
         this.lastHeartbeatAt = heartbeatAt;
@@ -55,18 +60,22 @@ public final class AgentWebSocketSession {
         this.authenticating = true;
     }
 
+    /** 返回会话是否正在认证中。 */
     public boolean authenticating() {
         return authenticating;
     }
 
+    /** 返回会话是否已完成认证。 */
     public boolean authenticated() {
         return authenticated;
     }
 
+    /** 返回最近一次心跳的时间。 */
     public LocalDateTime lastHeartbeatAt() {
         return lastHeartbeatAt;
     }
 
+    /** 更新最近一次心跳时间。 */
     public void heartbeat(LocalDateTime heartbeatAt) {
         this.lastHeartbeatAt = heartbeatAt;
     }

@@ -12,7 +12,8 @@
 
 - 重复边界采用完全 5 元组：`server_id`、`metric`、`operator`、`threshold_value`、`level` 全部相同才判定为冲突；`server_id IS NULL` 的通用规则作为独立范围处理。
 - `AlertRuleServiceImpl` 在创建和更新前执行活跃规则查重，命中时返回 `40900 RESOURCE_CONFLICT`。
-- 新增 Flyway `V13__enforce_unique_active_alert_rules.sql`：已将本地数据库中历史重复活跃规则软删除（保留最小 ID），并通过生成列与 `uk_alert_rules_active_signature` 唯一索引阻止并发重复写入；软删除后允许重建相同规则。
+- 新增 Flyway `V13__enforce_unique_active_alert_rules.sql`：已将本地数据库中历史重复活跃规则软删除（保留最小 ID），并通过**生成列 `active_server_scope_id`**（活跃记录取 `COALESCE(server_id, 0)`、软删记录取 NULL）与 `uk_alert_rules_active_signature` 唯一索引阻止并发重复写入；软删除后允许重建相同规则。注意：唯一索引是针对生成列而非裸 5 元组，软删行因生成列为 NULL 不参与唯一约束，这是"软删后可重建"的实现基础。
+- 2026-08-10 补充：删除语义保持按 ID 软删（设计属性，不做"删除时级联删同元组"）；因 V13 已去重历史重复 + 创建期查重 + 唯一索引三保险，新建数据不会再出现"删一条留一条完全相同"场景。
 - 执行迁移前已备份 `alert_rules` 到 `C:\Backup\susumonitor_alert_rules_before_v13_20260728.sql`，并验证备份非空、可读且包含表结构和数据。
 - 本地 Flyway 已从 v12 成功迁移至 v13；数据库验证确认活跃重复规则组数量为 0，唯一索引存在。
 - 已新增 Service 和真实 MyBatis/H2 回归测试；`mvn -q test` 与 `mvn -q -DskipTests package` 均通过。
@@ -116,7 +117,7 @@ CREATE TABLE `alert_rules` (
 
 1. **重复评估**:两条完全相同的规则会同时匹配同一指标,产生**重复 alert_records**(数据库 V11 之后可能按 `(rule_id, server_id)` UNIQUE 触发 `alert_states` 唯一约束,但 `alert_records` 不会——见 V10 `idx_alert_records_rule_id` 仅单字段索引)
 2. **数据冗余**:列表查询 (`/api/alerts/rules`) 返回所有 `deleted=0` 行,用户看到两条完全相同的规则,无法区分
-3. **修复歧义**:删除规则时,同 `(server_id, metric, operator, threshold_value, level)` 5 元组只能删一条,剩下一条仍然完全相同,问题未解决
+3. ~~**修复歧义**:删除规则时,同 `(server_id, metric, operator, threshold_value, level)` 5 元组只能删一条,剩下一条仍然完全相同,问题未解决~~ —— **2026-08-10 结论**：此为软删除设计属性（按 ID 删除）：V13 已把历史重复软删为仅剩最小 ID 一条，且创建/更新期查重 + 唯一索引使新重复无法产生，故"删一条留一条完全相同"仅对 V13 迁移前的历史脏数据成立，该场景已由 V13 数据清理闭环，不再作为未解决项。
 4. **路径 B 联调阻挡**:opencode 计划阶段 1-4 第 14 项"40900 冲突 toast 验证"无法观察到精确中文文案——只能看到通用"创建成功"
 
 ## 与前端关系
@@ -185,7 +186,7 @@ CREATE TABLE `alert_rules` (
 
 修复完成后:
 
-- [ ] 真实 HTTP 第二次创建完全相同规则返回 40900（待使用 IDEA 完整运行环境复验）
+- [ ] 真实 HTTP 第二次创建完全相同规则返回 40900（2026-08-10 已交付 `api-test/verify-alert-rules.mjs`，R2 项覆盖；待隔离库/联调环境实跑）
 - [ ] 浏览器 toast 显示 "规则冲突:同一指标 / 服务器的同类规则已存在"（待真实 HTTP 复验后确认）
 - [x] 数据库 `alert_rules` 不存在完全 5 元组重复的 `deleted=0` 行；V13 已成功执行，活跃重复规则组数量为 0，`uk_alert_rules_active_signature` 已存在
 - [ ] alert 评估时(阶段 3 路径 C 真实 alert.push 验证)同一指标只产生一条 alert_records（待后续真实告警链路验证）

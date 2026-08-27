@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SuSuMonitor</string>
+
+    <!-- 通知渠道 -->
+    <string name="channel_monitor_name">实时监控</string>
+    <string name="channel_monitor_desc">监控连接状态与常驻服务通知</string>
+    <string name="channel_alert_name">告警通知</string>
+    <string name="channel_alert_desc">服务器指标越界告警</string>
+
+    <!-- 前台服务 -->
+    <string name="notification_monitor_title">SuSuMonitor 正在监控</string>
+    <string name="notification_monitor_text">已连接 %1$d 台服务器，实时接收指标与告警</string>
+
+    <!-- 通用 -->
+    <string name="common_retry">重试</string>
+    <string name="common_loading">加载中…</string>
+    <string name="common_empty">暂无数据</string>
+</resources>

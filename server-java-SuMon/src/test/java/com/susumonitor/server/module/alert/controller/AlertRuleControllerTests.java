@@ -25,20 +25,30 @@ import com.susumonitor.server.module.alert.vo.AlertRuleVo;
 import com.susumonitor.server.module.auth.mapper.AuthBootstrapStateMapper;
 import com.susumonitor.server.module.auth.mapper.UserMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsCleanupMapper;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationCleanupMapper;
+import com.susumonitor.server.module.metrics.outbox.OutboxCleanupMapper;
+import com.susumonitor.server.module.metrics.mapper.IngestionCleanupMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
+import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.consume.ConsumeRecordMapper;
+import com.susumonitor.server.module.alert.consume.ConsumeRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
+import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
 import com.susumonitor.server.module.terminal.mapper.TerminalSessionMapper;
 import com.susumonitor.server.security.JwtTokenService;
 import com.susumonitor.server.security.SecurityConfig;
 import com.susumonitor.server.security.SecurityErrorHandler;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,14 +82,41 @@ class AlertRuleControllerTests {
     private AuthBootstrapStateMapper authBootstrapStateMapper;
     @MockitoBean
     private ServerMapper serverMapper;
+
+    // 替代全局 Mapper 扫描注册的 SSH 测试历史 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private SshTestHistoryMapper sshTestHistoryMapper;
     @MockitoBean
     private MetricsMapper metricsMapper;
     @MockitoBean
     private MetricsCleanupMapper metricsCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的指标幂等接收记录清理 Mapper。
+    @MockitoBean
+    private IngestionCleanupMapper ingestionCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的 Outbox 清理 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private OutboxCleanupMapper outboxCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的通知投递清理 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private AlertNotificationCleanupMapper alertNotificationCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的消费幂等记录清理 Mapper。
+    @MockitoBean
+    private ConsumeRecordCleanupMapper consumeRecordCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的告警记录清理 Mapper。
+    @MockitoBean
+    private AlertRecordCleanupMapper alertRecordCleanupMapper;
+
     @MockitoBean
     private AlertRuleMapper alertRuleMapper;
     @MockitoBean
     private AlertRecordMapper alertRecordMapper;
+    @MockitoBean
+    private AlertNotificationMapper alertNotificationMapper;
     @MockitoBean
     private AlertStateMapper alertStateMapper;
     @MockitoBean
@@ -188,7 +225,7 @@ class AlertRuleControllerTests {
 
     private void authenticateAdmin() {
         when(jwtTokenService.parseToken(ADMIN_TOKEN))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         com.susumonitor.server.module.auth.entity.UserEntity user = new com.susumonitor.server.module.auth.entity.UserEntity();
         user.setId(1L);
         user.setUsername("admin");

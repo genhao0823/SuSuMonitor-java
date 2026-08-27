@@ -21,6 +21,24 @@ public class ServerStatusVo {
     // 将 Java 的 lastHeartbeatAt 属性映射为接口 JSON 字段 last_heartbeat_at。
     @JsonProperty("last_heartbeat_at")
     private OffsetDateTime lastHeartbeatAt;
+    // 将 Java 的 deliveryPendingCount 属性映射为接口 JSON 字段 delivery_pending_count。
+    @JsonProperty("delivery_pending_count")
+    private Long deliveryPendingCount;
+    // 将 Java 的 deliveryPendingBytes 属性映射为接口 JSON 字段 delivery_pending_bytes。
+    @JsonProperty("delivery_pending_bytes")
+    private Long deliveryPendingBytes;
+    // 将 Java 的 deliveryOldestCollectedAt 属性映射为接口 JSON 字段 delivery_oldest_collected_at。
+    @JsonProperty("delivery_oldest_collected_at")
+    private OffsetDateTime deliveryOldestCollectedAt;
+    // 将 Java 的 deliveryDropCount 属性映射为接口 JSON 字段 delivery_drop_count。
+    @JsonProperty("delivery_drop_count")
+    private Long deliveryDropCount;
+    // 将 Java 的 deliveryDeadLetterCount 属性映射为接口 JSON 字段 delivery_dead_letter_count。
+    @JsonProperty("delivery_dead_letter_count")
+    private Long deliveryDeadLetterCount;
+    // 将 Java 的 deliveryDeadLetterBytes 属性映射为接口 JSON 字段 delivery_dead_letter_bytes。
+    @JsonProperty("delivery_dead_letter_bytes")
+    private Long deliveryDeadLetterBytes;
     // 将 Java 的 checkedAt 属性映射为接口 JSON 字段 checked_at。
     @JsonProperty("checked_at")
     private OffsetDateTime checkedAt;

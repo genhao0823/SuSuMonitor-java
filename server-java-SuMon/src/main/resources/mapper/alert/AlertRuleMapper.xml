@@ -8,6 +8,10 @@
         <result column="operator" property="operator"/>
         <result column="threshold_value" property="thresholdValue"/>
         <result column="level" property="level"/>
+        <result column="confirm_count" property="confirmCount"/>
+        <result column="notify_email" property="notifyEmail"/>
+        <result column="notify_dingtalk" property="notifyDingtalk"/>
+        <result column="notify_webhook" property="notifyWebhook"/>
         <result column="enabled" property="enabled"/>
         <result column="deleted" property="deleted"/>
         <result column="deleted_at" property="deletedAt"/>
@@ -15,12 +19,14 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
-    <sql id="RuleColumns">id, server_id, metric, operator, threshold_value, level, enabled,
-        deleted, deleted_at, created_by, created_at, updated_at</sql>
+    <sql id="RuleColumns">id, server_id, metric, operator, threshold_value, level, confirm_count,
+        notify_email, notify_dingtalk, notify_webhook, enabled, deleted, deleted_at, created_by, created_at, updated_at</sql>
     <insert id="insertRule" useGeneratedKeys="true" keyProperty="rule.id">
-        INSERT INTO alert_rules (server_id, metric, operator, threshold_value, level, enabled, created_by)
+        INSERT INTO alert_rules (server_id, metric, operator, threshold_value, level, confirm_count,
+            notify_email, notify_dingtalk, notify_webhook, enabled, created_by)
         VALUES (#{rule.serverId}, #{rule.metric}, #{rule.operator}, #{rule.thresholdValue},
-            #{rule.level}, #{rule.enabled}, #{rule.createdBy})
+            #{rule.level}, #{rule.confirmCount}, #{rule.notifyEmail}, #{rule.notifyDingtalk},
+            #{rule.notifyWebhook}, #{rule.enabled}, #{rule.createdBy})
     </insert>
     <select id="selectActiveRuleById" resultMap="AlertRuleResultMap">
         SELECT <include refid="RuleColumns"/> FROM alert_rules
@@ -38,7 +44,11 @@
     </select>
     <update id="updateRule">
         UPDATE alert_rules
-        SET threshold_value = #{thresholdValue}, level = #{level}, enabled = #{enabled}
+        SET threshold_value = #{thresholdValue}, level = #{level}, enabled = #{enabled},
+            confirm_count = COALESCE(#{confirmCount}, confirm_count),
+            notify_email = #{notifyEmail},
+            notify_dingtalk = #{notifyDingtalk},
+            notify_webhook = #{notifyWebhook}
         WHERE id = #{id} AND deleted = 0
     </update>
     <update id="softDeleteRule">

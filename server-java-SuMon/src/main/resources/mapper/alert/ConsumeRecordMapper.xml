@@ -14,17 +14,32 @@
     </resultMap>
     <sql id="ConsumeRecordColumns">id, consumer, event_id, status, attempts, last_error,
         consumed_at, created_at, updated_at</sql>
-    <insert id="insert" useGeneratedKeys="true" keyProperty="record.id">
+    <insert id="upsertConsumed" useGeneratedKeys="true" keyProperty="record.id">
         INSERT INTO message_consume_records (consumer, event_id, status, attempts, consumed_at)
         VALUES (#{record.consumer}, #{record.eventId}, #{record.status}, #{record.attempts}, #{record.consumedAt})
+        ON DUPLICATE KEY UPDATE
+            status = 'consumed',
+            attempts = 0,
+            last_error = NULL,
+            consumed_at = VALUES(consumed_at)
     </insert>
     <select id="existsConsumed" resultType="boolean">
         SELECT COUNT(1) > 0 FROM message_consume_records
-        WHERE consumer = #{consumer} AND event_id = #{eventId}
+        WHERE consumer = #{consumer} AND event_id = #{eventId} AND status = 'consumed'
     </select>
-    <update id="markFailed">
-        UPDATE message_consume_records
-        SET status = 'failed', attempts = #{attempts}, last_error = #{lastError}
-        WHERE id = #{id}
-    </update>
+    <insert id="upsertFailed">
+        INSERT INTO message_consume_records (consumer, event_id, status, attempts, last_error, consumed_at)
+        VALUES (#{consumer}, #{eventId}, 'failed', #{attempts}, #{lastError}, NULL)
+        ON DUPLICATE KEY UPDATE
+            status = 'failed',
+            attempts = VALUES(attempts),
+            last_error = VALUES(last_error),
+            consumed_at = NULL
+    </insert>
+    <select id="countByConsumerAndStatus" resultType="java.util.HashMap">
+        SELECT consumer AS consumer, COUNT(*) AS count
+        FROM message_consume_records
+        WHERE status = #{status} AND created_at &gt;= #{since}
+        GROUP BY consumer
+    </select>
 </mapper>

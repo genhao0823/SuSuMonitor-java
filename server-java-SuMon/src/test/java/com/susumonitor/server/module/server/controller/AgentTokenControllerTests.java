@@ -21,17 +21,24 @@ import com.susumonitor.server.module.auth.entity.UserEntity;
 import com.susumonitor.server.module.auth.mapper.AuthBootstrapStateMapper;
 import com.susumonitor.server.module.auth.mapper.UserMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsCleanupMapper;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationCleanupMapper;
+import com.susumonitor.server.module.metrics.outbox.OutboxCleanupMapper;
+import com.susumonitor.server.module.metrics.mapper.IngestionCleanupMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
+import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
 import com.susumonitor.server.module.server.service.AgentTokenService;
 import com.susumonitor.server.module.server.vo.AgentTokenVo;
 import com.susumonitor.server.security.JwtTokenService;
 import com.susumonitor.server.security.SecurityConfig;
 import com.susumonitor.server.security.SecurityErrorHandler;
+import com.susumonitor.server.module.alert.mapper.AlertNotificationMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.consume.ConsumeRecordMapper;
+import com.susumonitor.server.module.alert.consume.ConsumeRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
+import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
 import com.susumonitor.server.module.alert.mapper.AlertStateMapper;
 import com.susumonitor.server.module.terminal.mapper.TerminalSessionMapper;
 import java.time.LocalDateTime;
@@ -84,6 +91,10 @@ class AgentTokenControllerTests {
     @MockitoBean
     private ServerMapper serverMapper;
 
+    // 替代全局 Mapper 扫描注册的 SSH 测试历史 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private SshTestHistoryMapper sshTestHistoryMapper;
+
     // 替代全局 Mapper 扫描注册的指标 Mapper。
     @MockitoBean
     private MetricsMapper metricsMapper;
@@ -92,12 +103,35 @@ class AgentTokenControllerTests {
     @MockitoBean
     private MetricsCleanupMapper metricsCleanupMapper;
 
+    // 替代全局 Mapper 扫描注册的指标幂等接收记录清理 Mapper。
+    @MockitoBean
+    private IngestionCleanupMapper ingestionCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的 Outbox 清理 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private OutboxCleanupMapper outboxCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的通知投递清理 Mapper，避免加载真实 MyBatis 会话工厂。
+    @MockitoBean
+    private AlertNotificationCleanupMapper alertNotificationCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的消费幂等记录清理 Mapper。
+    @MockitoBean
+    private ConsumeRecordCleanupMapper consumeRecordCleanupMapper;
+
+    // 替代全局 Mapper 扫描注册的告警记录清理 Mapper。
+    @MockitoBean
+    private AlertRecordCleanupMapper alertRecordCleanupMapper;
+
+
     // 使用模拟告警 Mapper，避免告警模块 Mapper 扫描后创建真实 MyBatis 会话依赖。
     @MockitoBean
     private AlertRuleMapper alertRuleMapper;
 
     @MockitoBean
     private AlertRecordMapper alertRecordMapper;
+    @MockitoBean
+    private AlertNotificationMapper alertNotificationMapper;
 
     @MockitoBean
     private AlertStateMapper alertStateMapper;
@@ -190,13 +224,13 @@ class AgentTokenControllerTests {
 
     private void authenticateAdmin() {
         when(jwtTokenService.parseToken(ADMIN_TOKEN))
-                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "admin-token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "admin-token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(authenticationUser(1L, "admin", "admin"));
     }
 
     private void authenticateUser() {
         when(jwtTokenService.parseToken(USER_TOKEN))
-                .thenReturn(new JwtTokenService.ParsedToken(2L, "approved_user", "user-token-id"));
+                .thenReturn(new JwtTokenService.ParsedToken(2L, "approved_user", "user-token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
         when(userMapper.selectAuthenticationUserById(2L))
                 .thenReturn(authenticationUser(2L, "approved_user", "user"));
     }

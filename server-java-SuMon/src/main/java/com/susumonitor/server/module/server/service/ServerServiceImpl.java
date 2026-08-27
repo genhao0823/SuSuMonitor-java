@@ -280,6 +280,12 @@ public class ServerServiceImpl implements ServerService {
             result.setStatus(server.getStatus());
             result.setAgentStatus(server.getAgentStatus());
             result.setLastHeartbeatAt(toOffsetDateTime(server.getLastHeartbeatAt()));
+            result.setDeliveryPendingCount(server.getDeliveryPendingCount());
+            result.setDeliveryPendingBytes(server.getDeliveryPendingBytes());
+            result.setDeliveryOldestCollectedAt(toOffsetDateTime(server.getDeliveryOldestCollectedAt()));
+            result.setDeliveryDropCount(server.getDeliveryDropCount());
+            result.setDeliveryDeadLetterCount(server.getDeliveryDeadLetterCount());
+            result.setDeliveryDeadLetterBytes(server.getDeliveryDeadLetterBytes());
             result.setCheckedAt(OffsetDateTime.now(APPLICATION_ZONE));
             return result;
         } catch (DataAccessException exception) {

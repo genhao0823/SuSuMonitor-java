@@ -14,19 +14,25 @@ import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.module.server.dto.UpdateSshHostKeyRequest;
 import com.susumonitor.server.module.server.entity.ServerEntity;
+import com.susumonitor.server.module.server.entity.SshTestHistoryEntity;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
+import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
+import com.susumonitor.server.module.server.vo.SshHostKeyObservationVo;
 import com.susumonitor.server.module.server.vo.SshHostKeyVo;
+import com.susumonitor.server.module.server.vo.SshTestHistoryVo;
 import com.susumonitor.server.module.server.vo.SshTestVo;
 import com.susumonitor.server.security.CredentialCipher;
 import com.susumonitor.server.ssh.SshConnectionException;
 import com.susumonitor.server.ssh.SshConnectionTester;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -57,13 +63,18 @@ class ServerSshServiceTests {
     @Mock
     private SshConnectionTester connectionTester;
 
+    // 使用历史 Mapper 替身验证测试结果留痕行为。
+    @Mock
+    private SshTestHistoryMapper sshTestHistoryMapper;
+
     private ServerSshService serverSshService;
 
     /** 在每个测试前创建待测 SSH 业务服务。 */
     // 将当前方法注册为 JUnit 5 的测试初始化方法。
     @BeforeEach
     void setUp() {
-        serverSshService = new ServerSshServiceImpl(serverMapper, credentialCipher, connectionTester);
+        serverSshService = new ServerSshServiceImpl(
+                serverMapper, credentialCipher, connectionTester, sshTestHistoryMapper);
     }
 
     /** 验证未登记公钥时完成握手、CAS 首次确认并回读最终状态。 */
@@ -263,6 +274,125 @@ class ServerSshServiceTests {
                 BusinessException.class, () -> serverSshService.testConnection(SERVER_ID));
 
         assertEquals(expectedError(category), exception.getErrorCode());
+    }
+
+    /** 验证观察模式返回目标主机当前公钥，不涉及凭据与登记。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void observeHostKeyShouldReturnObservedKey() {
+        ServerEntity server = hostKeyServer(ALGORITHM, FIRST_FINGERPRINT);
+        when(serverMapper.selectActiveServerHostKeyById(SERVER_ID)).thenReturn(server);
+        when(connectionTester.observeHostKey(HOST, PORT))
+                .thenReturn(new SshConnectionTester.SshHostKeyObservation(ALGORITHM, FIRST_FINGERPRINT));
+
+        SshHostKeyObservationVo result = serverSshService.observeHostKey(SERVER_ID);
+
+        assertEquals(SERVER_ID, result.getServerId());
+        assertEquals(ALGORITHM, result.getHostKeyAlgorithm());
+        assertEquals(FIRST_FINGERPRINT, result.getHostKeyFingerprint());
+        assertEquals(FIRST_FINGERPRINT, result.getRegisteredFingerprint());
+        assertNotNull(result.getObservedAt());
+        verify(connectionTester, never()).testPassword(anyString(), eq(PORT), anyString(), anyString(), anyString(), any());
+    }
+
+    /** 验证未确认过主机密钥的服务器观察时 registered_fingerprint 为 null。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void observeHostKeyOnUnconfirmedServerShouldReportNullRegistered() {
+        ServerEntity server = hostKeyServer(null, null);
+        when(serverMapper.selectActiveServerHostKeyById(SERVER_ID)).thenReturn(server);
+        when(connectionTester.observeHostKey(HOST, PORT))
+                .thenReturn(new SshConnectionTester.SshHostKeyObservation(ALGORITHM, FIRST_FINGERPRINT));
+
+        SshHostKeyObservationVo result = serverSshService.observeHostKey(SERVER_ID);
+
+        assertEquals(null, result.getRegisteredFingerprint());
+    }
+
+    /** 验证观察目标不存在的服务器返回 40400。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void observeHostKeyOnMissingServerShouldReturnNotFound() {
+        when(serverMapper.selectActiveServerHostKeyById(SERVER_ID)).thenReturn(null);
+
+        assertError(ErrorCode.RESOURCE_NOT_FOUND, () -> serverSshService.observeHostKey(SERVER_ID));
+
+        verify(connectionTester, never()).observeHostKey(anyString(), eq(PORT));
+    }
+
+    /** 验证成功连接测试会留痕一条成功历史记录。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void successfulTestShouldRecordHistory() {
+        ServerEntity server = passwordServer(true);
+        when(serverMapper.selectActiveServerSshById(SERVER_ID)).thenReturn(server);
+        when(connectionTester.testPassword(
+                eq(HOST), eq(PORT), eq("operator"), eq(ALGORITHM), eq(FIRST_FINGERPRINT), any()))
+                .thenReturn(new SshConnectionTester.SshConnectionResult(ALGORITHM, FIRST_FINGERPRINT, 25L));
+
+        SshTestVo result = serverSshService.testConnection(SERVER_ID);
+
+        assertEquals(true, result.isConnected());
+        ArgumentCaptor<SshTestHistoryEntity> captor = ArgumentCaptor.forClass(SshTestHistoryEntity.class);
+        verify(sshTestHistoryMapper).insert(captor.capture());
+        SshTestHistoryEntity history = captor.getValue();
+        assertEquals(SERVER_ID, history.getServerId());
+        assertEquals(true, history.getConnected());
+        assertEquals(null, history.getErrorCode());
+        assertEquals(ALGORITHM, history.getHostKeyAlgorithm());
+        assertEquals(FIRST_FINGERPRINT, history.getHostKeyFingerprint());
+        assertEquals("password", history.getAuthType());
+        assertEquals(25L, history.getDurationMs());
+        assertNotNull(history.getTestedAt());
+    }
+
+    /** 验证连接失败会留痕失败历史（含错误码）后继续抛出映射后的业务异常。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void failedTestShouldRecordFailureHistoryWithErrorCode() {
+        ServerEntity server = passwordServer(true);
+        when(serverMapper.selectActiveServerSshById(SERVER_ID)).thenReturn(server);
+        when(connectionTester.testPassword(
+                eq(HOST), eq(PORT), eq("operator"), eq(ALGORITHM), eq(FIRST_FINGERPRINT), any()))
+                .thenThrow(new SshConnectionException(SshConnectionException.Category.TIMEOUT));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> serverSshService.testConnection(SERVER_ID));
+
+        assertEquals(ErrorCode.SSH_CONNECTION_TIMEOUT, exception.getErrorCode());
+        ArgumentCaptor<SshTestHistoryEntity> captor = ArgumentCaptor.forClass(SshTestHistoryEntity.class);
+        verify(sshTestHistoryMapper).insert(captor.capture());
+        SshTestHistoryEntity history = captor.getValue();
+        assertEquals(false, history.getConnected());
+        assertEquals(50400, history.getErrorCode());
+        assertEquals(null, history.getHostKeyAlgorithm());
+        assertEquals(0L, history.getDurationMs());
+    }
+
+    /** 验证历史查询将实体转换为对外 VO，保持时间与成功标志。 */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void listTestHistoryShouldConvertEntities() {
+        SshTestHistoryEntity entity = new SshTestHistoryEntity();
+        entity.setId(1L);
+        entity.setServerId(SERVER_ID);
+        entity.setConnected(true);
+        entity.setErrorCode(null);
+        entity.setHostKeyAlgorithm(ALGORITHM);
+        entity.setHostKeyFingerprint(FIRST_FINGERPRINT);
+        entity.setAuthType("password");
+        entity.setDurationMs(25L);
+        entity.setTestedAt(LocalDateTime.now());
+        when(sshTestHistoryMapper.selectRecentByServerId(SERVER_ID, 10)).thenReturn(List.of(entity));
+
+        List<SshTestHistoryVo> result = serverSshService.listTestHistory(SERVER_ID);
+
+        assertEquals(1, result.size());
+        assertEquals(SERVER_ID, result.getFirst().getServerId());
+        assertEquals(true, result.getFirst().isConnected());
+        assertEquals(25L, result.getFirst().getDurationMs());
+        assertEquals(ALGORITHM, result.getFirst().getHostKeyAlgorithm());
+        assertNotNull(result.getFirst().getTestedAt());
     }
 
     /** 创建主机公钥确认请求。 */

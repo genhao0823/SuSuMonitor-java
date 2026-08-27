@@ -3,7 +3,7 @@ package com.susumonitor.server.common;
 import org.springframework.http.HttpStatus;
 
 /**
- * Project-wide error codes defined by the API contract.
+ * 全项目错误码枚举，由 API 契约统一定义。
  */
 public enum ErrorCode {
 
@@ -28,11 +28,13 @@ public enum ErrorCode {
     AGENT_MESSAGE_RATE_LIMIT_REACHED(42902, "agent message rate limit reached", HttpStatus.TOO_MANY_REQUESTS),
     TERMINAL_SESSION_LIMIT_REACHED(42903, "terminal session limit reached", HttpStatus.TOO_MANY_REQUESTS),
     TERMINAL_MESSAGE_LIMIT_REACHED(42904, "terminal message limit reached", HttpStatus.TOO_MANY_REQUESTS),
+    LOGIN_RATE_LIMIT_REACHED(42905, "login rate limit reached", HttpStatus.TOO_MANY_REQUESTS),
     INTERNAL_SERVER_ERROR(50000, "internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
     DATABASE_ERROR(50001, "database error", HttpStatus.INTERNAL_SERVER_ERROR),
     SSH_CONNECTION_FAILED(50002, "ssh connection failed", HttpStatus.BAD_GATEWAY),
     SSH_AUTHENTICATION_FAILED(50003, "ssh authentication failed", HttpStatus.BAD_GATEWAY),
     RABBITMQ_UNAVAILABLE(50301, "rabbitmq unavailable", HttpStatus.SERVICE_UNAVAILABLE),
+    REDIS_UNAVAILABLE(50302, "redis unavailable", HttpStatus.SERVICE_UNAVAILABLE),
     SSH_CONNECTION_TIMEOUT(50400, "ssh connection timeout", HttpStatus.GATEWAY_TIMEOUT);
 
     private final int code;
@@ -41,20 +43,42 @@ public enum ErrorCode {
 
     private final HttpStatus httpStatus;
 
+    /**
+     * 构造错误码枚举项。
+     *
+     * @param code 数字错误码
+     * @param message 默认错误消息
+     * @param httpStatus 对应的 HTTP 状态码
+     */
     ErrorCode(int code, String message, HttpStatus httpStatus) {
         this.code = code;
         this.message = message;
         this.httpStatus = httpStatus;
     }
 
+    /**
+     * 获取数字错误码。
+     *
+     * @return 数字错误码
+     */
     public int getCode() {
         return code;
     }
 
+    /**
+     * 获取默认错误消息。
+     *
+     * @return 默认错误消息
+     */
     public String getMessage() {
         return message;
     }
 
+    /**
+     * 获取对应的 HTTP 状态码。
+     *
+     * @return HTTP 状态码
+     */
     public HttpStatus getHttpStatus() {
         return httpStatus;
     }

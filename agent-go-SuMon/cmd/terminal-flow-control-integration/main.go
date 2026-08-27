@@ -104,6 +104,10 @@ func main() {
 		err = runner.runJavaOutputRate(ctx, agentToken)
 	case "monitor-backpressure":
 		err = runner.runMonitorBackpressure(ctx, agentToken)
+	case "agent-disconnect-closed":
+		err = runner.runAgentDisconnectClosed(ctx, agentToken)
+	case "agent-heartbeat-timeout-closed":
+		err = runner.runAgentHeartbeatTimeoutClosed(ctx, agentToken)
 	default:
 		err = fmt.Errorf("unsupported SUSUMONITOR_FLOW_SCENARIO")
 	}
@@ -190,7 +194,7 @@ func (r *flowRunner) startAgent(ctx context.Context, token, rate, burst string) 
 		"SUSUMONITOR_TERMINAL_OUTPUT_RATE_BYTES_PER_SECOND="+rate,
 		"SUSUMONITOR_TERMINAL_OUTPUT_BURST_BYTES="+burst,
 		"SUSUMONITOR_COLLECT_INTERVAL_SECONDS=60",
-		"SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS=5",
+		"SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS="+getenv("SUSUMONITOR_FLOW_HEARTBEAT_INTERVAL_SECONDS", "5"),
 		"SUSUMONITOR_RECONNECT_INITIAL_SECONDS=1",
 		"SUSUMONITOR_RECONNECT_MAX_SECONDS=2",
 	)
@@ -264,6 +268,40 @@ func (r *flowRunner) verifyAgentDisconnect(ctx context.Context) error {
 		return err
 	}
 	return expectErrorCode(ctx, connection, 40903)
+}
+
+// runAgentDisconnectClosed proves the server-generated terminal.closed frame with reason
+// agent_disconnected reaches the originating Monitor connection after an Agent socket loss
+// (20260813 M1 relay enhancement, end-to-end acceptance).
+func (r *flowRunner) runAgentDisconnectClosed(ctx context.Context, agentToken string) error {
+	if err := r.startAgent(ctx, agentToken, "1048576", "1048576"); err != nil {
+		return err
+	}
+	connection, sessionID, err := r.openTerminal(ctx)
+	if err != nil {
+		return err
+	}
+	defer connection.Close(websocket.StatusNormalClosure, "flow_control_complete")
+	r.stopAgent()
+	return expectAgentDisconnectedClose(ctx, connection, r.serverID, sessionID)
+}
+
+// runAgentHeartbeatTimeoutClosed proves the same server-generated terminal.closed frame reaches
+// the originating Monitor connection when the Java heartbeat scan expires the Agent session while
+// the Agent stays connected without sending heartbeats (20260815 relay closeout acceptance).
+// The Java validation instance must run with a short AGENT_HEARTBEAT_TIMEOUT_SECONDS and the Agent
+// with a heartbeat interval beyond the scenario window so only the scan can close the session.
+func (r *flowRunner) runAgentHeartbeatTimeoutClosed(ctx context.Context, agentToken string) error {
+	if err := r.startAgent(ctx, agentToken, "1048576", "1048576"); err != nil {
+		return err
+	}
+	connection, sessionID, err := r.openTerminal(ctx)
+	if err != nil {
+		return err
+	}
+	defer connection.Close(websocket.StatusNormalClosure, "flow_control_complete")
+	// The scan runs every 30 seconds, so expiry can be observed up to timeout + one scan window.
+	return expectAgentDisconnectedCloseWithin(ctx, connection, r.serverID, sessionID, 90*time.Second)
 }
 
 // verifyMonitorDisconnect closes the owner socket, then confirms the Agent remains reachable.
@@ -394,11 +432,65 @@ func expectCloseReason(ctx context.Context, connection *websocket.Conn, expected
 	return nil
 }
 
+// expectAgentDisconnectedClose asserts the full server-generated terminal.closed envelope for an
+// Agent socket loss: UUID message_id, UTC ISO-8601 timestamp, and the fixed agent_disconnected
+// payload matching the exact session that was opened.
+func expectAgentDisconnectedClose(ctx context.Context, connection *websocket.Conn, serverID int64, sessionID string) error {
+	return expectAgentDisconnectedCloseWithin(ctx, connection, serverID, sessionID, 20*time.Second)
+}
+
+// expectAgentDisconnectedCloseWithin is expectAgentDisconnectedClose with a caller-chosen frame wait.
+func expectAgentDisconnectedCloseWithin(ctx context.Context, connection *websocket.Conn, serverID int64, sessionID string, timeout time.Duration) error {
+	message, err := readTypeWithin(ctx, connection, "terminal.closed", timeout)
+	if err != nil {
+		return err
+	}
+	if !isUUIDv4(message.MessageID) {
+		return errors.New("terminal.closed message_id is not a UUID v4")
+	}
+	if _, err := time.Parse(time.RFC3339, message.Timestamp); err != nil || !strings.HasSuffix(message.Timestamp, "Z") {
+		return errors.New("terminal.closed timestamp is not UTC ISO-8601")
+	}
+	var payload struct {
+		ServerID  int64  `json:"server_id"`
+		SessionID string `json:"session_id"`
+		Reason    string `json:"reason"`
+	}
+	if err := json.Unmarshal(message.Payload, &payload); err != nil {
+		return errors.New("terminal.closed payload was invalid")
+	}
+	if payload.ServerID != serverID || payload.SessionID != sessionID || payload.Reason != "agent_disconnected" {
+		return errors.New("terminal.closed payload does not match the agent_disconnected contract")
+	}
+	return nil
+}
+
+// isUUIDv4 reports whether the value is a canonical lower-case UUID v4 string.
+func isUUIDv4(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' || value[14] != '4' {
+		return false
+	}
+	for index := 0; index < len(value); index++ {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			continue
+		}
+		if !((value[index] >= '0' && value[index] <= '9') || (value[index] >= 'a' && value[index] <= 'f')) {
+			return false
+		}
+	}
+	return true
+}
+
 // readType ignores terminal data and does not decode or print it.
 // If an error frame arrives before the expected type, its protocol code is surfaced
 // so a server-side rejection is not masked as a read timeout.
 func readType(parent context.Context, connection *websocket.Conn, expectedType string) (wsclient.AgentMessage, error) {
-	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
+	return readTypeWithin(parent, connection, expectedType, 20*time.Second)
+}
+
+// readTypeWithin is readType with a caller-chosen frame wait for slow server-side paths.
+func readTypeWithin(parent context.Context, connection *websocket.Conn, expectedType string, timeout time.Duration) (wsclient.AgentMessage, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	for {
 		var message wsclient.AgentMessage

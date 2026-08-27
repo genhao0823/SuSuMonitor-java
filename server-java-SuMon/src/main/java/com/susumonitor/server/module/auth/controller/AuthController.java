@@ -1,15 +1,26 @@
 package com.susumonitor.server.module.auth.controller;
 
 import com.susumonitor.server.common.ApiResponse;
+import com.susumonitor.server.common.ClientIpResolver;
 import com.susumonitor.server.module.auth.dto.LoginRequest;
 import com.susumonitor.server.module.auth.dto.RegisterRequest;
+import com.susumonitor.server.module.auth.limit.LoginRateLimiter;
 import com.susumonitor.server.module.auth.service.UserService;
 import com.susumonitor.server.module.auth.vo.CurrentUserVo;
 import com.susumonitor.server.module.auth.vo.LoginVo;
 import com.susumonitor.server.security.AuthenticatedUser;
+import com.susumonitor.server.security.JwtAuthenticationFilter;
+import com.susumonitor.server.security.JwtTokenService;
+import com.susumonitor.server.security.RedisTokenBlacklist;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,22 +29,36 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-// 将当前类注册为 REST Controller，并将返回值写入 HTTP 响应体。
+/**
+ * 认证控制器，提供用户注册、登录、获取当前用户信息和登出接口。
+ *
+ * <p>所有认证接口统一以 /api/auth 为路径前缀，通过 UserService 完成认证业务。</p>
+ */
+@Slf4j
 @RestController
-// 为认证接口统一增加 /api/auth 路径前缀。
 @RequestMapping("/api/auth")
-// 自动生成包含 final 字段的构造方法，用于构造方法依赖注入。
 @RequiredArgsConstructor
 public class AuthController {
 
     private final UserService userService;
 
-    // 接收注册请求并委托 UserService 完成用户创建业务。
+    private final ObjectProvider<RedisTokenBlacklist> tokenBlacklist;
+
+    private final ObjectProvider<LoginRateLimiter> loginRateLimiter;
+
+    private final ClientIpResolver clientIpResolver;
+
+    private final Clock clock;
+
+    /**
+     * 接收注册请求并委托 UserService 完成用户创建业务。
+     *
+     * @param request 注册请求（触发 Bean Validation 校验）
+     * @return 当前用户公开信息
+     */
     @PostMapping("/register")
     public ApiResponse<CurrentUserVo> register(
-            // 触发 RegisterRequest 的 Bean Validation 校验。
             @Valid
-            // 将 HTTP JSON 请求体反序列化为 RegisterRequest。
             @RequestBody RegisterRequest request) {
         return ApiResponse.success(userService.register(request));
     }
@@ -41,18 +66,24 @@ public class AuthController {
     /**
      * 校验用户凭据并为已审核用户签发 JWT。
      *
-     * @param request 登录请求
+     * <p>登录前先做防爆破限流（按客户端 IP 固定窗口计数，超限 429）。
+     * 限流实现由 Redis 启用状态决定：Redis 启用时跨实例共享计数，否则内存兜底。</p>
+     *
+     * @param request  登录请求
+     * @param httpRequest HTTP 请求（解析客户端 IP）
      * @param response HTTP 响应，用于禁止缓存敏感 Token
      * @return 登录结果
      */
-    // 将 POST /api/auth/login 映射到当前方法。
     @PostMapping("/login")
     public ApiResponse<LoginVo> login(
-            // 触发 LoginRequest 的 Bean Validation 校验。
             @Valid
-            // 将 HTTP JSON 请求体反序列化为 LoginRequest。
             @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
+        LoginRateLimiter limiter = loginRateLimiter.getIfAvailable();
+        if (limiter != null) {
+            limiter.checkAttempt(clientIpResolver.resolve(httpRequest));
+        }
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader(HttpHeaders.PRAGMA, "no-cache");
         return ApiResponse.success(userService.login(request));
@@ -64,22 +95,35 @@ public class AuthController {
      * @param authenticatedUser 当前认证用户
      * @return 当前用户信息
      */
-    // 将 GET /api/auth/me 映射到当前方法。
     @GetMapping("/me")
     public ApiResponse<CurrentUserVo> me(
-            // 从 Spring SecurityContext 注入安全用户 Principal。
             @AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
         return ApiResponse.success(authenticatedUser.toCurrentUserVo());
     }
 
     /**
-     * 确认无状态退出，客户端收到响应后负责删除本地 JWT。
+     * 登出：Redis 启用时将当前 token 的 jti 写入黑名单（TTL=剩余有效期），
+     * 此后任何实例携带该 token 请求均 401（真实失效）；Redis 未启用时保持
+     * 无状态空操作（客户端删除本地 JWT）。
      *
+     * @param request HTTP 请求（读取过滤器放置的 ParsedToken）
      * @return data 为 null 的统一成功响应
      */
-    // 将 POST /api/auth/logout 映射到当前方法。
     @PostMapping("/logout")
-    public ApiResponse<Void> logout() {
+    public ApiResponse<Void> logout(HttpServletRequest request) {
+        RedisTokenBlacklist blacklist = tokenBlacklist.getIfAvailable();
+        if (blacklist != null) {
+            JwtTokenService.ParsedToken parsedToken = (JwtTokenService.ParsedToken)
+                    request.getAttribute(JwtAuthenticationFilter.JWT_PARSED_TOKEN_ATTRIBUTE);
+            if (parsedToken != null) {
+                Duration ttl = Duration.between(Instant.now(clock), parsedToken.expiresAt());
+                if (!ttl.isNegative() && !ttl.isZero()) {
+                    blacklist.revoke(parsedToken.tokenId(), ttl);
+                }
+            } else {
+                log.warn("logout skipped: parsed token missing from request attribute");
+            }
+        }
         return ApiResponse.success(null);
     }
 }

@@ -69,6 +69,7 @@ public class TerminalMessageRateLimiter {
         private double tokens;
         private Instant refreshedAt;
 
+        /** 创建指定分钟速率和容量的令牌桶。 */
         private TokenBucket(int ratePerMinute, int capacity, Instant now) {
             this.ratePerMinute = ratePerMinute;
             this.capacity = capacity;
@@ -76,6 +77,7 @@ public class TerminalMessageRateLimiter {
             this.refreshedAt = now;
         }
 
+        /** 尝试消耗一个令牌，令牌不足时返回 false。 */
         private synchronized boolean tryConsume(Instant now) {
             long elapsedMillis = Duration.between(refreshedAt, now).toMillis();
             if (elapsedMillis > 0) {

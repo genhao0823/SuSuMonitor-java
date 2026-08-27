@@ -211,7 +211,13 @@
             id,
             status,
             agent_status,
-            last_heartbeat_at
+            last_heartbeat_at,
+            delivery_pending_count,
+            delivery_pending_bytes,
+            delivery_oldest_collected_at,
+            delivery_drop_count,
+            delivery_dead_letter_count,
+            delivery_dead_letter_bytes
         FROM servers
         WHERE id = #{serverId}
           AND deleted = 0
@@ -314,6 +320,19 @@
           AND agent_token_revoked_at IS NULL
     </update>
 
+    <!-- 仅在离线状态转为在线时更新，用受影响行数决定是否发布状态事件。 -->
+    <update id="markAgentOnlineAndHeartbeat">
+        UPDATE servers
+        SET agent_status = 'online',
+            status = 'online',
+            last_heartbeat_at = #{heartbeatAt}
+        WHERE id = #{serverId}
+          AND deleted = 0
+          AND agent_token_hash IS NOT NULL
+          AND agent_token_revoked_at IS NULL
+          AND (agent_status &lt;&gt; 'online' OR status &lt;&gt; 'online')
+    </update>
+
     <!-- 心跳/鉴权成功时把 status 同步置为 online,使前端"状态"列与 Agent 在线状态一致。 -->
     <update id="updateAgentHeartbeat">
         UPDATE servers
@@ -324,6 +343,19 @@
           AND deleted = 0
           AND agent_token_hash IS NOT NULL
           AND agent_token_revoked_at IS NULL
+    </update>
+
+    <!-- 心跳携带的投递遥测统计；null 字段保持原值，不参与在线状态转换。 -->
+    <update id="updateDeliveryStats">
+        UPDATE servers
+        SET delivery_pending_count = #{pendingCount},
+            delivery_pending_bytes = #{pendingBytes},
+            delivery_oldest_collected_at = #{oldestCollectedAt},
+            delivery_drop_count = #{dropCount},
+            delivery_dead_letter_count = #{deadLetterCount},
+            delivery_dead_letter_bytes = #{deadLetterBytes}
+        WHERE id = #{serverId}
+          AND deleted = 0
     </update>
 
     <!-- 心跳超时或主动离线时把 status 同步置为 offline。 -->

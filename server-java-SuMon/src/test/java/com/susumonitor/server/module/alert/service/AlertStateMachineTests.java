@@ -86,7 +86,9 @@ class AlertStateMachineTests {
 
         AlertTransition transition = stateMachine.evaluate(rule, metrics, state);
 
-        assertInstanceOf(AlertTransition.NoAction.class, transition);
+        // 实际语义：active=false 是逃逸窗口计数状态行，不再越界 → 计数重置删除该行，清理后无残留活动状态。
+        // 恢复后的正式状态行在 handleResolve 中已被删除，因此该场景返回 CountingReset。
+        assertInstanceOf(AlertTransition.CountingReset.class, transition);
     }
 
     /** 操作符 > 不含等于，等于阈值应返回 NoAction。 */
@@ -210,6 +212,7 @@ class AlertStateMachineTests {
         rule.setOperator(operator);
         rule.setThresholdValue(threshold);
         rule.setLevel("warning");
+        rule.setConfirmCount(1);
         rule.setEnabled(true);
         rule.setDeleted(false);
         return rule;
@@ -252,5 +255,66 @@ class AlertStateMachineTests {
 
     private BigDecimal bd(String value) {
         return new BigDecimal(value);
+    }
+
+    // ---- 逃逸窗口（confirm_count > 1）测试 ----
+
+    /** 首次越界且 confirm_count>1 应返回 CountingStart 而非 Trigger。 */
+    @Test
+    void firstBreachWithConfirmWindowShouldReturnCountingStart() {
+        AlertRuleEntity rule = rule("cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+
+        AlertTransition transition = stateMachine.evaluate(rule, metrics(bd("90"), null, null, null, null), null);
+
+        assertInstanceOf(AlertTransition.CountingStart.class, transition);
+    }
+
+    /** 计数状态行续越界但未达 confirm_count 应返回 CountingProgress。 */
+    @Test
+    void countingStateProgressShouldReturnCountingProgress() {
+        AlertRuleEntity rule = rule("cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity countingState = new AlertStateEntity();
+        countingState.setActive(false);
+        countingState.setBreachCount(1);
+        countingState.setVersion(0);
+
+        AlertTransition transition = stateMachine.evaluate(rule, metrics(bd("90"), null, null, null, null),
+                countingState);
+
+        assertInstanceOf(AlertTransition.CountingProgress.class, transition);
+    }
+
+    /** 计数值已达 confirm_count-1，本次越界达到阈值 → Trigger。 */
+    @Test
+    void countingReachingThresholdShouldReturnTrigger() {
+        AlertRuleEntity rule = rule("cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity countingState = new AlertStateEntity();
+        countingState.setActive(false);
+        countingState.setBreachCount(2); // 已累计 2 次，本次为第 3 次达到 confirm_count。
+        countingState.setVersion(0);
+
+        AlertTransition transition = stateMachine.evaluate(rule, metrics(bd("90"), null, null, null, null),
+                countingState);
+
+        assertInstanceOf(AlertTransition.Trigger.class, transition);
+    }
+
+    /** 计数状态行恢复（不再越界）应返回 CountingReset 清除计数。 */
+    @Test
+    void countingStateRecoveryShouldReturnCountingReset() {
+        AlertRuleEntity rule = rule("cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        AlertStateEntity countingState = new AlertStateEntity();
+        countingState.setActive(false);
+        countingState.setBreachCount(2);
+        countingState.setVersion(0);
+
+        AlertTransition transition = stateMachine.evaluate(rule, metrics(bd("50"), null, null, null, null),
+                countingState);
+
+        assertInstanceOf(AlertTransition.CountingReset.class, transition);
     }
 }

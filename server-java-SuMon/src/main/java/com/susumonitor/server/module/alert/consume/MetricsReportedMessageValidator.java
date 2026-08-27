@@ -46,6 +46,7 @@ public class MetricsReportedMessageValidator {
         }
     }
 
+    /** 校验字符串是否为合法 UUID。 */
     private boolean isUuid(String value) {
         if (value == null || value.isBlank()) {
             return false;
@@ -58,6 +59,7 @@ public class MetricsReportedMessageValidator {
         }
     }
 
+    /** 校验字符串是否为 UTC 偏移的日期时间格式。 */
     private boolean isUtcOffsetDateTime(String value) {
         if (value == null || value.isBlank()) {
             return false;
@@ -69,18 +71,21 @@ public class MetricsReportedMessageValidator {
         }
     }
 
+    /** 校验百分比值在 0-100 范围内。 */
     private void validatePercent(BigDecimal value) {
         if (value == null || value.signum() < 0 || value.compareTo(ONE_HUNDRED) > 0) {
             throw new IllegalArgumentException("invalid metrics percentage");
         }
     }
 
+    /** 校验 Long 值非空且非负。 */
     private void validateRequiredNonNegative(Long value) {
         if (value == null || value < 0) {
             throw new IllegalArgumentException("invalid metrics quantity");
         }
     }
 
+    /** 判断 BigDecimal 是否为负数。 */
     private boolean isNegative(BigDecimal value) {
         return value != null && value.signum() < 0;
     }

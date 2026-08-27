@@ -50,6 +50,15 @@ public class AlertRecordEntity {
     // 告警触发时间。
     @TableField("triggered_at")
     private LocalDateTime triggeredAt;
+    // 告警恢复时间；未恢复（status != resolved）时为 null。
+    @TableField("resolved_at")
+    private LocalDateTime resolvedAt;
+    // 外部通知发送完成时间；未发送过通知时为 null。
+    @TableField("notified_at")
+    private LocalDateTime notifiedAt;
+    // 已发出通知的渠道，逗号分隔（email/dingtalk/webhook）；未发送过通知时为 null。
+    @TableField("notify_channels")
+    private String notifyChannels;
     @TableField("created_at")
     private LocalDateTime createdAt;
     @TableField("updated_at")

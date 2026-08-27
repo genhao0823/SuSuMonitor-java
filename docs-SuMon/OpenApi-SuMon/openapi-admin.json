@@ -23,36 +23,11 @@
     }
   ],
   "paths": {
-    "/api/admin/users/pending": {
-      "get": {
-        "tags": ["admin"],
-        "summary": "List pending users",
-        "description": "Returns all users whose reviewStatus is 'pending'. Admin only.",
-        "operationId": "listPendingUsers",
-        "parameters": [
-          {"$ref": "#/components/parameters/XCorrelationId"}
-        ],
-        "responses": {
-          "200": {
-            "description": "Pending user list returned",
-            "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
-            },
-            "content": {
-              "application/json": {
-                "schema": {"$ref": "#/components/schemas/PendingUserListResponse"}
-              }
-            }
-          },
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"}
-        }
-      }
-    },
     "/api/admin/users/{id}/approve": {
       "put": {
-        "tags": ["admin"],
+        "tags": [
+          "admin"
+        ],
         "summary": "Approve a pending user",
         "description": "Transitions the target user from 'pending' to 'approved'. Returns the updated user snapshot. Admin only.",
         "operationId": "approveUser",
@@ -62,34 +37,58 @@
             "in": "path",
             "required": true,
             "description": "Target user ID, must be positive.",
-            "schema": {"type": "integer", "format": "int64", "minimum": 1}
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
           },
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "User approved",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/CurrentUserResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/ResourceConflict"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ResourceConflict"
+          }
         }
       }
     },
     "/api/admin/users/{id}/reject": {
       "put": {
-        "tags": ["admin"],
+        "tags": [
+          "admin"
+        ],
         "summary": "Reject a pending user",
         "description": "Transitions the target user from 'pending' to 'rejected'. Returns the updated user snapshot. Admin only.",
         "operationId": "rejectUser",
@@ -99,35 +98,246 @@
             "in": "path",
             "required": true,
             "description": "Target user ID, must be positive.",
-            "schema": {"type": "integer", "format": "int64", "minimum": 1}
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
           },
-          {"$ref": "#/components/parameters/XCorrelationId"}
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "User rejected",
             "headers": {
-              "X-Request-ID": {"$ref": "#/components/headers/XRequestId"},
-              "X-Correlation-ID": {"$ref": "#/components/headers/XCorrelationId"}
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
             },
             "content": {
               "application/json": {
-                "schema": {"$ref": "#/components/schemas/CurrentUserResponse"}
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponse"
+                }
               }
             }
           },
-          "400": {"$ref": "#/components/responses/InvalidRequestParameter"},
-          "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/ResourceConflict"}
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ResourceConflict"
+          }
+        }
+      }
+    },
+    "/api/admin/users/batch-approve": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Batch approve pending users",
+        "description": "批量approve待审核用户，逐 id 原子审核，single failure 不影响其余项。Admin only.",
+        "operationId": "batchApproveUsers",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch approve result returned",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchReviewResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/admin/users/batch-reject": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Batch reject pending users",
+        "description": "批量reject待审核用户，逐 id 原子审核，single failure 不影响其余项。Admin only.",
+        "operationId": "batchRejectUsers",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch reject result returned",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchReviewResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List users (paginated, status filter, keyword search)",
+        "description": "管理员用户列表：按审核状态筛选 + 用户名搜索 + 分页。Admin only.",
+        "operationId": "listUsers",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            },
+            "description": "审核状态筛选（可选，缺省不过滤）"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "用户名模糊关键字（可选）"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "页码（从 1 起）"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "每页大小（1~100）"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending user list returned",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingUserListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     }
   },
   "components": {
     "securitySchemes": {
-      "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
     },
     "parameters": {
       "XCorrelationId": {
@@ -135,17 +345,23 @@
         "in": "header",
         "required": false,
         "description": "Optional client request trace ID. The server generates a UUID when omitted.",
-        "schema": {"type": "string"}
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "headers": {
       "XRequestId": {
         "description": "Server-generated UUID request trace ID.",
-        "schema": {"type": "string"}
+        "schema": {
+          "type": "string"
+        }
       },
       "XCorrelationId": {
         "description": "Server-generated UUID correlation ID.",
-        "schema": {"type": "string"}
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "responses": {
@@ -153,8 +369,14 @@
         "description": "Missing, invalid, or expired JWT (40100)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40100, "message": "unauthorized", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40100,
+              "message": "unauthorized",
+              "data": null
+            }
           }
         }
       },
@@ -162,8 +384,14 @@
         "description": "Authenticated but not an administrator (40300)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40300, "message": "forbidden", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40300,
+              "message": "forbidden",
+              "data": null
+            }
           }
         }
       },
@@ -171,8 +399,14 @@
         "description": "Resource not found (40400)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40400, "message": "resource not found", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40400,
+              "message": "resource not found",
+              "data": null
+            }
           }
         }
       },
@@ -180,8 +414,14 @@
         "description": "Resource state conflict (40900)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40900, "message": "resource conflict", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40900,
+              "message": "resource conflict",
+              "data": null
+            }
           }
         }
       },
@@ -189,64 +429,218 @@
         "description": "Invalid request parameter (40002)",
         "content": {
           "application/json": {
-            "schema": {"$ref": "#/components/schemas/ErrorResponse"},
-            "example": {"code": 40002, "message": "invalid request parameter", "data": null}
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40002,
+              "message": "invalid request parameter",
+              "data": null
+            }
           }
         }
       }
     },
     "schemas": {
-      "PendingUser": {
-        "type": "object",
-        "required": ["id", "username", "role", "reviewStatus", "createdAt"],
-        "properties": {
-          "id": {"type": "integer", "format": "int64"},
-          "username": {"type": "string"},
-          "role": {"type": "string", "enum": ["admin", "user"]},
-          "reviewStatus": {"type": "string", "enum": ["pending", "approved", "rejected"]},
-          "createdAt": {"type": "string", "format": "date-time"}
-        }
-      },
       "PendingUserListResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
-          "code": {"type": "integer", "example": 0},
-          "message": {"type": "string", "example": "success"},
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
           "data": {
-            "type": "array",
-            "items": {"$ref": "#/components/schemas/PendingUser"}
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AdminUser"
+                }
+              },
+              "total": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "page": {
+                "type": "integer"
+              },
+              "page_size": {
+                "type": "integer"
+              }
+            }
           }
         }
       },
       "CurrentUser": {
         "type": "object",
-        "required": ["id", "username", "role", "reviewStatus", "createdAt"],
+        "required": [
+          "id",
+          "username",
+          "role",
+          "reviewStatus",
+          "createdAt"
+        ],
         "properties": {
-          "id": {"type": "integer", "format": "int64"},
-          "username": {"type": "string"},
-          "role": {"type": "string", "enum": ["admin", "user"]},
-          "reviewStatus": {"type": "string", "enum": ["pending", "approved", "rejected"]},
-          "reviewedAt": {"type": "string", "format": "date-time", "nullable": true},
-          "createdAt": {"type": "string", "format": "date-time"}
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "user"
+            ]
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
+          },
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "CurrentUserResponse": {
         "type": "object",
-        "required": ["code", "message", "data"],
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
         "properties": {
-          "code": {"type": "integer", "example": 0},
-          "message": {"type": "string", "example": "success"},
-          "data": {"$ref": "#/components/schemas/CurrentUser"}
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CurrentUser"
+          }
         }
       },
       "ErrorResponse": {
         "type": "object",
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "properties": {
-          "code": {"type": "integer"},
-          "message": {"type": "string"},
-          "data": {"nullable": true}
+          "code": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true
+          }
+        }
+      },
+      "BatchReviewRequest": {
+        "type": "object",
+        "required": [
+          "user_ids"
+        ],
+        "properties": {
+          "user_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "待审核用户 ID 列表（非空）"
+          }
+        }
+      },
+      "BatchReviewResult": {
+        "type": "object",
+        "required": [
+          "processed",
+          "failed",
+          "failed_ids"
+        ],
+        "properties": {
+          "processed": {
+            "type": "integer",
+            "description": "成功审核的用户数"
+          },
+          "failed": {
+            "type": "integer",
+            "description": "失败的用户数（状态已变化/不存在）"
+          },
+          "failed_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "失败的用户 ID 列表"
+          }
+        }
+      },
+      "AdminUser": {
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "role",
+          "reviewStatus",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "user"
+            ]
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       }
     }

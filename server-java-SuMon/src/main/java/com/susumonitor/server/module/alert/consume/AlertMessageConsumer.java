@@ -84,6 +84,7 @@ public class AlertMessageConsumer {
     /**
      * 反序列化并校验信封；不可重试数据错误直接拒绝（进 DLQ）。
      */
+    /** 反序列化并校验信封，不可重试数据错误直接拒绝进 DLQ。 */
     private MetricsReportedMessage parseEnvelope(Message message) {
         String body = new String(message.getBody(), StandardCharsets.UTF_8);
         MetricsReportedMessage envelope;
@@ -108,6 +109,7 @@ public class AlertMessageConsumer {
         return envelope;
     }
 
+    /** 插入消费幂等记录，已存在则翻转为 consumed。 */
     private void insertConsumeRecord(MetricsReportedMessage envelope) {
         ConsumeRecordEntity record = new ConsumeRecordEntity();
         record.setConsumer(CONSUMER_NAME);
@@ -115,6 +117,7 @@ public class AlertMessageConsumer {
         record.setStatus(ConsumeStatus.CONSUMED.ruleValue());
         record.setAttempts(0);
         record.setConsumedAt(LocalDateTime.now(clock));
-        consumeRecordMapper.insert(record);
+        // upsert：若该事件此前失败留痕过（failed 行），重放成功后翻转回 consumed。
+        consumeRecordMapper.upsertConsumed(record);
     }
 }

@@ -83,6 +83,7 @@ public class AgentHandshakeInterceptor implements HandshakeInterceptor {
         private double tokens;
         private Instant refreshedAt;
 
+        /** 创建容量和分钟补充速率相同的令牌桶。 */
         private TokenBucket(int ratePerMinute, Instant now) {
             this.capacity = ratePerMinute;
             this.ratePerMinute = ratePerMinute;
@@ -90,6 +91,7 @@ public class AgentHandshakeInterceptor implements HandshakeInterceptor {
             this.refreshedAt = now;
         }
 
+        /** 尝试消耗一个令牌，令牌不足时返回 false。 */
         private boolean tryConsume(Instant now) {
             long elapsedMillis = Duration.between(refreshedAt, now).toMillis();
             if (elapsedMillis > 0) {

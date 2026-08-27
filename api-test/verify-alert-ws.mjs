@@ -167,9 +167,9 @@ const registeredUser = await api('/api/auth/register', {
 })
 assert(registeredUser.status === 200, 'Validation user registration failed')
 
-const pending = await api('/api/admin/users/pending', { token: adminToken })
+const pending = await api('/api/admin/users?status=pending&page=1&page_size=100', { token: adminToken })
 assert(pending.status === 200, 'Pending user list failed')
-const pendingUser = pending.body.data.find((user) => user.username === userUsername)
+const pendingUser = pending.body.data.items.find((user) => user.username === userUsername)
 assert(pendingUser, 'Validation user is missing from pending list')
 
 const approved = await api(`/api/admin/users/${pendingUser.id}/approve`, {

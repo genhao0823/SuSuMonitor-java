@@ -46,6 +46,7 @@ public class MonitorMetricsPublisher {
         }
     }
 
+    /** 构建 metrics.update WebSocket 消息 JSON 字符串。 */
     private String message(MetricsLatestVo metrics) throws IOException {
         var payload = objectMapper.createObjectNode()
                 .put("server_id", metrics.getServerId())

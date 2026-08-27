@@ -87,7 +87,23 @@ scheduler(@Scheduled fixedDelay ${susumonitor.rabbitmq.poll-interval-ms:1000})
 2. 队列 purge（DELETE contents）为异步，基线需轮询归零（竞态超时）
 3. 管理 API 204 响应无 body；Broker 重启期连接拒绝应容忍重试（阶段 C）
 
-## 四、未验证/遗留（留痕）
+## 四、已发布 Outbox 保留期清理（后续运维增强）
+
+`V16__add_message_outbox_published_retention_index.sql` 为
+`message_outbox(status, published_at, id)` 添加索引，并新增独立的分批清理任务。
+
+- **范围**：仅删除 `status='published' AND published_at < cutoff` 的记录；`pending`
+  行（无论重试次数或存续时间）永不由该任务选择。RabbitMQ 业务队列/DLQ、Metrics
+  数据和 `message_consume_records` 也不在范围内。
+- **安全默认值**：`OUTBOX_CLEANUP_ENABLED=false`，不会因升级自动删除发布审计/重放
+  payload。启用时默认保留 30 天、1000 行/批、100 批/轮，cron 为每日 03:30。
+- **执行方式**：每批独立事务，同 JVM 通过 `AtomicBoolean` 防止重叠；多 JVM 不提供
+  全局运行上限。cutoff 使用 UTC，SQL 按 `published_at, id` 从旧到新有界删除，并用
+  双层派生表规避 MySQL 1093。
+- **回滚/停用**：设置 `OUTBOX_CLEANUP_ENABLED=false` 并重启后端；已删除的 Outbox
+  payload 不可从该表恢复，启用前须确认排障保留期。
+
+## 五、未验证/遗留（留痕）
 
 1. **消费侧（MVP-11）**：ACK 幂等消费、`message_consume_records`、重试耗尽进 DLQ、DLQ 查询与受控重放——队列消息当前堆积（预期行为）。
 2. **多实例**：SKIP LOCKED 防重复取行已具备；多 JVM 同库发布待真实多实例验收。

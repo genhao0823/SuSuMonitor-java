@@ -14,6 +14,7 @@
 #   - 拷贝二进制到 /usr/local/bin/
 #   - 创建配置目录 /etc/susumonitor/
 #   - 创建日志目录 /var/log/susumonitor/
+#   - 创建受限指标缓冲目录 /var/lib/susumonitor/
 #   - 拷贝 systemd service 文件
 #   - 拷贝 logrotate 配置
 #   - 启用开机自启
@@ -55,6 +56,7 @@ fi
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/susumonitor"
 LOG_DIR="/var/log/susumonitor"
+METRICS_BUFFER_DIR="/var/lib/susumonitor"
 SERVICE_FILE="/etc/systemd/system/susumonitor-agent.service"
 LOGROTATE_FILE="/etc/logrotate.d/susumonitor-agent"
 BINARY_DEST="${INSTALL_DIR}/susumonitor-agent"
@@ -87,6 +89,12 @@ info "Creating log directory ${LOG_DIR}..."
 mkdir -p "${LOG_DIR}"
 chown root:root "${LOG_DIR}"
 chmod 0755 "${LOG_DIR}"
+
+# 创建受限指标缓冲目录，保证未确认的历史指标不被普通用户读取或篡改。
+info "Creating metrics buffer directory ${METRICS_BUFFER_DIR}..."
+mkdir -p "${METRICS_BUFFER_DIR}"
+chown root:root "${METRICS_BUFFER_DIR}"
+chmod 0700 "${METRICS_BUFFER_DIR}"
 
 # 拷贝 logrotate 配置。
 LOGROTATE_SRC="${SCRIPT_DIR}/logrotate.conf"

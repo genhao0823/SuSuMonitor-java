@@ -5,6 +5,7 @@
         <id column="id" property="id"/>
         <result column="event_id" property="eventId"/>
         <result column="event_type" property="eventType"/>
+        <result column="routing_key" property="routingKey"/>
         <result column="payload" property="payload"/>
         <result column="status" property="status"/>
         <result column="attempts" property="attempts"/>
@@ -14,11 +15,11 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
-    <sql id="OutboxColumns">id, event_id, event_type, payload, status, attempts, next_attempt_at,
+    <sql id="OutboxColumns">id, event_id, event_type, routing_key, payload, status, attempts, next_attempt_at,
         last_error, published_at, created_at, updated_at</sql>
     <insert id="insert" useGeneratedKeys="true" keyProperty="outbox.id">
-        INSERT INTO message_outbox (event_id, event_type, payload, status, attempts, next_attempt_at)
-        VALUES (#{outbox.eventId}, #{outbox.eventType}, #{outbox.payload},
+        INSERT INTO message_outbox (event_id, event_type, routing_key, payload, status, attempts, next_attempt_at)
+        VALUES (#{outbox.eventId}, #{outbox.eventType}, #{outbox.routingKey}, #{outbox.payload},
             #{outbox.status}, #{outbox.attempts}, #{outbox.nextAttemptAt})
     </insert>
     <!-- 应用写入的 next_attempt_at 为 UTC（Clock.systemUTC），必须与 UTC_TIMESTAMP() 比较，

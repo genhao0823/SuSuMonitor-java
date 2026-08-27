@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.alert.mapper.AlertNotificationCleanupMapper">
+
+    <delete id="deleteExpiredBatch">
+        DELETE FROM alert_notifications
+        WHERE id IN (
+            SELECT expired_notifications.id
+            FROM (
+                SELECT id
+                FROM alert_notifications
+                WHERE created_at &lt; #{cutoffTime}
+                ORDER BY id
+                LIMIT #{batchSize}
+            ) expired_notifications
+        )
+    </delete>
+</mapper>

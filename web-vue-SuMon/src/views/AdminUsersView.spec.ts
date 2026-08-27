@@ -1,33 +1,52 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
+import type * as ElementPlus from 'element-plus'
 import AdminUsersView from '@/views/AdminUsersView.vue'
+import * as adminApi from '@/api/admin'
+import type { CurrentUser } from '@/types/api'
 
 /**
- * AdminUsersView 本地搜索框逻辑回归。
+ * AdminUsersView 分页/搜索/批量审核回归。
  *
  * 范围:
- * - searchKeyword 空 → 表格 :data 透传原 pendingList
- * - searchKeyword 非空 → 表格 :data 只包含 username 包含关键字(大小写不敏感)的项
- * - 空结果时 empty-text 切换文案
+ * - 挂载后按 page/page_size 拉取分页数据并渲染 items + total
+ * - 搜索回车触发远端 keyword 查询(page 重置为 1)
+ * - 翻页触发 current-change → 重新拉取
+ * - 单行通过/拒绝 → 调用对应 API + 本地移除该行
+ * - 批量(选择 + 批量通过) → batchApproveUsers(ids) + 提示 processed/failed
  *
- * 策略:stub PageHeader 与 Element Plus 子组件避免 jsdom 警告,
- * 直接 mock @/api/admin.listPendingUsers 返回固定 3 条数据。
+ * 策略:stub PageHeader 与 Element Plus 子组件;el-table/el-pagination stub
+ * 提供触发按钮以驱动 selection-change / current-change 事件。
  */
 
+const PENDING_USER = (id: number, username: string): CurrentUser => ({
+  id,
+  username,
+  role: 'user',
+  reviewStatus: 'pending',
+  reviewedAt: null,
+  createdAt: '2026-07-20T00:00:00Z'
+})
+
 vi.mock('@/api/admin', () => ({
-  listPendingUsers: vi.fn().mockResolvedValue({
-    code: 0,
-    message: 'success',
-    data: [
-      { id: 1, username: 'alice', role: 'user', reviewStatus: 'pending', reviewedAt: null, createdAt: '2026-07-20T00:00:00Z' },
-      { id: 2, username: 'bob',   role: 'user', reviewStatus: 'pending', reviewedAt: null, createdAt: '2026-07-21T00:00:00Z' },
-      { id: 3, username: 'Alex',  role: 'user', reviewStatus: 'pending', reviewedAt: null, createdAt: '2026-07-22T00:00:00Z' }
-    ]
-  }),
-  approveUser: vi.fn().mockResolvedValue({ code: 0, message: 'success', data: null }),
-  rejectUser: vi.fn().mockResolvedValue({ code: 0, message: 'success', data: null })
+  listUsers: vi.fn(),
+  approveUser: vi.fn(),
+  rejectUser: vi.fn(),
+  batchApproveUsers: vi.fn(),
+  batchRejectUsers: vi.fn()
 }))
+
+// 捕获批量失败明细弹窗调用(vi.hoisted 保证 mock 工厂 hoist 后仍可引用)。
+const { alertSpy } = vi.hoisted(() => ({ alertSpy: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('element-plus', async () => {
+  const actual = await vi.importActual<typeof ElementPlus>('element-plus')
+  return {
+    ...actual,
+    ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+    ElMessageBox: { alert: alertSpy }
+  }
+})
 
 const globalStubs = {
   PageHeader: { template: '<div class="page-header-stub" />' },
@@ -39,13 +58,43 @@ const globalStubs = {
   },
   'el-table': {
     props: ['data', 'emptyText'],
-    template: '<div class="el-table-stub" :data-rows="JSON.stringify(data)" :empty-text="emptyText" />'
+    emits: ['selection-change'],
+    template:
+      '<div class="el-table-stub" :data-rows="JSON.stringify(data)" :empty-text="emptyText">' +
+      '<button class="el-table-stub__select" @click="$emit(\'selection-change\', data)">select</button>' +
+      '<slot /></div>'
   },
-  'el-table-column': { template: '<div class="el-table-column-stub"><slot /></div>' },
+  'el-table-column': {
+    props: ['label', 'type'],
+    // 静态作用域 row:驱动操作列 #default="{ row }" 渲染可点击按钮。
+    template: '<div class="el-table-column-stub"><slot :row="{ id: 1, username: \'alice\' }" /></div>'
+  },
   'el-button': { template: '<button class="el-button-stub"><slot /></button>' },
-  'el-popconfirm': { template: '<div class="el-popconfirm-stub"><slot /></div>' },
+  'el-popconfirm': {
+    emits: ['confirm'],
+    template:
+      '<div class="el-popconfirm-stub"><slot name="reference" />' +
+      '<button class="el-popconfirm-stub__confirm" @click="$emit(\'confirm\')">confirm</button></div>'
+  },
   'el-tag': { template: '<span class="el-tag-stub"><slot /></span>' },
-  'el-card': { template: '<div class="el-card-stub"><slot /></div>' }
+  'el-tabs': {
+    props: ['modelValue'],
+    emits: ['update:modelValue', 'tab-change'],
+    template:
+      '<div class="el-tabs-stub" :data-status="modelValue">' +
+      '<button class="el-tabs-stub__approved" @click="$emit(\'update:modelValue\', \'approved\'); $emit(\'tab-change\')">approved</button>' +
+      '<slot /></div>'
+  },
+  'el-tab-pane': { template: '<div class="el-tab-pane-stub"><slot /></div>' },
+  'el-card': { template: '<div class="el-card-stub"><slot /></div>' },
+  'el-pagination': {
+    props: ['total'],
+    emits: ['current-change', 'size-change'],
+    template:
+      '<div class="el-pagination-stub" :data-total="total">' +
+      '<button class="el-pagination-stub__next" @click="$emit(\'current-change\', 2)">next</button>' +
+      '<button class="el-pagination-stub__size" @click="$emit(\'size-change\', 50)">size</button></div>'
+  }
 }
 
 async function flush(): Promise<void> {
@@ -53,69 +102,143 @@ async function flush(): Promise<void> {
   await Promise.resolve()
 }
 
-describe('AdminUsersView 本地搜索', () => {
+describe('AdminUsersView 分页/搜索/批量', () => {
   let wrapper: VueWrapper
 
   beforeEach(async () => {
-    wrapper = mount(AdminUsersView, {
-      global: { stubs: globalStubs }
+    vi.clearAllMocks()
+    vi.mocked(adminApi.listUsers).mockResolvedValue({
+      code: 0,
+      message: 'success',
+      data: {
+        items: [PENDING_USER(1, 'alice'), PENDING_USER(2, 'bob')],
+        total: 42,
+        page: 1,
+        page_size: 20
+      }
     })
+    vi.mocked(adminApi.approveUser).mockResolvedValue({
+      code: 0,
+      message: 'success',
+      data: PENDING_USER(1, 'alice')
+    })
+    vi.mocked(adminApi.rejectUser).mockResolvedValue({
+      code: 0,
+      message: 'success',
+      data: PENDING_USER(1, 'alice')
+    })
+    vi.mocked(adminApi.batchApproveUsers).mockResolvedValue({
+      code: 0,
+      message: 'success',
+      data: { processed: 2, failed: 0, failed_ids: [] }
+    })
+    vi.mocked(adminApi.batchRejectUsers).mockResolvedValue({
+      code: 0,
+      message: 'success',
+      data: { processed: 0, failed: 2, failed_ids: [] }
+    })
+    wrapper = mount(AdminUsersView, { global: { stubs: globalStubs } })
     await flush()
   })
 
-  it('初始无关键字:表格 :data 含全部 3 条', () => {
+  it('挂载后按默认 page/page_size + status=pending 拉取并渲染 items + total', () => {
+    expect(adminApi.listUsers).toHaveBeenCalledWith({ status: 'pending', page: 1, page_size: 20, keyword: '' })
     const table = wrapper.find('.el-table-stub')
     const rows = JSON.parse(table.attributes('data-rows') ?? '[]') as Array<{ username: string }>
-    expect(rows).toHaveLength(3)
-    expect(rows.map((r) => r.username)).toEqual(['alice', 'bob', 'Alex'])
+    expect(rows.map((r) => r.username)).toEqual(['alice', 'bob'])
+    expect(wrapper.find('.el-pagination-stub').attributes('data-total')).toBe('42')
   })
 
-  it('搜索 "al":命中 alice 和 Alex(大小写不敏感)', async () => {
+  it('搜索回车:触发远端 keyword 查询并把 page 重置为 1', async () => {
     const input = wrapper.find('.el-input-stub')
-    await input.setValue('al')
+    await input.setValue('ali')
+    await input.trigger('keyup.enter')
     await flush()
-    const table = wrapper.find('.el-table-stub')
-    const rows = JSON.parse(table.attributes('data-rows') ?? '[]') as Array<{ username: string }>
-    expect(rows.map((r) => r.username).sort()).toEqual(['Alex', 'alice'])
+
+    expect(adminApi.listUsers).toHaveBeenLastCalledWith({ status: 'pending', page: 1, page_size: 20, keyword: 'ali' })
   })
 
-  it('搜索 "bob":只命中 bob', async () => {
-    const input = wrapper.find('.el-input-stub')
-    await input.setValue('bob')
+  it('翻页:current-change 触发按新 page 重新拉取', async () => {
+    await wrapper.find('.el-pagination-stub__next').trigger('click')
     await flush()
-    const table = wrapper.find('.el-table-stub')
-    const rows = JSON.parse(table.attributes('data-rows') ?? '[]') as Array<{ username: string }>
-    expect(rows.map((r) => r.username)).toEqual(['bob'])
+
+    expect(adminApi.listUsers).toHaveBeenLastCalledWith({ status: 'pending', page: 2, page_size: 20, keyword: '' })
   })
 
-  it('搜索 "zzz":空结果,empty-text 切换为"无匹配用户"', async () => {
-    const input = wrapper.find('.el-input-stub')
-    await input.setValue('zzz')
+  it('切换状态 tab:按新 status 拉取并隐藏批量按钮', async () => {
+    await wrapper.find('.el-tabs-stub__approved').trigger('click')
     await flush()
-    const table = wrapper.find('.el-table-stub')
-    const rows = JSON.parse(table.attributes('data-rows') ?? '[]') as unknown[]
-    expect(rows).toHaveLength(0)
-    expect(table.attributes('empty-text')).toBe('无匹配用户')
+
+    expect(adminApi.listUsers).toHaveBeenLastCalledWith({ status: 'approved', page: 1, page_size: 20, keyword: '' })
+    // 已通过 tab 下不渲染批量按钮(批量仅待审核)。
+    const buttons = wrapper.findAll('.el-button-stub')
+    expect(buttons.some((b) => b.text().includes('批量'))).toBe(false)
   })
 
-  it('搜索清空后:表格恢复原 3 条 + empty-text 恢复', async () => {
-    const input = wrapper.find('.el-input-stub')
-    await input.setValue('bob')
+  it('单行通过:调用 approveUser 并本地移除该行', async () => {
+    const buttons = wrapper.findAll('.el-button-stub')
+    const approveButton = buttons.find((b) => b.text().trim() === '通过')
+    expect(approveButton).toBeDefined()
+    await approveButton?.trigger('click')
     await flush()
-    await input.setValue('')
-    await flush()
-    const table = wrapper.find('.el-table-stub')
-    const rows = JSON.parse(table.attributes('data-rows') ?? '[]') as unknown[]
-    expect(rows).toHaveLength(3)
-    expect(table.attributes('empty-text')).toBe('暂无待审核用户,所有申请已处理完毕')
+
+    expect(adminApi.approveUser).toHaveBeenCalledWith(1)
+    const rows = JSON.parse(wrapper.find('.el-table-stub').attributes('data-rows') ?? '[]') as Array<{ id: number }>
+    expect(rows.map((r) => r.id)).toEqual([2])
+    expect(wrapper.find('.el-pagination-stub').attributes('data-total')).toBe('41')
   })
 
-  it('关键字前后空格:被 trim 后再匹配', async () => {
-    const input = wrapper.find('.el-input-stub')
-    await input.setValue('  bob  ')
+  it('批量通过:选择后调用 batchApproveUsers 并刷新列表', async () => {
+    // 模拟 el-table selection-change:全选当前页。
+    await wrapper.find('.el-table-stub__select').trigger('click')
     await flush()
-    const table = wrapper.find('.el-table-stub')
-    const rows = JSON.parse(table.attributes('data-rows') ?? '[]') as Array<{ username: string }>
-    expect(rows.map((r) => r.username)).toEqual(['bob'])
+
+    // 找到"批量通过"按钮(文本含"批量通过(2)")。
+    const buttons = wrapper.findAll('.el-button-stub')
+    const batchApproveButton = buttons.find((b) => b.text().includes('批量通过'))
+    expect(batchApproveButton?.attributes('disabled')).toBeUndefined()
+    await batchApproveButton?.trigger('click')
+    await flush()
+
+    expect(adminApi.batchApproveUsers).toHaveBeenCalledWith([1, 2])
+    // 成功(failed=0)后重新拉取。
+    expect(adminApi.listUsers).toHaveBeenCalledTimes(2)
+  })
+
+  it('批量拒绝:选择后经 popconfirm 确认调用 batchRejectUsers', async () => {
+    await wrapper.find('.el-table-stub__select').trigger('click')
+    await flush()
+
+    const buttons = wrapper.findAll('.el-button-stub')
+    const batchRejectButton = buttons.find((b) => b.text().includes('批量拒绝'))
+    await batchRejectButton?.trigger('click')
+    await flush()
+    // reference 按钮只打开 popconfirm,需点确认按钮才触发 @confirm。
+    await wrapper.find('.el-popconfirm-stub__confirm').trigger('click')
+    await flush()
+
+    expect(adminApi.batchRejectUsers).toHaveBeenCalledWith([1, 2])
+  })
+
+  it('批量部分失败:弹出失败明细(alice/bob 用户名映射)', async () => {
+    vi.mocked(adminApi.batchRejectUsers).mockResolvedValue({
+      code: 0,
+      message: 'success',
+      data: { processed: 0, failed: 2, failed_ids: [1, 2] }
+    })
+    await wrapper.find('.el-table-stub__select').trigger('click')
+    await flush()
+
+    const buttons = wrapper.findAll('.el-button-stub')
+    const batchRejectButton = buttons.find((b) => b.text().includes('批量拒绝'))
+    await batchRejectButton?.trigger('click')
+    await flush()
+    await wrapper.find('.el-popconfirm-stub__confirm').trigger('click')
+    await flush()
+
+    expect(alertSpy).toHaveBeenCalled()
+    const message = alertSpy.mock.calls[0][0] as string
+    expect(message).toContain('alice')
+    expect(message).toContain('bob')
   })
 })

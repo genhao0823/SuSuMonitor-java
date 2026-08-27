@@ -48,7 +48,7 @@
     />
 
     <el-card
-      class="alert-records-view__card"
+      class="alert-records-view__card liquid-glass-card"
       shadow="never"
     >
       <div class="alert-records-view__filters">
@@ -152,21 +152,53 @@
           </template>
         </el-table-column>
         <el-table-column
+          label="通知状态"
+          min-width="150"
+        >
+          <template #default="{ row }">
+            <span v-if="row.notify_channels">
+              {{ channelLabel(row.notify_channels) }}
+            </span>
+            <span
+              v-else-if="hasRuleChannels(row.rule_id)"
+              class="alert-records-view__failed"
+            >
+              发送失败
+            </span>
+            <span
+              v-else
+              class="alert-records-view__not-failed"
+            >
+              未发送
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="操作"
-          width="120"
+          width="200"
           fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'unread'"
-              size="small"
-              type="primary"
-              plain
-              :loading="markingReadId === row.id"
-              @click="handleMarkRead(row as AlertRecord)"
-            >
-              标记已读
-            </el-button>
+            <div class="table-action-group">
+              <el-button
+                size="small"
+                plain
+                :loading="notificationsLoadingId === row.id"
+                @click="handleShowNotifications(row as AlertRecord)"
+              >
+                通知详情
+              </el-button>
+              <el-button
+                v-if="row.status === 'unread'"
+                size="small"
+                type="primary"
+                plain
+                :loading="markingReadId === row.id"
+                @click="handleMarkRead(row as AlertRecord)"
+              >
+                标记已读
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -187,6 +219,82 @@
         @size-change="onPageSizeChange"
       />
     </el-card>
+
+    <!-- 通知投递历史弹窗 -->
+    <el-dialog
+      v-model="notificationDialogVisible"
+      :title="`通知投递历史 · #${notificationDialogRecordId ?? ''}`"
+      width="620"
+    >
+      <el-table
+        v-if="notificationList.length > 0"
+        :data="notificationList"
+        stripe
+        empty-text="该记录无通知投递记录（规则可能未配置渠道）"
+      >
+        <el-table-column
+          prop="channel"
+          label="渠道"
+          width="110"
+        >
+          <template #default="{ row }">
+            {{ notificationChannelLabel(row.channel) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="status"
+          label="状态"
+          width="90"
+        >
+          <template #default="{ row }">
+            <el-tag :type="notificationStatusTagType(row.status)">
+              {{ notificationStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="attempts"
+          label="尝试次数"
+          width="90"
+        />
+        <el-table-column
+          prop="last_error"
+          label="最近错误"
+          min-width="180"
+        >
+          <template #default="{ row }">
+            <span :title="row.last_error">{{ row.last_error || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="next_attempt_at"
+          label="下次重试"
+          min-width="150"
+        >
+          <template #default="{ row }">
+            {{ row.next_attempt_at ? formatDateTime(row.next_attempt_at) : '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="updated_at"
+          label="更新时间"
+          min-width="150"
+        >
+          <template #default="{ row }">
+            {{ row.updated_at ? formatDateTime(row.updated_at) : '-' }}
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty
+        v-else-if="!notificationLoading"
+        description="该记录无通知投递记录"
+      />
+      <template #footer>
+        <el-button @click="notificationDialogVisible = false">
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -195,10 +303,17 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import { listServers } from '@/api/server'
+import { listAlertRules, listAlertRecordNotifications } from '@/api/alert'
 import { useAlertsStore } from '@/stores/alerts'
 import { MonitorWebSocket } from '@/services/websocket'
 import { formatDateTime } from '@/utils/format'
-import type { AlertRecord, AlertRecordQuery, AlertStatus, Server } from '@/types/api'
+import type {
+  AlertNotification,
+  AlertRecord,
+  AlertRecordQuery,
+  AlertStatus,
+  Server
+} from '@/types/api'
 
 const alerts = useAlertsStore()
 
@@ -210,6 +325,15 @@ const page = ref(1)
 const pageSizeOptions: number[] = [10, 20, 50, 100]
 const pageSize = ref<number>(pageSizeOptions[0])
 const markingReadId = ref<number | null>(null)
+
+/** 通知投递历史弹窗状态 */
+const notificationDialogVisible = ref(false)
+const notificationDialogRecordId = ref<number | null>(null)
+const notificationList = ref<AlertNotification[]>([])
+const notificationLoading = ref(false)
+const notificationsLoadingId = ref<number | null>(null)
+/** 规则 ID → 已配置的通知渠道；用于区分"规则未配渠道"与"配了但发送失败"。 */
+const ruleChannelsById = ref<Record<number, string[]>>({})
 
 /** 实时连接 WS(按需创建);切换筛选或离页时必须 disconnect。 */
 let socket: MonitorWebSocket | null = null
@@ -248,6 +372,43 @@ function statusTagType(status: AlertStatus | string): 'success' | 'info' | 'warn
 function formatNumber(value: number): string {
   if (typeof value !== 'number' || Number.isNaN(value)) return '-'
   return Number.isInteger(value) ? value.toString() : value.toFixed(2)
+}
+
+/** 将成功渠道字符串（email,dingtalk,webhook）转为可读文案。 */
+function channelLabel(channels: string): string {
+  return channels
+    .split(',')
+    .map((channel) => {
+      if (channel === 'email') return '📧 邮件'
+      if (channel === 'dingtalk') return '💬 钉钉'
+      if (channel === 'webhook') return '🔗 Webhook'
+      return channel
+    })
+    .join(' / ')
+}
+
+/** 加载规则 → 通知渠道映射，供"发送失败"判定（失败不阻断列表）。 */
+async function loadRuleChannels(): Promise<void> {
+  try {
+    const response = await listAlertRules()
+    const map: Record<number, string[]> = {}
+    for (const rule of response.data) {
+      const channels: string[] = []
+      if (rule.notify_email) channels.push('email')
+      if (rule.notify_dingtalk) channels.push('dingtalk')
+      if (rule.notify_webhook) channels.push('webhook')
+      if (channels.length > 0) map[rule.id] = channels
+    }
+    ruleChannelsById.value = map
+  } catch {
+    // 通知状态为增强展示，加载失败时统一按"未发送"展示。
+  }
+}
+
+/** 规则是否配置了至少一个通知渠道（记录未送达时据此区分"发送失败"）。 */
+function hasRuleChannels(ruleId: number | null): boolean {
+  if (ruleId === null) return false
+  return (ruleChannelsById.value[ruleId]?.length ?? 0) > 0
 }
 
 /**
@@ -344,6 +505,43 @@ async function handleMarkRead(row: AlertRecord): Promise<void> {
   }
 }
 
+/** 打开通知投递历史弹窗并加载。 */
+async function handleShowNotifications(row: AlertRecord): Promise<void> {
+  notificationDialogRecordId.value = row.id
+  notificationDialogVisible.value = true
+  notificationList.value = []
+  notificationLoading.value = true
+  notificationsLoadingId.value = row.id
+  try {
+    const res = await listAlertRecordNotifications(row.id)
+    notificationList.value = res.data ?? []
+  } catch {
+    ElMessage.error('加载通知历史失败')
+  } finally {
+    notificationLoading.value = false
+    notificationsLoadingId.value = null
+  }
+}
+
+function notificationChannelLabel(channel: string): string {
+  if (channel === 'email') return '邮件'
+  if (channel === 'dingtalk') return '钉钉'
+  if (channel === 'webhook') return 'Webhook'
+  return channel
+}
+
+function notificationStatusLabel(status: string): string {
+  if (status === 'sent') return '已送达'
+  if (status === 'failed') return '失败'
+  return '待重试'
+}
+
+function notificationStatusTagType(status: string): 'success' | 'info' | 'danger' | 'warning' {
+  if (status === 'sent') return 'success'
+  if (status === 'failed') return 'danger'
+  return 'warning'
+}
+
 function onPushBannerRefresh(): void {
   alerts.markPendingPushSeen()
   void reload()
@@ -352,6 +550,7 @@ function onPushBannerRefresh(): void {
 onMounted(async () => {
   await loadServerOptions()
   await reload()
+  void loadRuleChannels()
   // 仅当默认有 serverFilter(默认 null 时)才建立 WS;默认 null 不订阅。
   resyncWebSocket()
 })
@@ -369,17 +568,6 @@ onBeforeUnmount(() => {
 .alert-records-view {
   max-width: 1280px;
   margin: 0 auto;
-}
-
-.alert-records-view__card {
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 16px;
-  box-shadow:
-    0 12px 32px rgba(183, 50, 92, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .alert-records-view__card :deep(.el-card__body) {
@@ -425,5 +613,23 @@ onBeforeUnmount(() => {
 .alert-records-view__pagination {
   margin-top: 16px;
   justify-content: flex-end;
+}
+
+.alert-records-view__not-failed {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.alert-records-view__failed {
+  color: var(--el-color-danger);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .alert-records-view__pagination {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
 }
 </style>

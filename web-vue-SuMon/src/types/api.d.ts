@@ -67,6 +67,32 @@ export interface CurrentUser {
 }
 
 /**
+ * 管理员用户列表分页查询参数(与 OpenAPI listUsers parameters 对齐)。
+ */
+export interface AdminUserQuery {
+  /** 审核状态筛选(可选):pending/approved/rejected,不传不过滤。 */
+  status?: 'pending' | 'approved' | 'rejected'
+  /** 用户名模糊关键字(可选)。 */
+  keyword?: string
+  /** 页码,从 1 起,默认 1。 */
+  page?: number
+  /** 每页大小 1~100,默认 20。 */
+  page_size?: number
+}
+
+/**
+ * 批量审核结果(与 OpenAPI BatchReviewResult schema 字段一致)。
+ */
+export interface BatchReviewResult {
+  /** 成功审核的用户数。 */
+  processed: number
+  /** 失败的用户数(状态已变化/不存在/参数非法)。 */
+  failed: number
+  /** 失败的用户 ID 列表(前端可映射用户名展示明细)。 */
+  failed_ids: number[]
+}
+
+/**
  * 登录结果(与 OpenAPI LoginResult schema 字段一致)。
  */
 export interface LoginResult {
@@ -119,20 +145,32 @@ export interface ServerStatus {
   status: ServerStatusKind
   agent_status: AgentStatusKind
   last_heartbeat_at: string | null
+  delivery_pending_count: number | null
+  delivery_pending_bytes: number | null
+  delivery_oldest_collected_at: string | null
+  delivery_drop_count: number | null
+  delivery_dead_letter_count: number | null
+  delivery_dead_letter_bytes: number | null
   checked_at: string
 }
 
 /**
- * 服务器列表查询参数。
- * 后端 OpenAPI 允许 keyword 单一字段模糊匹配;前端额外提供 name/host
- * 两个独立字段以满足"按 name 搜"与"按 host 搜"的精确场景。
+ * Monitor WebSocket 推送的服务器状态转换快照。
+ */
+export interface ServerStatusPushPayload {
+  server_id: number
+  status: ServerStatusKind
+  agent_status: AgentStatusKind
+  last_heartbeat_at: string | null
+}
+
+/**
+ * 服务器列表查询参数,与后端 OpenAPI 契约保持一致。
  */
 export interface ServerQuery {
   page?: number
   page_size?: number
   keyword?: string
-  name?: string
-  host?: string
   sort_by?: 'id' | 'name' | 'host' | 'created_at' | 'updated_at'
   sort_order?: 'asc' | 'desc'
 }
@@ -172,11 +210,13 @@ export interface UpdateServerRequest {
 }
 
 /**
- * SSH 连接测试结果(与后端 SshTestVo 字段对齐)。
+ * SSH 连接测试结果(与后端 SshTestVo / SshTestHistoryVo 字段对齐)。
+ * 单次测试响应 connected 恒为 true;历史记录中 connected=false 时 error_code 非空。
  */
 export interface SshTestResult {
   server_id: number
   connected: boolean
+  error_code: number | null
   host_key_algorithm: string | null
   host_key_fingerprint: string | null
   auth_type: string
@@ -222,6 +262,14 @@ export interface AlertRule {
   operator: AlertOperator | string
   threshold_value: number
   level: AlertLevel | string
+  /** 连续越界确认次数: 1=立即触发,>1=连续N次越界触发(逃逸窗口)。 */
+  confirm_count: number
+  /** 通知邮件地址,多个用英文逗号分隔;为空不发送。 */
+  notify_email: string | null
+  /** 钉钉机器人 Webhook URL;为空不发送。 */
+  notify_dingtalk: string | null
+  /** 自定义 Webhook URL;为空不发送。 */
+  notify_webhook: string | null
   enabled: boolean
   created_by: number | null
   created_at: string
@@ -245,7 +293,29 @@ export interface AlertRecord {
   read_by: number | null
   read_at: string | null
   triggered_at: string
+  /** 外部通知发送完成时间;null=未成功发送。 */
+  notified_at: string | null
+  /** 成功送达的渠道,逗号分隔(email/dingtalk/webhook);null=未成功发送。 */
+  notify_channels: string | null
   created_at: string
+}
+
+/**
+ * /api/alerts/records/{id}/notifications 返回的单条渠道投递记录。
+ *
+ * status: pending(待发送/待重试) / sent(已送达) / failed(达重试上限放弃)。
+ * next_attempt_at 为 null 表示不再重试;last_error 记录最近失败原因。
+ */
+export interface AlertNotification {
+  id: number
+  alert_record_id: number
+  channel: 'email' | 'dingtalk' | 'webhook' | string
+  status: 'pending' | 'sent' | 'failed' | string
+  attempts: number
+  next_attempt_at: string | null
+  last_error: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 /**
@@ -284,6 +354,14 @@ export interface CreateAlertRuleRequest {
   operator: AlertOperator
   threshold_value: number
   level: AlertLevel
+  /** 连续越界确认次数(可选,默认1=立即触发)。 */
+  confirm_count?: number
+  /** 通知邮件地址,多个用英文逗号分隔(可选)。 */
+  notify_email?: string | null
+  /** 钉钉机器人 Webhook URL(可选)。 */
+  notify_dingtalk?: string | null
+  /** 自定义 Webhook URL(可选)。 */
+  notify_webhook?: string | null
 }
 
 /**
@@ -294,6 +372,14 @@ export interface UpdateAlertRuleRequest {
   threshold_value: number
   level: AlertLevel
   enabled: boolean
+  /** 连续越界确认次数(可选项,不传保持原值)。 */
+  confirm_count?: number
+  /** 通知邮件地址(传入则更新,不传保持原值)。 */
+  notify_email?: string | null
+  /** 钉钉机器人 Webhook URL(传入则更新,不传保持原值)。 */
+  notify_dingtalk?: string | null
+  /** 自定义 Webhook URL(传入则更新,不传保持原值)。 */
+  notify_webhook?: string | null
 }
 
 /**
@@ -323,6 +409,19 @@ export interface SshHostKey {
   host_key_fingerprint: string
   operation: 'confirmed' | 'rotated' | 'unchanged'
   verified_at: string
+}
+
+/**
+ * 只读观察到的目标主机公钥(与后端 SshHostKeyObservationVo 字段对齐)。
+ * 供管理员"一键信任"确认前核对,不涉及登记。
+ * registered_fingerprint 为当前已登记指纹,未确认过为 null;与观察指纹不同表示密钥已变更。
+ */
+export interface SshHostKeyObservation {
+  server_id: number
+  host_key_algorithm: string
+  host_key_fingerprint: string
+  registered_fingerprint: string | null
+  observed_at: string
 }
 
 /**

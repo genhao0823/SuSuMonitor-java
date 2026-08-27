@@ -41,6 +41,12 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         entity.setOperator(request.getOperator());
         entity.setThresholdValue(request.getThresholdValue());
         entity.setLevel(request.getLevel());
+        // 逃逸窗口：confirm_count 缺省即为 1（立即触发，向后兼容）。
+        entity.setConfirmCount(request.getConfirmCount() == null
+                ? 1 : Math.max(1, request.getConfirmCount()));
+        entity.setNotifyEmail(request.getNotifyEmail());
+        entity.setNotifyDingtalk(request.getNotifyDingtalk());
+        entity.setNotifyWebhook(request.getNotifyWebhook());
         entity.setEnabled(true);
         entity.setDeleted(false);
         entity.setCreatedBy(createdBy);
@@ -79,6 +85,7 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         return ruleMapper.selectActiveRules().stream().map(this::toVo).toList();
     }
 
+    /** 校验创建请求中 metric、operator 和 level 的合法性。 */
     private void validateCreateRequest(CreateAlertRuleRequest request) {
         if (AlertMetric.fromValue(request.getMetric()) == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
@@ -89,17 +96,20 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         validateLevel(request.getLevel());
     }
 
+    /** 校验告警等级字符串是否为合法枚举值。 */
     private void validateLevel(String level) {
         if (AlertLevel.fromValue(level) == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
         }
     }
 
+    /** 检查是否存在同签名的活跃规则（使用 Entity 参数重载）。 */
     private void ensureNoActiveRuleWithSameSignature(AlertRuleEntity rule, Long excludeId) {
         ensureNoActiveRuleWithSameSignature(rule.getServerId(), rule.getMetric(), rule.getOperator(),
                 rule.getThresholdValue(), rule.getLevel(), excludeId);
     }
 
+    /** 检查是否存在同签名的活跃规则，存在则抛 RESOURCE_CONFLICT 异常。 */
     private void ensureNoActiveRuleWithSameSignature(Long serverId, String metric, String operator,
             java.math.BigDecimal thresholdValue, String level, Long excludeId) {
         if (ruleMapper.existsActiveRule(serverId, metric, operator, thresholdValue, level, excludeId)) {
@@ -107,6 +117,7 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         }
     }
 
+    /** 插入规则，捕获唯一键冲突并转换为业务异常。 */
     private void insertRule(AlertRuleEntity entity) {
         try {
             ruleMapper.insertRule(entity);
@@ -115,14 +126,18 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         }
     }
 
+    /** 更新规则，捕获唯一键冲突并转换为业务异常。 */
     private void updateRuleWithConflictTranslation(Long ruleId, UpdateAlertRuleRequest request) {
         try {
-            ruleMapper.updateRule(ruleId, request.getThresholdValue(), request.getLevel(), request.getEnabled());
+            ruleMapper.updateRule(ruleId, request.getThresholdValue(), request.getLevel(),
+                    request.getEnabled(), request.getConfirmCount(),
+                    request.getNotifyEmail(), request.getNotifyDingtalk(), request.getNotifyWebhook());
         } catch (DuplicateKeyException exception) {
             throw new BusinessException(ErrorCode.RESOURCE_CONFLICT, exception);
         }
     }
 
+    /** 将 Entity 转换为 VO，时间字段转为 UTC OffsetDateTime。 */
     private AlertRuleVo toVo(AlertRuleEntity entity) {
         if (entity == null) {
             return null;
@@ -134,6 +149,10 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         vo.setOperator(entity.getOperator());
         vo.setThresholdValue(entity.getThresholdValue());
         vo.setLevel(entity.getLevel());
+        vo.setConfirmCount(entity.getConfirmCount());
+        vo.setNotifyEmail(entity.getNotifyEmail());
+        vo.setNotifyDingtalk(entity.getNotifyDingtalk());
+        vo.setNotifyWebhook(entity.getNotifyWebhook());
         vo.setEnabled(entity.getEnabled());
         vo.setCreatedBy(entity.getCreatedBy());
         vo.setCreatedAt(AlertRuleVo.toOffset(entity.getCreatedAt()));

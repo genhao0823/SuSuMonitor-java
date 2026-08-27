@@ -1,0 +1,147 @@
+# SuSuMonitor 容器编排：MySQL + RabbitMQ + Server + Web，Agent 为可选 profile。
+# 敏感值全部从环境变量/ .env 注入，不硬编码（遵循 docker-standards）。
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${DB_NAME:-susumonitor}
+      MYSQL_USER: ${DB_USER:-susumonitor}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-susumonitor}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-susumonitor}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: ./server-java-SuMon
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      # 容器内存上限内给 JVM 留 75% 堆（N6 预告的容器 JVM 调优）。
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75.0
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-susumonitor}
+      DB_USER: ${DB_USER:-susumonitor}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: 18080
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      AES_GCM_KEY: ${AES_GCM_KEY:?set AES_GCM_KEY in .env}
+      APP_ENV: prod
+      SPRING_PROFILES_ACTIVE: prod
+      OUTBOX_ENABLED: ${OUTBOX_ENABLED:-true}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-susumonitor}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-susumonitor}
+      # 多实例化阶段一（2026-08-17）：Redis ticket 共享；默认关闭，经 .env 显式开启。
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ALERT_NOTIFICATION_ENABLED: ${ALERT_NOTIFICATION_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      ALERT_MAIL_FROM: ${ALERT_MAIL_FROM:-noreply@susumonitor.local}
+      # 生产必配：浏览器跨域来源（prod profile 默认占位符不可用）与 Nginx 容器网段反代 CIDR。
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS in .env, e.g. https://genhaosan.online}
+      AGENT_TRUSTED_PROXY_CIDRS: ${AGENT_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # 探活用 /api/health（liveness；/api/ready 会随 Broker 状态波动，不适合作为容器健康依据）。
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:18080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    expose:
+      - "18080"
+
+  web:
+    build: ./web-vue-SuMon
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # 目标主机上的 Agent 建议直接用 systemd 部署；此 profile 供容器化试点/测试。
+  # 注意：compose 加载时会插值全部服务（含 profile 门控），因此此处不能用 :? 必填语法，
+  # 否则未启用 agent profile 的其余命令也会报"变量缺失"。空值时由 agent 二进制启动校验报错。
+  agent:
+    build: ./agent-go-SuMon
+    profiles: ["agent"]
+    restart: unless-stopped
+    environment:
+      SUSUMONITOR_BACKEND_URL: ${SUSUMONITOR_BACKEND_URL:-ws://server:18080}
+      SUSUMONITOR_SERVER_ID: ${SUSUMONITOR_SERVER_ID:-}
+      SUSUMONITOR_AGENT_TOKEN: ${SUSUMONITOR_AGENT_TOKEN:-}
+      SUSUMONITOR_METRICS_BUFFER_PATH: /var/lib/susumonitor/metrics-buffer.json
+      SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES: 720
+      SUSUMONITOR_METRICS_BUFFER_MAX_BYTES: 0
+      SUSUMONITOR_TERMINAL_ENABLED: "false"
+    volumes:
+      - agent-data:/var/lib/susumonitor
+    depends_on:
+      - server
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  redis-data:
+  agent-data:

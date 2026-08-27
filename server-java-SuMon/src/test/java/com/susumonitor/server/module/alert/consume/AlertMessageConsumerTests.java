@@ -69,7 +69,7 @@ class AlertMessageConsumerTests {
         consumer.onMessage(envelopeMessage(EVENT_ID, 1));
 
         verify(evaluationService, never()).evaluate(any());
-        verify(consumeRecordMapper, never()).insert(any());
+        verify(consumeRecordMapper, never()).upsertConsumed(any());
     }
 
     @Test
@@ -79,7 +79,7 @@ class AlertMessageConsumerTests {
         consumer.onMessage(envelopeMessage(EVENT_ID, 1));
 
         verify(evaluationService).evaluate(any());
-        verify(consumeRecordMapper).insert(org.mockito.ArgumentMatchers.argThat(record ->
+        verify(consumeRecordMapper).upsertConsumed(org.mockito.ArgumentMatchers.argThat(record ->
                 AlertMessageConsumer.CONSUMER_NAME.equals(record.getConsumer())
                         && EVENT_ID.equals(record.getEventId())
                         && ConsumeStatus.CONSUMED.ruleValue().equals(record.getStatus())
@@ -94,7 +94,7 @@ class AlertMessageConsumerTests {
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
 
         verifyNoInteractions(evaluationService);
-        verify(consumeRecordMapper, never()).insert(any());
+        verify(consumeRecordMapper, never()).upsertConsumed(any());
     }
 
     @Test
@@ -106,7 +106,7 @@ class AlertMessageConsumerTests {
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
 
         verifyNoInteractions(evaluationService);
-        verify(consumeRecordMapper, never()).insert(any());
+        verify(consumeRecordMapper, never()).upsertConsumed(any());
     }
 
     @Test

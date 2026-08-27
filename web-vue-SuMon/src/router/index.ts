@@ -99,6 +99,7 @@ const protectedChildren: RouteRecordRaw[] = [
 const protectedLayout: RouteRecordRaw = {
   path: '/',
   component: MainLayout,
+  redirect: '/dashboard',
   children: protectedChildren
 }
 

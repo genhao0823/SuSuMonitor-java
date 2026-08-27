@@ -2,7 +2,7 @@
 
 **适用范围**: 被监控 Linux 主机（含家庭内网 / NAT 主机、WSL 调试机）部署 Go Agent 接入云端后端  
 **Agent 工程目录**: `agent-go-SuMon/`  
-**后端接入地址**: `ws://SERVER_IP_OR_DOMAIN/ws/agent`  
+**后端接入地址**: `wss://SERVER_IP_OR_DOMAIN/ws/agent`（生产必须 HTTPS/WSS）  
 **协议参考**: `docs-SuMon/Protocol-SuMon/websocket-protocol.md`
 
 ## 一、Agent 定位与架构
@@ -21,7 +21,7 @@ SuSuMonitor 采用 **Agent 主动出站** 模式，不依赖后端反向连接�
 |----|------|
 | 后端 | 已部署且运行，nginx 80 反代 `/ws/agent` → 后端 18080 |
 | 管理员账号 | 一个 admin 角色账号（首个注册用户自动成为 admin），用于预建 server 与发放 token |
-| 编译机 | Go 1.22+（用于交叉编译 Linux 二进制），或目标机自带 Go |
+| 编译机 | Go 1.23+（`go.mod` 要求 1.23，用于交叉编译 Linux 二进制），或目标机自带 Go |
 | 目标机 | Linux x86_64（PTY 终端功能仅 Linux 支持） |
 | 网络 | 目标机能出站访问 `SERVER_IP_OR_DOMAIN:80` |
 
@@ -52,7 +52,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/susumonitor-agent-linux-am
 
 ### 方式 B：目标机原生编译
 
-若目标机已装 Go 1.22+ 且版本 ≥ go.mod 声明版本：
+若目标机已装 Go 1.23+ 且版本 ≥ go.mod 声明版本：
 
 ```bash
 cd agent-go-SuMon
@@ -132,6 +132,15 @@ SUSUMONITOR_TERMINAL_OUTPUT_BURST_BYTES=524288
 SUSUMONITOR_TERMINAL_OUTPUT_QUEUE_SIZE=64
 SUSUMONITOR_TERMINAL_IDLE_TIMEOUT_SECONDS=1200
 SUSUMONITOR_TERMINAL_MAX_LIFETIME_SECONDS=28800
+# --- 指标可靠投递(默认值即生产推荐,可省略) ---
+SUSUMONITOR_METRICS_BUFFER_PATH=/var/lib/susumonitor/metrics-buffer.json
+SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES=720
+# SUSUMONITOR_METRICS_BUFFER_MAX_BYTES=0     # 字节上限，0 = 不限制（默认），最小 1024
+SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS=15
+SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS=2
+SUSUMONITOR_METRICS_RETRY_MAX_SECONDS=60
+SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED=true
+SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS=2500
 ```
 
 关键配置项：
@@ -147,6 +156,16 @@ SUSUMONITOR_TERMINAL_MAX_LIFETIME_SECONDS=28800
 | `SUSUMONITOR_LOG_LEVEL` | `info` / `debug` / `warn` / `error`，排障时用 `debug` 可见 `metrics sent/reported` |
 | `SUSUMONITOR_TERMINAL_ENABLED` | 是否接受 Web 终端协议帧，默认 `false`。开启终端功能设 `true` |
 | `SUSUMONITOR_TERMINAL_SHELL` | PTY 启动 shell，须干净绝对路径，默认 `/bin/bash` |
+| `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标 FIFO 快照文件，必须是 clean absolute path（含本地死信，v2 格式，v1 自动迁移），默认 `/var/lib/susumonitor/metrics-buffer.json` |
+| `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` | 待确认指标与死信共用的条数上限，默认 720（约 1 小时 5 秒采集；死信超限丢最旧） |
+| `SUSUMONITOR_METRICS_BUFFER_MAX_BYTES` | 待确认队列字节上限，默认 `0`（不限制）；非 0 时必须 ≥ 1024。超限拒绝最新采样并计 drop，与条数上限独立生效 |
+| `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` | 写入后等待 `metrics.ack` 的最长时间，默认 15；超时保留队首并按退避重传原 UUID |
+| `SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS` / `_MAX_SECONDS` | ACK 超时重传的指数退避初始 / 上限，默认 2 / 60；max ≥ initial |
+| `SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED` | 重传是否使用 equal jitter，默认 `true`（实际等待为退避值的 1/2 至 1 倍） |
+| `SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS` | ACK/NACK 后积压相邻发送的最小间隔，默认 2500ms |
+| `SUSUMONITOR_LOG_LEVEL` | `info` / `debug` / `warn` / `error`，排障时用 `debug` 可见 `metrics sent/reported`；NACK 死信处置为 warn 级 |
+
+> **可靠投递语义（2026-08-05）**：仅收到同一 `message_id` 的 `metrics.ack` 才删除队首；`metrics.nack`（永久拒绝：载荷非法 / 乱序 / 服务器不存在）把队首移入本地死信且不重试；泛化 `error` 帧不删队首。心跳携带投递遥测（pending/bytes、最旧采样、丢弃、死信），后端落库后可在服务器详情页"状态快照"查看。
 
 ## 六、systemd 部署
 
@@ -166,28 +185,31 @@ deploy/
 
 ```bash
 curl --fail --silent --show-error --location \
-  http://SERVER_IP_OR_DOMAIN/agent/install-agent.sh | \
+  https://genhaosan.online/agent/install-agent.sh | \
   sudo -E env \
-    AGENT_BASE_URL=http://SERVER_IP_OR_DOMAIN \
-    AGENT_ALLOW_INSECURE_HTTP=true \
+    AGENT_BASE_URL=https://genhaosan.online \
+    AGENT_TERMINAL_ENABLED=true \
     AGENT_VERSION=1.0.0 \
     bash
 ```
 
-> 临时 IPv4 测试用 `AGENT_ALLOW_INSECURE_HTTP=true`（仅允许授权测试 IP）。生产环境上 HTTPS 后去掉此变量，`AGENT_BASE_URL` 改为 `https://域名`。
+> 生产环境必须 HTTPS。脚本会把 `AGENT_BASE_URL` 的 `https:` 自动转成 `wss:` 写入 `SUSUMONITOR_BACKEND_URL`（agent 连后端地址），无需再传 `AGENT_ALLOW_INSECURE_HTTP`。终端功能需要 `AGENT_TERMINAL_ENABLED=true`（默认关闭）。
 
 脚本自动完成：下载二进制（sha256 校验）→ 交互输入 admin 账密 → 登录 → 预建 server → 发 token → 写配置 → 装 systemd → 启动验证。安装失败自动回滚。
+
+> ⚠️ **已装过 agent 的机器重跑不会更新旧地址**：脚本只在 `/etc/susumonitor/agent.env` 不存在时才写入 `SUSUMONITOR_BACKEND_URL`，已存在则保留原值。HTTPS 迁移后旧机器（指向 `ws://82.156.245.102` 等）需先手动改：`sed -i 's|SUSUMONITOR_BACKEND_URL=ws://.*|SUSUMONITOR_BACKEND_URL=wss://genhaosan.online|' /etc/susumonitor/agent.env && systemctl restart susumonitor-agent`，或 `rm /etc/susumonitor/agent.env` 后重跑脚本（会重新注册新 server）。
 
 **环境变量**：
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `AGENT_BASE_URL` | `https://monitor.example.com` | 后端地址，生产必须 HTTPS |
-| `AGENT_ALLOW_INSECURE_HTTP` | `false` | 临时明文 HTTP，仅允许授权 IPv4 |
+| `AGENT_BASE_URL` | `https://monitor.example.com` | 后端 HTTPS 地址，`https:` 自动转 `wss:` 写 agent 配置 |
 | `AGENT_VERSION` | `1.0.0` | release 版本号 |
 | `AGENT_NAME` | `hostname -s` | 主机显示名 |
 | `AGENT_SERVER_ID` | 空（新建） | 已有 server 时复用，跳过预建 |
+| `AGENT_TOKEN` | 空 | 已有 server 时配合 `AGENT_SERVER_ID` 复用，免交互 |
 | `AGENT_TERMINAL_ENABLED` | `false` | 设 `true` 开启 Web 终端 |
+| `AGENT_ALLOW_INSECURE_HTTP` | `false` | 仅历史 IPv4 明文测试用，生产勿设 |
 
 > 已有 `/etc/susumonitor/agent.env` 时脚本读取现有 `AGENT_SERVER_ID` + token，不重复预建。
 

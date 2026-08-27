@@ -1,51 +1,142 @@
 <template>
   <el-card
-    class="dashboard-view__card dashboard-view__card--glass"
+    class="dashboard-ssh-card liquid-glass-card"
     shadow="never"
   >
     <template #header>
-      <div class="dashboard-view__card-header">
-        <div class="dashboard-view__card-title">
+      <div class="dashboard-ssh-card__header">
+        <div class="dashboard-ssh-card__title">
           <TushanFoxMark
             :size="28"
             alt="涂山苏苏·SSH 测试"
           />
-          上次 SSH 测试结果
+          <span>最近 SSH 测试</span>
         </div>
-        <el-tag
-          type="info"
-          size="small"
-          effect="plain"
-        >
-          占位
-        </el-tag>
+        <span class="liquid-badge liquid-badge--info">{{ history.length }} 次</span>
       </div>
     </template>
-    <div class="dashboard-view__ssh-placeholder">
-      <div class="dashboard-view__ssh-line">
-        <span class="dashboard-view__ssh-label">最近一次</span>
-        <span class="dashboard-view__ssh-value">暂无记录</span>
+    <el-skeleton
+      v-if="loading"
+      :rows="5"
+      animated
+    />
+    <template v-else-if="error">
+      <p class="dashboard-ssh-card__error">
+        {{ error }}
+      </p>
+    </template>
+    <el-empty
+      v-else-if="history.length === 0"
+      description="暂无 SSH 测试记录"
+      :image-size="64"
+    >
+      <p class="dashboard-ssh-card__hint">
+        在服务器详情页执行 SSH 连接测试后会在此展示最近结果。
+      </p>
+    </el-empty>
+    <template v-else>
+      <div class="dashboard-ssh-card__list">
+        <div
+          v-for="item in history"
+          :key="item.tested_at"
+          class="dashboard-ssh-card__row"
+        >
+          <span
+            class="liquid-badge"
+            :class="item.connected ? 'liquid-badge--ok' : 'liquid-badge--down'"
+          >
+            {{ item.connected ? '成功' : '失败' }}
+          </span>
+          <span
+            v-if="!item.connected"
+            class="dashboard-ssh-card__code"
+            :title="`业务错误码 ${item.error_code ?? '-'}`"
+          >
+            {{ item.error_code ?? '-' }}
+          </span>
+          <span class="dashboard-ssh-card__duration">
+            {{ item.duration_ms }}ms
+          </span>
+          <span class="dashboard-ssh-card__time">
+            {{ formatDateTime(item.tested_at) }}
+          </span>
+        </div>
       </div>
-      <div class="dashboard-view__ssh-line">
-        <span class="dashboard-view__ssh-label">目标服务器</span>
-        <span class="dashboard-view__ssh-value">—</span>
-      </div>
-      <div class="dashboard-view__ssh-line">
-        <span class="dashboard-view__ssh-label">耗时</span>
-        <span class="dashboard-view__ssh-value">—</span>
-      </div>
-      <div class="dashboard-view__ssh-hint">
-        等待后端 /api/servers/{id}/ssh/test 历史接口;MVP-1 当前仅实现单次测试,历史接入时自动填充。
-      </div>
-    </div>
+      <p class="dashboard-ssh-card__hint">
+        最近 {{ history.length }} 次测试（成功与失败均记录）。
+      </p>
+    </template>
   </el-card>
 </template>
 
 <script setup lang="ts">
 import TushanFoxMark from '@/components/TushanFoxMark.vue'
+import type { SshTestResult } from '@/types/api'
+import { formatDateTime } from '@/utils/format'
 
-/**
- * Dashboard SSH 测试历史占位卡。
- * 等后端 /api/servers/{id}/ssh/test 历史接口接入后填充真实数据。
- */
+defineProps<{
+  history: SshTestResult[]
+  loading: boolean
+  error: string | null
+}>()
 </script>
+
+<style scoped>
+.dashboard-ssh-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-ssh-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #2a1626;
+}
+
+.dashboard-ssh-card__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dashboard-ssh-card__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  border-top: 1px solid rgba(39, 39, 42, 0.08);
+}
+
+.dashboard-ssh-card__code {
+  color: #f43f5e;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.dashboard-ssh-card__duration {
+  color: #6d3b54;
+  font-weight: 600;
+}
+
+.dashboard-ssh-card__time {
+  margin-left: auto;
+  color: #8a5872;
+  font-size: 11.5px;
+}
+
+.dashboard-ssh-card__hint {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: #8a5872;
+}
+
+.dashboard-ssh-card__error {
+  font-size: 13px;
+  color: #f43f5e;
+}
+</style>

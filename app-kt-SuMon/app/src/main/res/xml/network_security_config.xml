@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置：
+  - 全局禁止明文 HTTP（Android 9+ 默认）
+  - 已切换 HTTPS/WSS（genhaosan.online），无需再放行裸 IP 明文流量
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

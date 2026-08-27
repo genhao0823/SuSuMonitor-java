@@ -1,7 +1,6 @@
 // Package config 定义 SuSuMonitor Agent 的运行时配置。
 //
-// 配置来源优先级：环境变量 > 配置文件 > 默认值。
-// 阶段 0 只实现环境变量加载；配置文件解析在后续阶段补充。
+// 当前正式运行方式仅从环境变量加载；配置文件示例用于部署参考，不会被自动读取。
 package config
 
 import (
@@ -28,6 +27,28 @@ type Config struct {
 	ReconnectInitialSeconds int
 	// ReconnectMaxSeconds 是重连最大间隔，默认 60 秒。
 	ReconnectMaxSeconds int
+	// MetricsBufferPath 是未确认指标的持久化 FIFO 文件路径。
+	MetricsBufferPath string
+	// MetricsBufferMaxEntries 是未确认指标的最大条数，默认 720。
+	MetricsBufferMaxEntries int
+	// MetricsBufferMaxBytes 是未确认指标的最大总字节数；0 表示不限制。
+	MetricsBufferMaxBytes int
+	// MetricsAckTimeoutSeconds 是一次指标写入后等待服务端确认的最长时间。
+	MetricsAckTimeoutSeconds int
+	// MetricsRetryInitialSeconds 是确认超时后的首次重传等待时间。
+	MetricsRetryInitialSeconds int
+	// MetricsRetryMaxSeconds 是确认超时重传的最大等待时间。
+	MetricsRetryMaxSeconds int
+	// MetricsReplayMinIntervalMillis 是积压 FIFO 相邻重放之间的最小间隔。
+	MetricsReplayMinIntervalMillis int
+	// MetricsRetryJitterEnabled 控制确认超时重传是否使用 equal jitter。
+	MetricsRetryJitterEnabled bool
+	// MetricsNackRetryMax 是可重试 nack（retriable_server_error）的最大重试次数，默认 3。
+	MetricsNackRetryMax int
+	// MetricsNackRetryInitialSeconds 是可重试 nack 的首次退避间隔，默认 2。
+	MetricsNackRetryInitialSeconds int
+	// MetricsNackRetryMaxSeconds 是可重试 nack 的最大退避间隔，默认 60。
+	MetricsNackRetryMaxSeconds int
 	// LogLevel 是日志级别，如 info、debug。
 	LogLevel string
 	// TerminalEnabled 控制是否接受远程终端协议消息，默认关闭。
@@ -65,10 +86,11 @@ type Config struct {
 //   - SUSUMONITOR_LOG_LEVEL
 func Load() (*Config, error) {
 	cfg := &Config{
-		BackendURL:    os.Getenv("SUSUMONITOR_BACKEND_URL"),
-		AgentToken:    os.Getenv("SUSUMONITOR_AGENT_TOKEN"),
-		LogLevel:      getenvDefault("SUSUMONITOR_LOG_LEVEL", "info"),
-		TerminalShell: getenvDefault("SUSUMONITOR_TERMINAL_SHELL", "/bin/bash"),
+		BackendURL:        os.Getenv("SUSUMONITOR_BACKEND_URL"),
+		AgentToken:        os.Getenv("SUSUMONITOR_AGENT_TOKEN"),
+		MetricsBufferPath: getenvDefault("SUSUMONITOR_METRICS_BUFFER_PATH", "/var/lib/susumonitor/metrics-buffer.json"),
+		LogLevel:          getenvDefault("SUSUMONITOR_LOG_LEVEL", "info"),
+		TerminalShell:     getenvDefault("SUSUMONITOR_TERMINAL_SHELL", "/bin/bash"),
 	}
 
 	var err error
@@ -82,6 +104,36 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.ReconnectMaxSeconds, err = getenvIntDefault("SUSUMONITOR_RECONNECT_MAX_SECONDS", 60); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsBufferMaxEntries, err = getenvIntDefault("SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES", 720); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsBufferMaxBytes, err = getenvIntDefault("SUSUMONITOR_METRICS_BUFFER_MAX_BYTES", 0); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsAckTimeoutSeconds, err = getenvIntDefault("SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS", 15); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsRetryInitialSeconds, err = getenvIntDefault("SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS", 2); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsRetryMaxSeconds, err = getenvIntDefault("SUSUMONITOR_METRICS_RETRY_MAX_SECONDS", 60); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsReplayMinIntervalMillis, err = getenvIntDefault("SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS", 2500); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsRetryJitterEnabled, err = getenvBoolDefault("SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED", true); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsNackRetryMax, err = getenvIntDefault("SUSUMONITOR_NACK_RETRY_MAX", 3); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsNackRetryInitialSeconds, err = getenvIntDefault("SUSUMONITOR_NACK_RETRY_INITIAL_SECONDS", 2); err != nil {
+		return nil, err
+	}
+	if cfg.MetricsNackRetryMaxSeconds, err = getenvIntDefault("SUSUMONITOR_NACK_RETRY_MAX_SECONDS", 60); err != nil {
 		return nil, err
 	}
 	if cfg.TerminalEnabled, err = getenvBoolDefault("SUSUMONITOR_TERMINAL_ENABLED", false); err != nil {
@@ -147,6 +199,28 @@ func (c *Config) validate() error {
 	if c.ReconnectMaxSeconds < c.ReconnectInitialSeconds {
 		return fmt.Errorf("reconnect max (%d) must be >= initial (%d)",
 			c.ReconnectMaxSeconds, c.ReconnectInitialSeconds)
+	}
+	if !filepath.IsAbs(c.MetricsBufferPath) || filepath.Clean(c.MetricsBufferPath) != c.MetricsBufferPath {
+		return fmt.Errorf("SUSUMONITOR_METRICS_BUFFER_PATH must be a clean absolute path")
+	}
+	if c.MetricsBufferMaxEntries < 1 || c.MetricsBufferMaxEntries > 100000 {
+		return fmt.Errorf("metrics buffer max entries must be between 1 and 100000")
+	}
+	if c.MetricsBufferMaxBytes != 0 && c.MetricsBufferMaxBytes < 1024 {
+		return fmt.Errorf("SUSUMONITOR_METRICS_BUFFER_MAX_BYTES must be 0 (unlimited) or >= 1024")
+	}
+	if c.MetricsAckTimeoutSeconds < 1 || c.MetricsAckTimeoutSeconds > 300 {
+		return fmt.Errorf("metrics acknowledgement timeout must be between 1 and 300 seconds")
+	}
+	if c.MetricsRetryInitialSeconds < 1 {
+		return fmt.Errorf("metrics retry initial seconds must be positive")
+	}
+	if c.MetricsRetryMaxSeconds < c.MetricsRetryInitialSeconds {
+		return fmt.Errorf("metrics retry max (%d) must be >= initial (%d)",
+			c.MetricsRetryMaxSeconds, c.MetricsRetryInitialSeconds)
+	}
+	if c.MetricsReplayMinIntervalMillis < 0 || c.MetricsReplayMinIntervalMillis > 60000 {
+		return fmt.Errorf("metrics replay minimum interval must be between 0 and 60000 milliseconds")
 	}
 	if c.TerminalMaxSessions < 1 || c.TerminalMaxSessions > 4 {
 		return fmt.Errorf("terminal max sessions must be between 1 and 4")

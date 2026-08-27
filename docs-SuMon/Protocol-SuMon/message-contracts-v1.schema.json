@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "message-contracts-v1.schema.json",
+  "title": "SuSuMonitor Message Contracts v1 — metrics.reported.v1",
+  "description": "metrics.reported.v1 事件信封与指标载荷的 JSON Schema。字段语义与 message-contracts-v1.md §二/§三 及消费侧 MetricsReportedMessageValidator 的校验意图一致；不可重试数据错误进 DLQ。",
+  "type": "object",
+  "required": ["event_id", "event_type", "schema_version", "occurred_at", "producer", "payload"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "事件唯一 ID（UUID），消费幂等键"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["metrics.reported"],
+      "description": "本 schema 仅覆盖 metrics.reported.v1；alert.triggered.v1 / alert.resolved.v1 契约见 message-contracts-v1.md §四/§五（均已实现）"
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "契约版本；不支持的版本按不可重试数据错误处理"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "事件发生时间（UTC ISO-8601）"
+    },
+    "producer": {
+      "type": "string",
+      "const": "metrics-service"
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "server_id", "message_id", "collected_at",
+        "cpu_percent", "memory_percent", "disk_percent",
+        "memory_used", "memory_total", "disk_used", "disk_total",
+        "net_rx", "net_tx"
+      ],
+      "properties": {
+        "server_id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "服务器 ID，必须为正整数"
+        },
+        "message_id": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "description": "指标上报幂等键（UUID）"
+        },
+        "collected_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "采样时间（UTC ISO-8601）"
+        },
+        "cpu_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "memory_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "disk_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "memory_used": { "type": "integer", "minimum": 0 },
+        "memory_total": { "type": "integer", "minimum": 0 },
+        "disk_used": { "type": "integer", "minimum": 0 },
+        "disk_total": { "type": "integer", "minimum": 0 },
+        "net_rx": { "type": "integer", "minimum": 0 },
+        "net_tx": { "type": "integer", "minimum": 0 },
+        "temperature": { "type": "number", "minimum": 0, "description": "可选；部分平台缺失" },
+        "load_avg": { "type": "number", "minimum": 0, "description": "可选；部分平台缺失" }
+      },
+      "additionalProperties": true,
+      "description": "字段名与 MetricsLatestVo 一致（snake_case）；used<=total 与百分比 0-100 为消费侧不变量"
+    }
+  },
+  "additionalProperties": true
+}

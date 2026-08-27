@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -14,20 +15,45 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Converts exceptions into the unified API response shape.
+ * 将异常转换为统一的 API 响应格式。
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final long loginLimitWindowSeconds;
+
+    /** 注入登录防爆破窗口秒数（Retry-After 头；属性缺失时默认 60）。 */
+    public GlobalExceptionHandler(
+            @Value("${susumonitor.security.login-limit-window-seconds:60}") long loginLimitWindowSeconds) {
+        this.loginLimitWindowSeconds = loginLimitWindowSeconds;
+    }
+
+    /**
+     * 处理业务异常，从异常中提取 ErrorCode 并返回对应的 HTTP 状态和响应体。
+     *
+     * @param exception 业务异常，携带 ErrorCode
+     * @return 统一错误响应，状态码和文案由 ErrorCode 决定
+     */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
         ErrorCode errorCode = exception.getErrorCode();
         LOGGER.warn("Business exception: {}", errorCode.getMessage());
-        return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorCode));
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(errorCode.getHttpStatus());
+        if (errorCode == ErrorCode.LOGIN_RATE_LIMIT_REACHED) {
+            // 登录防爆破：告知客户端窗口秒数后再试。
+            builder.header("Retry-After", String.valueOf(loginLimitWindowSeconds));
+        }
+        return builder.body(ApiResponse.error(errorCode));
     }
 
+    /**
+     * 处理 @Valid 请求体校验失败，仅记录校验不通过的字段名，不记录字段值。
+     *
+     * @param exception 请求体校验异常，包含校验失败的字段信息
+     * @return 统一参数错误响应（400）
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
@@ -44,7 +70,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorCode));
     }
 
-    // 只记录约束路径，避免日志输出查询参数或路径参数的实际值。
+    /**
+     * 处理 @Validated 参数/路径参数校验失败，仅记录约束路径，不记录参数实际值。
+     *
+     * @param exception 约束校验异常，包含校验失败的参数路径
+     * @return 统一参数错误响应（400）
+     */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
             ConstraintViolationException exception) {
@@ -103,6 +134,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorCode));
     }
 
+    /**
+     * 兜底处理所有未匹配的异常，返回 500 内部错误，完整堆栈仅记录到日志。
+     *
+     * @param exception 未处理的异常
+     * @return 固定内部错误响应（500）
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
         LOGGER.error("Unhandled exception", exception);

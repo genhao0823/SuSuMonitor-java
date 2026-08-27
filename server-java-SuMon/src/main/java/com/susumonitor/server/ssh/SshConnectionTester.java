@@ -77,6 +77,21 @@ public class SshConnectionTester implements AutoCloseable {
     }
 
     /**
+     * 只执行 SSH 握手并读取远端实际公钥，不做任何匹配或登记。
+     *
+     * <p>观察模式供管理员"一键信任"前核对目标主机当前公钥；公钥不匹配概念
+     * 在观察模式下不存在，只要观察到公钥即返回。</p>
+     *
+     * @param host SSH 主机
+     * @param port SSH 端口
+     * @return 观察到的远端主机密钥
+     */
+    public SshHostKeyObservation observeHostKey(String host, int port) {
+        return execute(host, port, null, null, (sshClient, cancelled) -> {
+        });
+    }
+
+    /**
      * 严格验证主机身份后，按需取得密码并完成认证。
      *
      * @param host SSH 主机
@@ -136,13 +151,24 @@ public class SshConnectionTester implements AutoCloseable {
         return new SshConnectionResult(observation.algorithm(), observation.fingerprint(), elapsedMillis(startedAt));
     }
 
-    /** 在应用关闭时停止虚拟线程执行器，防止后台任务继续持有连接。 */
+    /**
+     * 在应用关闭时停止虚拟线程执行器，防止后台任务继续持有连接。
+     */
     @Override
     public void close() {
         executor.shutdownNow();
     }
 
-    /** 在整体超时和并发限制内执行一次 SSH 操作。 */
+    /**
+     * 在整体超时和并发限制内执行一次 SSH 操作。
+     *
+     * @param host SSH 主机
+     * @param port SSH 端口
+     * @param expectedFingerprint 预期主机公钥指纹
+     * @param expectedAlgorithm 预期主机公钥算法
+     * @param operation SSH 操作回调
+     * @return 已核对的主机密钥观察结果
+     */
     private SshHostKeyObservation execute(String host, int port, String expectedFingerprint,
             String expectedAlgorithm, SshOperation operation) {
         if (!connectionPermits.tryAcquire()) {
@@ -186,7 +212,18 @@ public class SshConnectionTester implements AutoCloseable {
         }
     }
 
-    /** 依次尝试已校验地址，并确保每个 SSHClient 都被关闭。 */
+    /**
+     * 依次尝试已校验地址，并确保每个 SSHClient 都被关闭。
+     *
+     * @param host SSH 主机
+     * @param port SSH 端口
+     * @param expectedFingerprint 预期主机公钥指纹
+     * @param expectedAlgorithm 预期主机公钥算法
+     * @param operation SSH 操作回调
+     * @param activeClient 当前活跃的 SSHClient 引用
+     * @param cancelled 取消标记
+     * @return 已核对的主机密钥观察结果
+     */
     private SshHostKeyObservation connect(String host, int port, String expectedFingerprint,
             String expectedAlgorithm, SshOperation operation, AtomicReference<SSHClient> activeClient,
             AtomicBoolean cancelled) {
@@ -226,6 +263,9 @@ public class SshConnectionTester implements AutoCloseable {
                 if (verifier.observed() && !verifier.matched()) {
                     throw new SshConnectionException(SshConnectionException.Category.HOST_KEY_MISMATCH, exception);
                 }
+                if (isSocketTimeout(exception)) {
+                    throw new SshConnectionException(SshConnectionException.Category.TIMEOUT, exception);
+                }
                 lastFailure = new SshConnectionException(SshConnectionException.Category.CONNECTION_FAILED, exception);
             } finally {
                 closeQuietly(sshClient);
@@ -237,7 +277,12 @@ public class SshConnectionTester implements AutoCloseable {
                 : lastFailure;
     }
 
-    /** 读取 sshj 实际协商的主机密钥算法，连接尚未建立时返回 null。 */
+    /**
+     * 读取 sshj 实际协商的主机密钥算法，连接尚未建立时返回 null。
+     *
+     * @param sshClient SSH 客户端
+     * @return 协商的主机密钥算法，或 null
+     */
     private String negotiatedHostKeyAlgorithm(SSHClient sshClient) {
         if (sshClient.getTransport() == null || sshClient.getTransport().getHostKeyAlgorithm() == null) {
             return null;
@@ -245,14 +290,37 @@ public class SshConnectionTester implements AutoCloseable {
         return sshClient.getTransport().getHostKeyAlgorithm().getKeyAlgorithm();
     }
 
-    /** 在超时或调用线程中断后阻止继续尝试地址或取得凭据。 */
+    /**
+     * 在超时或调用线程中断后阻止继续尝试地址或取得凭据。
+     *
+     * @param cancelled 取消标记
+     */
     private void ensureActive(AtomicBoolean cancelled) {
         if (cancelled.get() || Thread.currentThread().isInterrupted()) {
             throw new SshConnectionException(SshConnectionException.Category.TIMEOUT);
         }
     }
 
-    /** 不传播关闭异常，避免覆盖更重要的主机身份或认证失败。 */
+    /**
+     * 判断异常链中是否存在套接字超时信号，用于区分握手/认证阶段的超时与普通连接失败。
+     *
+     * @param throwable 待判断异常
+     * @return 是否由套接字读/连接超时导致
+     */
+    private static boolean isSocketTimeout(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            if (current instanceof java.net.SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 不传播关闭异常，避免覆盖更重要的主机身份或认证失败。
+     *
+     * @param sshClient SSH 客户端
+     */
     private void closeQuietly(SSHClient sshClient) {
         if (sshClient == null) {
             return;
@@ -264,18 +332,30 @@ public class SshConnectionTester implements AutoCloseable {
         }
     }
 
-    /** 计算单次连接测试耗时。 */
+    /**
+     * 计算单次连接测试耗时。
+     *
+     * @param startedAt 起始纳秒时间
+     * @return 耗时毫秒数
+     */
     private long elapsedMillis(long startedAt) {
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 
-    /** SSHClient 建连后的可选认证操作。 */
+    /**
+     * SSHClient 建连后的可选认证操作，由 execute 方法在连接建立后回调。
+     */
     @FunctionalInterface
     private interface SshOperation {
         void run(SSHClient sshClient, AtomicBoolean cancelled) throws IOException;
     }
 
-    /** 捕获远端公钥并使用 sshj SHA-256 verifier 完成恒定内容比较。 */
+    /**
+     * 捕获远端公钥并使用 sshj SHA-256 verifier 完成恒定内容比较。
+     *
+     * <p>expectedFingerprint 为 null 时进入观察模式：只记录观察到的公钥，
+     * 不做指纹比对（matched 恒为 true），供"一键信任"确认前核对。</p>
+     */
     static final class CapturingHostKeyVerifier implements HostKeyVerifier {
 
         private final HostKeyVerifier fingerprintVerifier;
@@ -283,19 +363,26 @@ public class SshConnectionTester implements AutoCloseable {
         private volatile SshHostKeyObservation observation;
         private volatile boolean matched;
 
+        /**
+         * 构造捕获型主机密钥验证器。
+         *
+         * @param expectedFingerprint 预期主机公钥指纹；null 表示观察模式不比对
+         * @param expectedAlgorithm 预期主机公钥算法；null 表示不限制算法
+         */
         CapturingHostKeyVerifier(String expectedFingerprint, String expectedAlgorithm) {
-            this.fingerprintVerifier = FingerprintVerifier.getInstance(expectedFingerprint);
+            this.fingerprintVerifier = expectedFingerprint == null ? null
+                    : FingerprintVerifier.getInstance(expectedFingerprint);
             this.expectedAlgorithm = expectedAlgorithm;
         }
 
-        /** 计算算法和 SHA-256 指纹，并同时校验登记算法与指纹。 */
+        /** 计算算法和 SHA-256 指纹，并按登记预期校验；观察模式下只记录不比对。 */
         @Override
         public boolean verify(String hostname, int port, PublicKey key) {
             String algorithm = KeyType.fromKey(key).toString();
             String fingerprint = sha256Fingerprint(key);
             this.observation = new SshHostKeyObservation(algorithm, fingerprint);
             boolean algorithmMatches = expectedAlgorithm == null || expectedAlgorithm.equals(algorithm);
-            boolean fingerprintMatches = fingerprintVerifier.verify(hostname, port, key);
+            boolean fingerprintMatches = fingerprintVerifier == null || fingerprintVerifier.verify(hostname, port, key);
             this.matched = algorithmMatches && fingerprintMatches;
             LOGGER.debug("SSH host key observed: host={}, port={}, algorithm={}, fingerprint={}, "
                             + "algorithmMatched={}, fingerprintMatched={}",
@@ -315,6 +402,11 @@ public class SshConnectionTester implements AutoCloseable {
             return observation == null ? null : observation.algorithm();
         }
 
+        /** 返回已观察到的指纹，仅用于诊断日志和同包测试。 */
+        String observedFingerprint() {
+            return observation == null ? null : observation.fingerprint();
+        }
+
         /** 返回已观察且通过校验的主机密钥。 */
         private SshHostKeyObservation observation() {
             if (!matched || observation == null) {
@@ -323,10 +415,20 @@ public class SshConnectionTester implements AutoCloseable {
             return observation;
         }
 
+        /**
+         * 返回是否已观察到主机公钥。
+         *
+         * @return 是否已观察到
+         */
         private boolean observed() {
             return observation != null;
         }
 
+        /**
+         * 返回算法和指纹是否完全匹配预期。
+         *
+         * @return 是否完全匹配
+         */
         boolean matched() {
             return matched;
         }
