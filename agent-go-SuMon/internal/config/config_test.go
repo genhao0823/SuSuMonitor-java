@@ -95,6 +95,10 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 	}{
 		{"missing backend URL", "SUSUMONITOR_BACKEND_URL", ""},
 		{"invalid backend URL", "SUSUMONITOR_BACKEND_URL", "http://localhost:18080"},
+		{"backend URL with path", "SUSUMONITOR_BACKEND_URL", "wss://example.com/api"},
+		{"backend URL with query", "SUSUMONITOR_BACKEND_URL", "wss://example.com?x=1"},
+		{"backend URL with fragment", "SUSUMONITOR_BACKEND_URL", "wss://example.com#frag"},
+		{"backend URL missing host", "SUSUMONITOR_BACKEND_URL", "wss://"},
 		{"missing token", "SUSUMONITOR_AGENT_TOKEN", ""},
 		{"zero collect interval", "SUSUMONITOR_COLLECT_INTERVAL_SECONDS", "0"},
 		{"zero heartbeat interval", "SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS", "0"},

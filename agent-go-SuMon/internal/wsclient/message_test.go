@@ -64,6 +64,24 @@ func TestNewUUID(t *testing.T) {
 	}
 }
 
+// TestNewUUIDFallback 验证 crypto/rand 失败时 fallback 仍产出合法 UUID v4 且不重复。
+func TestNewUUIDFallback(t *testing.T) {
+	uuidRegex := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	seen := make(map[string]bool)
+
+	for i := 0; i < 100; i++ {
+		b := make([]byte, 16)
+		id := formatUUID(newUUIDFallbackBytes(b))
+		if !uuidRegex.MatchString(id) {
+			t.Errorf("fallback uuid %q does not match v4 format", id)
+		}
+		if seen[id] {
+			t.Errorf("fallback uuid collision: %q seen twice", id)
+		}
+		seen[id] = true
+	}
+}
+
 // TestMetricsPayloadNullFields 验证 nil 指针字段序列化为 JSON null。
 func TestMetricsPayloadNullFields(t *testing.T) {
 	cpu := 35.5

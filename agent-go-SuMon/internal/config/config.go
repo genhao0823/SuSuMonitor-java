@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -183,6 +184,18 @@ func (c *Config) validate() error {
 	}
 	if !strings.HasPrefix(c.BackendURL, "ws://") && !strings.HasPrefix(c.BackendURL, "wss://") {
 		return fmt.Errorf("SUSUMONITOR_BACKEND_URL must start with ws:// or wss://")
+	}
+	// 客户端会直接拼接 "/ws/agent"，因此 backend URL 不允许携带路径/查询/片段，
+	// 否则会拼出未注册端点（如 /api/ws/agent）。
+	parsed, err := url.Parse(c.BackendURL)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("SUSUMONITOR_BACKEND_URL is not a valid ws(s) URL: %s", c.BackendURL)
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return fmt.Errorf("SUSUMONITOR_BACKEND_URL must not contain a path, got %q", c.BackendURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("SUSUMONITOR_BACKEND_URL must not contain query or fragment, got %q", c.BackendURL)
 	}
 	if c.AgentToken == "" {
 		return fmt.Errorf("SUSUMONITOR_AGENT_TOKEN is required")
