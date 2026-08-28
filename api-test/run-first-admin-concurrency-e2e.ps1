@@ -28,7 +28,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $serverDirectory 'target\server-java
 
 $runId = "fac-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())-$([Guid]::NewGuid().ToString('N').Substring(0, 6))"
 $databaseName = "susumonitor_first_admin_$($runId.Replace('-', '_'))"
-$port = 18182
+$port = 18183
 $workspace = Join-Path $env:TEMP "susumonitor-first-admin-$runId"
 $serverLog = Join-Path $workspace 'server.out.log'
 $serverErrorLog = Join-Path $workspace 'server.err.log'

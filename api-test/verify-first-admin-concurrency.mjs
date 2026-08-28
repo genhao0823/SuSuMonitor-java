@@ -8,7 +8,7 @@
 //
 // 环境变量：
 //   SUSUMONITOR_VALIDATION_CONFIRM=FIRST_ADMIN_CONCURRENCY  （硬性守卫）
-//   SUSUMONITOR_VALIDATION_BASE_URL        （默认 http://127.0.0.1:18182）
+//   SUSUMONITOR_VALIDATION_BASE_URL        （默认 http://127.0.0.1:18183，与正式 bash 编排器端口一致）
 //   SUSUMONITOR_VALIDATION_PREFIX          （注册用户名前缀，默认 first_admin_）
 //   SUSUMONITOR_VALIDATION_CONCURRENCY     （并发数，2-20，默认 8）
 //
@@ -25,7 +25,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-const baseUrl = process.env.SUSUMONITOR_VALIDATION_BASE_URL ?? 'http://127.0.0.1:18182'
+const baseUrl = process.env.SUSUMONITOR_VALIDATION_BASE_URL ?? 'http://127.0.0.1:18183'
 
 // 空库首启需完成 Flyway 迁移与 Tomcat 就绪，等待最多 120 秒，每 500ms 探测一次。
 async function waitForServer() {
