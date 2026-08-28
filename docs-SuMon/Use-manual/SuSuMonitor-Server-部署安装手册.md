@@ -10,7 +10,7 @@
 
 ```text
 浏览器 (Web 控制台)
-  │ HTTPS/WSS（域名备案后） / 明文 HTTP（当前阶段）
+  │ HTTPS/WSS（生产） / HTTP（仅本机验证）
   ▼
 Nginx (宝塔托管，80/443)
   ├─ / → Vue 静态资源（web-vue-SuMon/dist）
@@ -22,7 +22,7 @@ Java 后端 (susumonitor-server, systemd, 127.0.0.1:18080)
   └─ RabbitMQ（127.0.0.1:5672，vhost susumonitor，MVP-10 Outbox 发布）
 
 Go Agent（部署到被监控服务器）
-  └─ ws://<域名或IP>/ws/agent（Token 鉴权 + 指标上报 + 终端中继）
+  └─ wss://SERVER_IP_OR_DOMAIN/ws/agent（Token 鉴权 + 指标上报 + 终端中继）
 ```
 
 ## 二、前置条件与版本要求
@@ -113,7 +113,7 @@ sudo install -m 0600 -o root -g root server.env /etc/susumonitor/server.env
 - SPA fallback（`try_files ... /index.html`）
 - `/api/` 反代 127.0.0.1:18080
 - `/ws/agent`、`/ws/monitor` 反代（`Upgrade`/`Connection` 头 + 3600s 超时）
-- **HTTPS/WSS 由宝塔托管证书，域名备案后启用**（见《安全检查手册》TLS 计划）
+- **HTTPS/WSS 由宝塔托管证书，生产必须启用；HTTP 仅用于本机验证**（见《安全检查手册》）。
 
 ## 四、启动 / 停止 / 重启 / 状态
 
@@ -184,7 +184,7 @@ docker compose up -d                                    # 四服务，healthchec
 docker compose ps                                       # 应全部 (healthy)
 ```
 
-- 入口：`http://<主机>:${WEB_PORT:-8080}`（nginx 容器反代 `/api`、`/ws/agent`、`/ws/monitor` → server:18080）。
+- 入口：`http://<主机>:${WEB_PORT:-8080}`（仅限受控内网/本机验证；生产应在 TLS 终止的 Nginx 入口使用 `https://SERVER_IP_OR_DOMAIN`，nginx 容器反代 `/api`、`/ws/agent`、`/ws/monitor` → server:18080）。
 - 数据：命名卷 `mysql-data`/`rabbitmq-data` 持久化；`docker compose down -v` 清空重置。
 - 验收：`node api-test/verify-docker-compose.mjs`（P0 首管理员 bootstrap + C1 健康/C2 建服务器/C3 WS 订阅/C4 agent token/C5 agent 容器上报闭环，2026-08-16 PASS）。
 - 注意：容器与 systemd 部署不可在同一主机混用端口（3306/5672/18080 均被容器占用时 systemd 路径需改端口）。

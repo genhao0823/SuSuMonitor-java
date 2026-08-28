@@ -10,10 +10,10 @@
 |---|---|---|
 | 域名与证书 | 正式域名 + 有效 TLS 证书，证书链完整 | `openssl s_client -connect <域名>:443 -servername <域名> </dev/null 2>/dev/null | openssl x509 -noout -subject -dates` |
 | Nginx | 同域代理 `/api/`、`/ws/agent`、`/ws/monitor`，正确配置 Upgrade 头 | 见第 2 节示例 |
-| 后端服务 | Java 18080、MySQL、RabbitMQ 正常，Flyway 迁移完成 | `/api/ready` 返回 200，且包含 rabbitmq 就绪字段 |
+| 后端服务 | Java `18080`（仅回环/内网）、MySQL、RabbitMQ 正常，Flyway 迁移完成 | `/api/ready` 返回 200，且包含 rabbitmq 就绪字段 |
 | 账号与 Server | admin 账号；已建 server 记录 | REST `GET /api/servers` 可见目标 server |
 | Agent Token | 通过 register/rotate API 一次性获取 | `POST /api/servers/{id}/agent/register`，明文只返回一次 |
-| 家庭主机 | Linux amd64；root 或 systemd 权限；可出站访问 443 | 无入站端口要求 |
+| 家庭主机 | Linux amd64；具有运行服务所需的 systemd 权限；可出站访问 443 | 无入站端口要求；PTY 进程权限继承 Agent 服务用户，是否使用 root 由现场 systemd 单元明确配置 |
 
 ## 2. Nginx 关键配置（参考）
 
@@ -118,7 +118,7 @@ journalctl -u susumonitor-agent -f --no-pager   # 观察 JSON 日志
 | 1 | 断开家庭网络 30s 后恢复 | Agent 指数退避重连（带 jitter，等待为退避的 [1/2, 1]），恢复后重新认证并上报 |
 | 2 | 重启云端 Java 服务 | Agent 感知断线、退避、后端恢复后自动重连 |
 | 3 | 观察重连日志 | `connect or authenticate failed, reconnecting` 的 backoff 序列 1s→2s→4s…，且不形成紧密循环 |
-| 4 | 长时间断线再恢复 | 恢复后只上报新样本，不做离线回放 |
+| 4 | 长时间断线再恢复 | 恢复后先按 FIFO 顺序受控回放已持久化且未确认的指标，再继续上报新样本；不跳过队首、不无限制突发发送 |
 
 参考脚本：`api-test/verify-go-agent-reconnect.mjs`、`api-test/verify-go-agent-recovery.mjs`。
 
@@ -164,7 +164,7 @@ journalctl -u susumonitor-agent -f --no-pager   # 观察 JSON 日志
 
 | # | 步骤 | 预期 |
 |---|---|---|
-| 1 | `ls -l /etc/susumonitor/agent.env` | 权限 `0600`，属主 root |
+| 1 | `ls -l /etc/susumonitor/agent.env` | 权限 `0600`；属主为运行 Agent 的专用服务用户或 root（按部署方案），token 不可被无关用户读取 |
 | 2 | 抓包/日志 | 无明文 token；传输全部为 TLS |
 | 3 | `AGENT_ALLOW_INSECURE_HTTP` | 生产环境未设置 |
 | 4 | 家庭主机 | 仅出站 443，无入站端口开放 |
@@ -181,7 +181,7 @@ journalctl -u susumonitor-agent -f --no-pager   # 观察 JSON 日志
 | `api-test/verify-alert-ws.mjs` | 告警 Trigger/Continue/Resolve 推送 |
 | `api-test/verify-outbox.mjs` | Outbox 正常/停机/恢复补发三阶段 |
 | `api-test/verify-mvp11.mjs` | Alert 消费侧正常/幂等/DLQ |
-| `agent-go-SuMon/scripts/run-wsl-pty-integration.sh` | WSL PTY 链路集成 |
+| `scripts/run-wsl-pty-integration.sh` | WSL PTY 链路集成 |
 
 ## 6. MVP-11 外部验收项（2026-08-16 更新：三项均已完成）
 
@@ -196,5 +196,5 @@ journalctl -u susumonitor-agent -f --no-pager   # 观察 JSON 日志
 ## 7. 已知限制
 
 - `/ws/agent`、`/ws/monitor` 的连接注册表、ticket、订阅和终端中继均为单 JVM 内存状态，多实例横向扩容未验证。
-- 明文 `ws://` 已被运营商劫持验证，公网一律使用 `wss://`。
+- 明文 `ws://` 已被运营商劫持验证（历史记录，2026-07-30）；公网一律使用 `wss://`。
 - 慢消费者 `1011`（`CloseStatus.SESSION_NOT_RELIABLE`）背压需要受控慢网环境，WSL loopback 无法稳定触发。

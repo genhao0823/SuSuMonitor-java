@@ -41,19 +41,19 @@ Java 代码必须遵循《阿里巴巴 Java 开发手册》。
 | 数据库地址 | `127.0.0.1:3306` |
 | 数据库名 | `susumonitor` |
 | 数据库用户 | `susumonitor` |
-| 本机开发密码 | `732682` |
+| 本机开发密码 | 通过本机环境变量或未提交的本地配置注入，本文不记录口令 |
 
 该密码仅用于本机开发，生产环境必须替换。
 
 ## 三、环境变量
 
-参考 `.env.example`。真实 `.env` 不提交 Git。
+参考 `.env.example`。真实 `.env` 不提交 Git；本文和示例文件不得记录真实口令。
 
 关键密钥必须通过本机环境或部署平台注入：
 
 - `JWT_SECRET`
 - `AES_GCM_KEY`
-- `AGENT_REGISTER_KEY`
+- `AGENT_REGISTER_KEY`（预留配置；当前 Agent WebSocket 鉴权不读取此变量，暂不列为必配项）
 
 > 注意：工程启动**不会自动加载** `.env` 文件；本机运行需手动 `export`（或写入 IDE 运行配置），容器化部署由仓库根 `docker-compose.yml` 读取根目录 `.env` 注入。
 
@@ -98,7 +98,7 @@ OpenAPI 3.0 文档共 5 个文件，位于：
 baseUrl = http://localhost:18080
 ```
 
-5 个文件覆盖 system/auth/admin/server/alert 全部 REST 接口（29 路径 / 34 端点操作），例如：
+5 个文件覆盖 system/auth/admin/server/alert 全部 REST 接口（31 路径 / 36 端点操作），例如：
 
 - `GET /api/health`
 - `GET /api/ready`
@@ -108,7 +108,7 @@ baseUrl = http://localhost:18080
 
 ## 七、当前阶段
 
-当前已完成：Java 后端工程骨架、统一响应、基础错误码、全局异常处理、request_id、`/api/health`、`/api/ready`、认证（注册/登录/登出/当前用户）、管理员审核（待审核列表/通过/拒绝）、服务器 CRUD（含软删除和排序）、SSH 凭据加密和连接测试（含主机指纹确认）、Agent Token 生命周期（注册/轮换/撤销）、Metrics 接收/存储/查询/清理、Agent 和 Monitor 双 WebSocket 通道（含 Ticket 握手和实时推送）、CORS 跨域配置、WebSocket 错误契约冻结、MVP-6 告警业务闭环（规则 CRUD、状态机去重、恢复、记录查询、标记已读和 alert.push 推送）、终端会话生命周期（创建/状态转换/超时清理）、终端单 JVM 配额（用户 2、服务器 4、操作用户 5、全局 16、并发幂等）、**MVP-10 Metrics Outbox（V14 同事务写入 + RabbitMQ 发布器 Confirm/Return/指数退避 + ready 50301）**、**MVP-11 Alert 消费侧（V15 消费幂等表 + AUTO 确认 + 3 次有限重试 + DLQ 分类 + 字段级契约校验）**、**Agent 指标可靠投递（`metrics.ack` 入口确认；`metrics.nack` 永久拒绝分类 invalid_metrics_payload/stale_collected_at/server_not_found；心跳携带投递遥测落库 `servers.delivery_*` 并经 `GET /api/servers/{id}/status` 返回）**、Flyway V1-V19（V13 告警活跃规则唯一索引 / V14 outbox / V15 消费幂等 / V16 outbox 清理 / V17 心跳微秒精度 / V18 告警确认窗口 / V19 投递统计列）、**告警通知链路（V20/V21：邮件+钉钉+Webhook 通知渠道、消息驱动排程、退避重试与失败留痕、`GET /api/alerts/records/{id}/notifications` 通知历史）**、**alert.resolved 恢复事件链路（V25/V26 + alert-resolved-notifier 消费收口，`alert.triggered.v1` / `alert.resolved.v1` 出站事件）**、**保留期清理全集（V22 告警记录 / V24 SSH 测试历史 / V27 通知清理，outbox 清理默认开启，共 9 个调度器）**、**SSH 测试历史（V23，`GET /api/servers/{id}/ssh/test/history` 成功与失败均留痕）**、**心跳超时终端收口修复（`AGENT_HEARTBEAT_TIMEOUT_SECONDS`）**、部署资产（`application-prod.yml`、systemd unit、Nginx 反代示例、环境变量模板、`DEPLOYMENT.md`、本机 IPv4 smoke 脚本）。
+当前已完成：Java 后端工程骨架、统一响应、基础错误码、全局异常处理、request_id、`/api/health`、`/api/ready`、认证（注册/登录/登出/当前用户）、管理员审核（待审核列表/通过/拒绝）、服务器 CRUD（含软删除和排序）、SSH 凭据加密和连接测试（含主机指纹确认）、Agent Token 生命周期（注册/轮换/撤销）、Metrics 接收/存储/查询/清理、Agent 和 Monitor 双 WebSocket 通道（含 Ticket 握手和实时推送）、CORS 跨域配置、WebSocket 错误契约冻结、MVP-6 告警业务闭环（规则 CRUD、状态机去重、恢复、记录查询、标记已读和 alert.push 推送）、终端会话生命周期（创建/状态转换/超时清理）、终端单 JVM 配额（用户 2、服务器 4、操作用户 5、全局 16、并发幂等）、**MVP-10 Metrics Outbox（V14 同事务写入 + RabbitMQ 发布器 Confirm/Return/指数退避 + ready 50301）**、**MVP-11 Alert 消费侧（V15 消费幂等表 + AUTO 确认 + 3 次有限重试 + DLQ 分类 + 字段级契约校验）**、**Agent 指标可靠投递（`metrics.ack` 入口确认；`metrics.nack` 永久拒绝分类 invalid_metrics_payload/stale_collected_at/server_not_found；心跳携带投递遥测落库 `servers.delivery_*` 并经 `GET /api/servers/{id}/status` 返回）**、Flyway V1-V27（V13 告警活跃规则唯一索引 / V14 outbox / V15 消费幂等 / V16 outbox 清理 / V17 心跳微秒精度 / V18 告警确认窗口 / V19 投递统计列）、**告警通知链路（V20/V21：邮件+钉钉+Webhook 通知渠道、消息驱动排程、退避重试与失败留痕、`GET /api/alerts/records/{id}/notifications` 通知历史）**、**alert.resolved 恢复事件链路（V25/V26 + alert-resolved-notifier 消费收口，`alert.triggered.v1` / `alert.resolved.v1` 出站事件）**、**保留期清理全集（V22 告警记录 / V24 SSH 测试历史 / V27 通知清理，outbox 清理默认开启，共 9 个调度器）**、**SSH 测试历史（V23，`GET /api/servers/{id}/ssh/test/history` 成功与失败均留痕）**、**心跳超时终端收口修复（`AGENT_HEARTBEAT_TIMEOUT_SECONDS`）**、部署资产（`application-prod.yml`、systemd unit、Nginx 反代示例、环境变量模板、`DEPLOYMENT.md`、本机 IPv4 smoke 脚本）。
 
 资源限制语义：
 
@@ -124,7 +124,7 @@ baseUrl = http://localhost:18080
 
 - 已合入 `main`：上述所有能力（含 `mvnw`/`mvnw.cmd` 与 `deploy/` 部署资产）。
 - 本机 IPv4 可验证：`/api/health`、`/api/ready`、`127.0.0.1:18080` 监听、Nginx 示例配置静态检查。
-- 真实云环境已验证：云端明文 HTTP 部署端到端（2026-07-31，见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md`）；HTTPS/WSS 已上线（2026-08-07，域名 genhaosan.online）。
+- 真实云环境已验证：云端端到端联调记录（2026-07-31）保留在交接文档中；生产入口应使用 HTTPS/WSS（2026-08-07 的加密入口验收记录）。本文不固化具体域名，部署时以 `SERVER_IP_OR_DOMAIN` 或实际受控域名替换。
 - 真实云环境未验证：MySQL 备份恢复演练、家庭 Linux 主机（T6）部署。
 
 未纳入 `main` 跟踪的代码或计划：

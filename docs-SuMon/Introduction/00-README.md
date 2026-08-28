@@ -1,8 +1,8 @@
 # SuSuMonitor 面试准备文档导读
 
-> 本文档集是围绕 **SuSuMonitor 服务器监控平台** 整理的面试准备材料,内容全部来自仓库代码、开发日志(134 篇)、Bug 记录、验收文档与交接文档,保证与代码事实一致。
+> 本文档集是围绕 **SuSuMonitor 服务器监控平台** 整理的面试准备材料,内容全部来自仓库代码、开发日志(142 篇)、Bug 记录、验收文档与交接文档,保证与代码事实一致。
 >
-> 整理日期:2026-08-16(对应代码状态:`main` 分支,V27 运维收口完成,后端 550 项、前端 Vitest 129 项测试全绿)
+> 整理日期:2026-08-27（对应当前 PR 分支 `fix/web-glassmorphism-closeout`，HEAD `617ccd0`；当前提交链含计划 `ebe96d0`、验收脚本修正 `ebe152e` 和验收记录 `617ccd0`）。后端 Maven 基线为 591 条测试中 590 条通过、1 条既有时间炸弹失败；Web Vitest 129 项、Android 85 项、Go 10 个 test 文件。历史明文地址、IP 和命令已脱敏并禁止执行；当前部署目标为 HTTPS/WSS。
 
 ## 一、文档清单
 
@@ -21,10 +21,10 @@
 1. **一句话定位**:SuSuMonitor 是一套前后端 + Agent + Android 全栈的 Linux 服务器监控系统,采用"Go Agent 主动出站采集 + Java 后端处理 + Vue3 控制台与 Android App 展示"的四端架构,实现了从指标采集、实时推送、告警评估到 Web 终端运维的完整闭环。
 2. **我的角色**:独立完成四端开发与文档建设,经历了从需求分析、数据库设计、后端开发、联调验收、云端部署到生产问题排查的完整流程。
 3. **亮点一句话**(挑 1-2 个讲):
-   - 告警链路用 **Transactional Outbox 模式** 保证"指标入库"与"事件发布"的可靠性,解决了事务与消息一致性问题;
-   - 面对**公网明文 HTTP 部署**暴露的运营商劫持、安全上下文 API 失效等真实问题,逐一定位根因并解决;
-   - 建立了 4 道测试防线(单元测试 / 静态扫描 / API E2E / 浏览器 E2E),后端 550 项、前端 Vitest 129 项测试全绿;
-   - 每次线上问题都沉淀为 Bug 文档,形成"现象→根因→修复→教训"的闭环。
+   - 告警链路用 **Transactional Outbox 模式** 保证“指标入库”与“事件发布”的可靠性,解决了事务与消息一致性问题;
+   - HTTPS/WSS 已作为正式部署目标完成验证; 历史明文 HTTP/IP 仅作为问题定位背景，禁止执行;
+   - Web 前端测试：Vitest 133 项（22 个 spec 文件）；真实账号 UI E2E 需隔离凭据与后端环境。
+   - 每次线上问题都沉淀为 Bug 文档,形成“现象→根因→修复→教训”的闭环。
 
 ## 三、面试官可能深挖的"埋点"(务必提前准备)
 
@@ -39,18 +39,20 @@
 
 ### 已实现(可以放心声称做过)
 
-- **HTTPS / WSS** ✅ 已完成(2026-08-07,域名 genhaosan.online,Polish-6 M1)
-- **Docker / docker-compose** ✅ 已实现(三端 Dockerfile + docker-compose.yml,Polish-6 N6;**镜像实机构建 2026-08-16 完成**:WSL2 Docker 三镜像构建 + compose 全栈实跑 PASS)
-- **数据库异地备份脚本** ✅ 已实现(`scripts/remote-backup.sh`,云端备份→拉回→AES-256 加密落盘,Polish-6 M7)
-- **Android App** ✅ 已完整实现(`app-kt-SuMon/`,Kotlin + Compose;阶段一 Web 完整移植 + 阶段二 SSH 终端(自研 ANSI 终端模拟器),85 单测全绿;云端全链路手测待真机)
-- **告警外部通知渠道** ✅ 已实现(邮件 + 钉钉 + Webhook,V20,含退避重试,Polish-6 N1-N5;真实 SMTP 发送待邮箱凭据验收)
-- **alert.resolved 恢复事件链路** ✅ 已实现(V25/V26 + alert-resolved-notifier 消费收口,2026-08-13~15)
-- **终端断线中继 E2E** ✅ 已实现(terminal.closed `agent_disconnected` 语义收口,2026-08-13~15)
-- **V27 通知清理** ✅ 已实现(告警通知保留期清理 + outbox 清理默认开启,运维收口 2026-08-15)
+- **HTTPS / WSS** 已完成（2026-08-07；正式域名/IP 不在仓库文档中记录，当前以 HTTPS/WSS 为唯一部署目标）
+- **Docker / docker-compose** 已实现（三端 Dockerfile + docker-compose.yml；镜像实机构建 2026-08-16 完成，未推 registry、未做多架构 buildx）
+- **数据库异地备份脚本** 已实现（`scripts/remote-backup.sh`，真实密钥和地址不入库；crontab 调度仍未验证）
+- **Android App** 已完整实现（`app-kt-SuMon/`，Kotlin + Compose；阶段一 Web 完整移植 + 阶段二 SSH 终端，85 单测全绿；云端全链路手测待真机）
+- **告警外部通知渠道** 已实现（邮件 + 钉钉 + Webhook；真实 SMTP 发送待邮箱凭据验收）
+- **alert.resolved 恢复事件链路** 已实现（V25/V26 + alert-resolved-notifier 消费收口）
+- **终端断线中继 E2E** 已实现（`terminal.closed` `agent_disconnected` 语义收口）
+- **V27 通知清理** 已实现（告警通知保留期清理 + outbox 清理默认开启）
 
 ### 仍未实现(不要声称做过)
 
-- 多 JVM 实例部署 / 跨实例事件推送(Redis ticket 共享 2026-08-17 + 双实例跨实例验收完成 2026-08-18；注册表/事件广播仍单 JVM 内存态，阶段二/三)
-- Redis / 分布式锁 / 微服务拆分(Redis 已落地 2026-08-17 ticket 共享 + 2026-08-18 JWT 黑名单与登录防爆破，均可选启用；分布式锁/微服务拆分仅规划,Outbox 模式已为拆分做准备)
-- Docker 镜像实机构建(2026-08-16 已完成:三镜像构建 + compose 全栈实跑 PASS;未推 registry、未做多架构 buildx)
-- 真实 SMTP 发送验收、真实 Agent→Java/MySQL 联合 E2E、首管理员空库真实并发(脚本已备,待凭据/设备)
+- 多 JVM 实例部署 / 跨实例事件推送（Redis ticket 共享已落地；注册表、订阅和终端中继仍为单 JVM 内存态）
+- Redis / 分布式锁 / 微服务拆分（Redis 已落地 ticket 共享、JWT 黑名单与登录防爆破；分布式锁/微服务拆分仅规划，Outbox 模式已为拆分做准备）
+- Docker 镜像多架构发布或推送 registry（2026-08-16 已完成三镜像构建 + compose 全栈实跑 PASS）
+- 真实 SMTP 发送验收、真实 Agent→Java/MySQL 断网/重启联合 E2E、Monitor 1011 真实背压和数据库异地备份 crontab 调度
+
+首管理员空库真实并发已完成验收：conc=8 与 conc=20 均 PASS；不要再将其列为未实现项。

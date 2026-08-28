@@ -1,8 +1,8 @@
 # 20260805-Android App 开发计划（app-kt-SuMon 核心监控版 MVP）
 
-**状态**：✅ 已收口（阶段一+阶段二 2026-08-06、Polish-7 终端增强 2026-08-12；85 单测全绿；真机云端全链路手测待设备）
+**状态**：已收口（阶段一+阶段二 2026-08-06、Polish-7 终端增强 2026-08-12；85 单测全绿；真机云端全链路手测待设备）
 **日期**：2026-08-05
-**前置基线**：`main` HEAD `8ab99ce`（N6 运维收口）
+**当前校准**：2026-08-27，当前 PR 分支 HEAD `617ccd0`；正式后端入口目标为 HTTPS/WSS，历史明文 HTTP/IP 配置仅作追溯，禁止执行。
 
 ## 一、总览
 
@@ -11,16 +11,16 @@
 | 范围 | 核心监控版：登录/注册 + 服务器列表/详情 + 实时指标 + 告警记录 + 前台服务告警通知 |
 | 目录 | `app-kt-SuMon/`（需求文档 §15.9 既有规划，之前为空） |
 | 源码目录 | `app/src/main/java/`（与 kotlin-coding skill §8 一致） |
-| 技术栈 | Kotlin 2.0.21 + Jetpack Compose(M3) + Retrofit 2.11 + OkHttp 4.12 + kotlinx-serialization + Hilt + DataStore + AGP 8.13 + Gradle 8.10；minSdk 26 / target&compileSdk 36 |
-| 后端 | 固定云端 `http://82.156.245.102`（nginx 80 反代 `/api/` 与 `/ws/monitor`） |
-| 明文 HTTP | network_security_config 仅放行 `82.156.245.102`（演示环境） |
+| 技术栈 | Kotlin 2.0.21 + Jetpack Compose(M3) + Retrofit 2.11 + OkHttp 4.12 + kotlinx-serialization + Hilt + DataStore + AGP 8.13 + Gradle 8.13；minSdk 26 / target&compileSdk 36 |
+| 后端 | 通过受控 HTTPS/WSS 域名入口访问；仓库不记录真实域名、IP 或凭据 |
+| 明文 HTTP | 禁止作为正式配置或验收目标；历史明文地址/IP 仅作追溯，禁止执行 |
 
 **不在本版**：服务器 CRUD、SSH 终端、告警规则管理、用户审核（后续迭代）。
 
 ## 二、实施阶段
 
 ### 阶段 A：工程脚手架
-- A1 环境：本机 Android Studio 2026.1.1，SDK 位于 `D:\develop\android`（platforms=android-36.1，build-tools 36.1.0/37.0.0）；Gradle 8.10 wrapper 经腾讯云镜像分发
+- A1 环境：Android Studio 与 SDK 版本以本机实际环境为准；Gradle 8.13 wrapper 使用仓库配置的镜像分发
 - A2 骨架：settings/build/gradle.properties/libs.versions.toml/wrapper/.gitignore/manifest/资源/network_security_config
 - A3 最小可构建：SuSuMonitorApp/MainActivity/空 Dashboard/theme；`gradlew :app:assembleDebug` 通过
 - 注意：SDK 仅 android-36.1 平台，compileSdk 计划由 34 调整为 36

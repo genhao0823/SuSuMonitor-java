@@ -9,8 +9,8 @@
 
 SuSuMonitor 采用 **Agent 主动出站** 模式，不依赖后端反向连接主机：
 
-- **Agent（本手册）**：部署在被监控主机上，主动出站 WebSocket 连接云端后端 `ws://SERVER_IP_OR_DOMAIN/ws/agent`，鉴权后每 N 秒上报 `metrics.report`，并可选提供基于本地 PTY 的 Web 终端。
-- **方向**：Agent → 后端（出站）。被监控主机只需能访问公网 80 端口即可，**无需公网 IP、无需开放入站端口、无需后端能 SSH 进来**。
+- **Agent（本手册）**：部署在被监控主机上，主动出站 WebSocket 连接云端后端 `wss://SERVER_IP_OR_DOMAIN/ws/agent`（生产必须 WSS；`ws://` 仅限受控本机验证），鉴权后每 N 秒上报 `metrics.report`，并可选提供基于本地 PTY 的 Web 终端。
+- **方向**：Agent → 后端（出站）。生产环境被监控主机只需能访问公网 443 端口即可，**无需公网 IP、无需开放入站端口、无需后端能 SSH 进来**。受控本机验证可使用回环 HTTP/WS，但不得用于公网。
 - **适用场景**：家庭内网主机、NAT 后主机、云服务器、本机 WSL 调试机，均适用。
 
 > 与"服务器详情页 → 测试连接（SSH）"的区别：SSH 测试是后端**主动 SSH 连** `ssh_host` 做连通性测试，要求后端能连到主机，对家庭内网主机无效。Agent 监控 / Web 终端**不依赖** SSH 字段，全部走 WebSocket。创建服务器时 SSH 字段在 Agent 模式下为冗余，填占位值即可（见第四章）。
@@ -23,13 +23,13 @@ SuSuMonitor 采用 **Agent 主动出站** 模式，不依赖后端反向连接�
 | 管理员账号 | 一个 admin 角色账号（首个注册用户自动成为 admin），用于预建 server 与发放 token |
 | 编译机 | Go 1.23+（`go.mod` 要求 1.23，用于交叉编译 Linux 二进制），或目标机自带 Go |
 | 目标机 | Linux x86_64（PTY 终端功能仅 Linux 支持） |
-| 网络 | 目标机能出站访问 `SERVER_IP_OR_DOMAIN:80` |
+| 网络 | 目标机能出站访问 `SERVER_IP_OR_DOMAIN:443`（生产 HTTPS/WSS） |
 
 验证目标机网络可达：
 
 ```bash
-curl -i http://SERVER_IP_OR_DOMAIN/api/health
-# 期望 HTTP 200, "status":"UP"
+curl -i https://SERVER_IP_OR_DOMAIN/api/health
+# 生产入口期望 HTTP 200, "status":"UP"；HTTP 仅限本机受控验证
 ```
 
 ## 三、构建
@@ -68,7 +68,7 @@ Agent 启动需要 `server_id` 与 `agent_token`，由管理员通过后端 REST
 ### 1. 登录获取 JWT
 
 ```bash
-SERVER="http://SERVER_IP_OR_DOMAIN"
+SERVER="https://SERVER_IP_OR_DOMAIN"
 # 用变量传密码,避免明文进 history
 read -rsp "admin password: " ADMIN_PASS; echo
 LOGIN=$(curl -s -X POST "$SERVER/api/auth/login" \
@@ -114,7 +114,7 @@ Agent 只读环境变量（不自动加载 `.env` 文件，systemd 用 `Environm
 部署文件路径：`/etc/susumonitor/agent.env`（权限 0600，root 只读）。
 
 ```ini
-SUSUMONITOR_BACKEND_URL=ws://SERVER_IP_OR_DOMAIN
+SUSUMONITOR_BACKEND_URL=wss://SERVER_IP_OR_DOMAIN
 SUSUMONITOR_SERVER_ID=<上一步 server_id>
 SUSUMONITOR_AGENT_TOKEN=<上一步 agent_token>
 SUSUMONITOR_COLLECT_INTERVAL_SECONDS=5
@@ -147,7 +147,7 @@ SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS=2500
 
 | 配置项 | 说明 |
 |--------|------|
-| `SUSUMONITOR_BACKEND_URL` | 后端 WebSocket 地址，**必须** `ws://` 或 `wss://` 开头。走 nginx 公网入口，**不要**直连后端 18080（后端通常只绑 127.0.0.1） |
+| `SUSUMONITOR_BACKEND_URL` | 后端 WebSocket 地址，生产**必须**使用 `wss://`；`ws://` 仅限受控本机验证。走 nginx 公网入口，**不要**直连后端 18080（后端通常只绑 127.0.0.1） |
 | `SUSUMONITOR_SERVER_ID` | 预建 server 的 id（正整数，必填） |
 | `SUSUMONITOR_AGENT_TOKEN` | 预发的 Agent Token（必填，不写日志） |
 | `SUSUMONITOR_COLLECT_INTERVAL_SECONDS` | 指标采集间隔，默认 5 秒，≥1 |
@@ -156,7 +156,7 @@ SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS=2500
 | `SUSUMONITOR_LOG_LEVEL` | `info` / `debug` / `warn` / `error`，排障时用 `debug` 可见 `metrics sent/reported` |
 | `SUSUMONITOR_TERMINAL_ENABLED` | 是否接受 Web 终端协议帧，默认 `false`。开启终端功能设 `true` |
 | `SUSUMONITOR_TERMINAL_SHELL` | PTY 启动 shell，须干净绝对路径，默认 `/bin/bash` |
-| `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标 FIFO 快照文件，必须是 clean absolute path（含本地死信，v2 格式，v1 自动迁移），默认 `/var/lib/susumonitor/metrics-buffer.json` |
+| `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标的持久化 FIFO 快照文件，断线或重启后按原顺序受控回放（含本地死信，v3 格式，v1/v2 自动迁移），默认 `/var/lib/susumonitor/metrics-buffer.json` |
 | `SUSUMONITOR_METRICS_BUFFER_MAX_ENTRIES` | 待确认指标与死信共用的条数上限，默认 720（约 1 小时 5 秒采集；死信超限丢最旧） |
 | `SUSUMONITOR_METRICS_BUFFER_MAX_BYTES` | 待确认队列字节上限，默认 `0`（不限制）；非 0 时必须 ≥ 1024。超限拒绝最新采样并计 drop，与条数上限独立生效 |
 | `SUSUMONITOR_METRICS_ACK_TIMEOUT_SECONDS` | 写入后等待 `metrics.ack` 的最长时间，默认 15；超时保留队首并按退避重传原 UUID |
@@ -165,7 +165,7 @@ SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS=2500
 | `SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS` | ACK/NACK 后积压相邻发送的最小间隔，默认 2500ms |
 | `SUSUMONITOR_LOG_LEVEL` | `info` / `debug` / `warn` / `error`，排障时用 `debug` 可见 `metrics sent/reported`；NACK 死信处置为 warn 级 |
 
-> **可靠投递语义（2026-08-05）**：仅收到同一 `message_id` 的 `metrics.ack` 才删除队首；`metrics.nack`（永久拒绝：载荷非法 / 乱序 / 服务器不存在）把队首移入本地死信且不重试；泛化 `error` 帧不删队首。心跳携带投递遥测（pending/bytes、最旧采样、丢弃、死信），后端落库后可在服务器详情页"状态快照"查看。
+> **可靠投递语义（2026-08-05）**：仅收到同一 `message_id` 的 `metrics.ack` 才删除队首；`metrics.nack`（永久拒绝：载荷非法 / 乱序 / 服务器不存在）把队首移入本地死信且不重试；可重试的 `retriable_server_error` 按有限预算退避重传，耗尽后进入死信；泛化 `error` 帧不删队首。断线或重启后，已持久化的待确认指标会在重新鉴权后按 FIFO 顺序受控回放；心跳携带投递遥测（pending/bytes、最旧采样、丢弃、死信），后端落库后可在服务器详情页“状态快照”查看。
 
 ## 六、systemd 部署
 
@@ -185,9 +185,9 @@ deploy/
 
 ```bash
 curl --fail --silent --show-error --location \
-  https://genhaosan.online/agent/install-agent.sh | \
+  https://SERVER_IP_OR_DOMAIN/agent/install-agent.sh | \
   sudo -E env \
-    AGENT_BASE_URL=https://genhaosan.online \
+    AGENT_BASE_URL=https://SERVER_IP_OR_DOMAIN \
     AGENT_TERMINAL_ENABLED=true \
     AGENT_VERSION=1.0.0 \
     bash
@@ -197,13 +197,13 @@ curl --fail --silent --show-error --location \
 
 脚本自动完成：下载二进制（sha256 校验）→ 交互输入 admin 账密 → 登录 → 预建 server → 发 token → 写配置 → 装 systemd → 启动验证。安装失败自动回滚。
 
-> ⚠️ **已装过 agent 的机器重跑不会更新旧地址**：脚本只在 `/etc/susumonitor/agent.env` 不存在时才写入 `SUSUMONITOR_BACKEND_URL`，已存在则保留原值。HTTPS 迁移后旧机器（指向 `ws://82.156.245.102` 等）需先手动改：`sed -i 's|SUSUMONITOR_BACKEND_URL=ws://.*|SUSUMONITOR_BACKEND_URL=wss://genhaosan.online|' /etc/susumonitor/agent.env && systemctl restart susumonitor-agent`，或 `rm /etc/susumonitor/agent.env` 后重跑脚本（会重新注册新 server）。
+> **已装过 Agent 的机器重跑不会更新旧地址**：脚本只在 `/etc/susumonitor/agent.env` 不存在时才写入 `SUSUMONITOR_BACKEND_URL`，已存在则保留原值。迁移到新的 HTTPS/WSS 域名时，应先备份并编辑该配置文件，再重启服务；不要删除配置文件或执行会丢失配置的命令来“强制更新”。
 
 **环境变量**：
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `AGENT_BASE_URL` | `https://monitor.example.com` | 后端 HTTPS 地址，`https:` 自动转 `wss:` 写 agent 配置 |
+| `AGENT_BASE_URL` | `https://SERVER_IP_OR_DOMAIN` | 后端 HTTPS 地址，`https:` 自动转 `wss:` 写入 Agent 配置 |
 | `AGENT_VERSION` | `1.0.0` | release 版本号 |
 | `AGENT_NAME` | `hostname -s` | 主机显示名 |
 | `AGENT_SERVER_ID` | 空（新建） | 已有 server 时复用，跳过预建 |
@@ -227,7 +227,7 @@ sudo systemctl enable --now susumonitor-agent
 
 systemd 单元要点：
 
-- `User=root`（PTY 需要 root 或对应权限）
+- `User=root`（随仓库提供的 systemd 单元）会使 Agent 与其 PTY 子进程以 root 权限运行；这不是 PTY 的必然要求。若业务不需要 root，部署时应改为专用非 root 服务用户，并确保其可读配置、写入日志/缓冲目录。无论哪种方案，终端用户获得的都是 Agent 服务用户权限。
 - `EnvironmentFile=/etc/susumonitor/agent.env`
 - `Restart=always` / `RestartSec=5`（断线自动重连拉起）
 - `StandardOutput=append:/var/log/susumonitor/agent.log`
@@ -251,7 +251,7 @@ sudo journalctl -u susumonitor-agent -f
 期望关键行：
 
 ```
-"msg":"susumonitor agent starting","backend_url":"ws://...","server_id":N,...
+"msg":"susumonitor agent starting","backend_url":"wss://...","server_id":N,...
 "msg":"agent authenticated","server_id":N
 ```
 
@@ -311,7 +311,7 @@ Web 终端走 WebSocket（**不是 SSH**）：前端 `/ws/monitor` → 后端中
 | 创建 server 必填 SSH | 当前 `CreateServerRequest` DTO 强制要求 SSH 字段，Agent 模式填占位值即可通过 |
 | Web 终端报终端错误（40903 等） | `TERMINAL_ENABLED=false`，设 `true` 后 `restart` |
 | 前端 dashboard 无数据 | 先看 `agent.log` 是否 `authenticated` + `metrics reported`，再看后端 `metrics` 表是否落库 |
-| `BACKEND_URL must start with ws:// or wss://` | 地址没带协议头；注意走 nginx 公网入口，别直连后端 18080 |
+| `BACKEND_URL must start with ws:// or wss://` | 地址没带协议头；生产必须使用 `wss://`，并走 nginx 公网入口，别直连后端 18080 |
 | WSL 里 `nohup &` 后台进程消失 | WSL 命令退出会回收后台进程。WSL 需用 systemd 部署（WSL2 需 `/etc/wsl.conf` 设 `[boot] systemd=true`） |
 
 ### 家庭内网主机部署要点

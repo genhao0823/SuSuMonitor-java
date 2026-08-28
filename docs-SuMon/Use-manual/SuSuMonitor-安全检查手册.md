@@ -1,7 +1,7 @@
 # SuSuMonitor 安全检查手册（MVP-8）
 
 **适用范围**：部署环境安全基线、上线前检查清单。
-**原则**：最小暴露、密钥隔离、日志脱敏、依赖补丁。HTTPS/WSS 已启用（2026-08-07，`https://genhaosan.online`），TLS 状态与加固待办见 §五。
+**原则**：最小暴露、密钥隔离、日志脱敏、依赖补丁。生产必须使用 HTTPS/WSS；本文不固化具体域名，部署时以 `SERVER_IP_OR_DOMAIN` 或实际受控域名替换。
 
 ---
 
@@ -14,6 +14,7 @@
 | MySQL | 仅 `127.0.0.1:3306`，禁止公网 | `ss -tlnp \| grep 3306` |
 | RabbitMQ | 5672/15672 仅内网（云安全组不开放公网） | `ss -tlnp \| grep -E '5672\|15672'` |
 | SSH | 建议禁用 root 密码登录、启用密钥登录 | `grep PermitRootLogin /etc/ssh/sshd_config` |
+| TLS | 生产 HTTPS/WSS 已启用；证书、域名和 HSTS 等按现场部署核对 | `curl -I https://SERVER_IP_OR_DOMAIN/api/health` |
 
 ## 二、数据库
 
@@ -50,16 +51,16 @@ rabbitmqctl list_permissions -p susumonitor
 | 日志脱敏 | 应用日志不含密码/Token/SSH 私钥/密钥；错误响应不含敏感字段 | `journalctl -u susumonitor-server \| grep -iE 'password\|secret\|token' `（应仅命中脱敏提示） |
 | SSH 凭据 | 数据库仅存 AES-GCM 密文，接口不返回明文 | 抽查 `servers.ssh_password_encrypted` 无明文 |
 
-## 五、TLS（已启用，2026-08-07）
+## 五、TLS（生产必需）
 
-HTTPS/WSS 已上线（`https://genhaosan.online`，Polish-6 M1，2026-08-07），原计划项逐条核销：
+生产入口必须使用 HTTPS，Agent 和 Monitor WebSocket 必须使用 WSS。将 `SERVER_IP_OR_DOMAIN` 替换为实际受控域名后，核对证书链、有效期、反代 Upgrade 头和 HTTP 到 HTTPS 的跳转策略。
 
-1. ~~域名备案完成后：宝塔签发 CA 证书（Let's Encrypt）→ 站点启用 HTTPS → `nginx-susumonitor.conf.example` 合并到 443 server 块~~（已完成，2026-08-07）
-2. ~~切换后更新：`CORS_ALLOWED_ORIGINS=https://genhaosan.online`、`AGENT_TRUSTED_PROXY_CIDRS` 保持本机、Agent 端 `SUSUMONITOR_BACKEND_URL=wss://genhaosan.online`~~（已完成）
-3. ~~启用后验收：浏览器锁标、`/ws/monitor` 与 `/ws/agent` WSS 握手、Agent 长连接保活~~（验收通过）
+1. ~~域名备案完成后：宝塔签发 CA 证书（Let's Encrypt）→ 站点启用 HTTPS → `nginx-susumonitor.conf.example` 合并到 443 server 块~~（历史记录：2026-08-07 已完成；当前部署仍须按实际域名复核）
+2. ~~切换后更新：`CORS_ALLOWED_ORIGINS=https://SERVER_IP_OR_DOMAIN`、`AGENT_TRUSTED_PROXY_CIDRS` 保持本机、Agent 端 `SUSUMONITOR_BACKEND_URL=wss://SERVER_IP_OR_DOMAIN`~~（配置模板；上线前按实际域名复核）
+3. ~~启用后验收：浏览器锁标、`/ws/monitor` 与 `/ws/agent` WSS 握手、Agent 长连接保活~~（历史记录：2026-08-07 验收通过；当前环境必须重新核验）
 4. 生产 CA 证书轮换、TLS 1.3、HSTS/OCSP 按需加固（**待办**，当前宝塔托管默认即可）
 
-**历史记录（2026-07-30，风险已消除）**：原明文 HTTP + WS 阶段存在运营商劫持风险（可劫持明文 HTTP 头与 WS 握手，实测诊断记录：`Difficulty-log/20260730-宽带运营商劫持WebSocket-诊断记录.md`）。该风险已随 2026-08-07 HTTPS/WSS 启用消除。
+**历史记录（2026-07-30，风险已消除）**：原明文 HTTP + WS 阶段存在运营商劫持风险。该记录仅用于追溯，明文公网 HTTP/WS **禁止执行**；生产必须使用 HTTPS/WSS。
 
 ## 六、依赖与补丁
 
@@ -81,5 +82,5 @@ HTTPS/WSS 已上线（`https://genhaosan.online`，Polish-6 M1，2026-08-07）�
 □ 日志抽查无明文凭据
 □ Nginx 反代 /api 与 /ws 路径正确（SPA fallback + Upgrade 头）
 □ 验收清单通过（《部署安装手册》§六 7 项）
-□ TLS 已启用（HTTPS/WSS，genhaosan.online，2026-08-07；HSTS/OCSP 等加固为待办）
+□ TLS 已启用（HTTPS/WSS，域名以 `SERVER_IP_OR_DOMAIN` 替换并现场核验；HSTS/OCSP 等加固按需执行）
 ```

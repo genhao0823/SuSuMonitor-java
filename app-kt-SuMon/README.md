@@ -1,7 +1,7 @@
 # app-kt-SuMon — Android 监控客户端
 
-SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端后端
-`https://genhaosan.online`（HTTPS/WSS 反代 `/api/` 与 `/ws/monitor`）。
+SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接通过 HTTPS/WSS
+反代 `/api/` 与 `/ws/monitor` 的后端入口 `https://SERVER_IP_OR_DOMAIN`。
 
 ## 功能（阶段一：Web 端完整移植）
 
@@ -29,7 +29,7 @@ SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接云端�
 - Hilt 依赖注入
 - 前台 Service（START_STICKY + dataSync）+ NotificationChannel
 - DataStore Preferences（会话持久化）
-- AGP 8.13 + Gradle 8.10；minSdk 26 / target&compileSdk 36
+- AGP 8.13 + Gradle 8.13（wrapper）；minSdk 26 / target&compileSdk 36
 
 ## 构建
 
@@ -47,7 +47,7 @@ Debug APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 2. 连接真机或启动模拟器，运行 `app` 配置
 3. 登录页输入后端账号（首个用户为 admin，或联系管理员审核）
 
-> network_security_config 全局禁止明文 HTTP，仅放行 HTTPS/WSS（`genhaosan.online`）；生产环境仅允许加密连接。
+> `network_security_config` 全局禁止明文 HTTP；生产环境仅使用 HTTPS/WSS，部署时将后端入口配置为实际受控域名。
 
 ## 云端联调状态（2026-08-06）
 
@@ -72,8 +72,8 @@ app/src/main/java/com/susumonitor/
 
 ## 协议对齐
 
-- REST：`docs-SuMon/OpenApi-SuMon/*.json`（5 个文件，29 路径/34 端点操作，auth 模块 camelCase，其余 snake_case）
+- REST：`docs-SuMon/OpenApi-SuMon/*.json`（5 个文件，31 路径/36 端点操作，auth 模块 camelCase，其余 snake_case）
 - WebSocket：`docs-SuMon/Protocol-SuMon/websocket-protocol.md` v1.3
-  - 先 `POST /api/ws/monitor-ticket` 取 30s 一次性 ticket → 连 `ws://…/ws/monitor?ticket=…`
+  - 先 `POST /api/ws/monitor-ticket` 取 30s 一次性 ticket → 通过 `wss://SERVER_IP_OR_DOMAIN/ws/monitor?ticket=…` 建立连接
   - `metrics.subscribe` → 收 `metrics.update` / `alert.push` / `server.status.update` / `error`
 - 错误码：`server-java-SuMon/src/main/java/com/susumonitor/server/common/ErrorCode.java`（40100/40300/40001/40002…）

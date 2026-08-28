@@ -18,7 +18,7 @@
 ## 二、备份操作
 
 ```bash
-# 标准备份（root 执行）
+# 标准备份（需要写入受保护备份目录的运维账号执行；按现场权限策略使用 sudo）
 sudo bash /opt/susumonitor/deploy/backup.sh --dir /var/backups/susumonitor --keep 7
 
 # 输出示例
@@ -42,7 +42,7 @@ ENCRYPT_PASS='你的加密口令' bash scripts/remote-backup.sh --keep 7
 - 恢复：`export ENCRYPT_PASS=口令 && openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"$ENCRYPT_PASS" -in xxx.tar.gz.enc -out backup.tar.gz && tar -xzf backup.tar.gz`
 - ⚠️ 加密口令与备份文件**分开存放**，口令丢失则备份不可恢复
 
-**调度建议**（crontab，root）：
+**调度建议**（crontab，使用具备备份目录与数据库读取权限的专用账号；如现场策略要求可由 root 调度）：
 ```cron
 # 每日 02:00 备份，保留 14 份
 0 2 * * * /usr/bin/bash /opt/susumonitor/deploy/backup.sh --dir /var/backups/susumonitor --keep 14 >> /var/log/susumonitor-backup.log 2>&1
@@ -63,7 +63,7 @@ sudo bash /opt/susumonitor/deploy/restore.sh --backup /var/backups/susumonitor/s
 
 # 3) 启动并验证（脚本输出验证清单）
 sudo systemctl start susumonitor-server
-sudo journalctl -u susumonitor-server -n 50 --no-pager    # Flyway 回放到备份时点
+sudo journalctl -u susumonitor-server -n 50 --no-pager    # 检查服务启动与 Flyway 状态，不会回放迁移到备份时点
 curl -s http://127.0.0.1:18080/api/health
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/ready   # 200
 # 抽查：服务器列表 / 告警记录 / 用户账号 与备份时点一致
@@ -82,8 +82,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/ready   # 20
 
 ## 五、恢复演练（建议每月）
 
-1. 在**隔离验证库**（`susumonitor_metrics_validation`）执行：`restore.sh` 指向验证库（`DB_NAME` 环境变量覆盖）
-2. 验证：Flyway 版本回放到备份时点、服务器/告警记录抽查一致
+1. 在**隔离验证库**（例如 `susumonitor_metrics_validation`）执行：`restore.sh` 指向验证库（通过 `DB_NAME` 环境变量覆盖）
+2. 验证：恢复后的数据库应在启动时由 Flyway 校验并升级到当前支持版本；不要将 Flyway “回放到备份时点”作为恢复语义，服务器/告警记录抽查一致
 3. 演练记录写入 Develop-log（时间/备份包/结果/异常）
 
 ## 六、与发布流程的配合

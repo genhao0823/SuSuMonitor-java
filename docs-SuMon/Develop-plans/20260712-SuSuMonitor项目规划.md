@@ -2,10 +2,9 @@
 
 **日期**: 2026-07-12  
 **依据**: 根目录 `项目需求与规范.md`  
-**最后核对日期**: 2026-08-16
-**当前实施阶段**: **2026-08-16 全仓文档对齐后**；2026-08-13~16 已收口：终端断线中继、心跳超时收口修复、alert.resolved.v1 恢复事件链路、运维收口（V27 通知清理 + outbox 清理默认开启）。（下文 08-01/08-05 行保留作历史快照）
-**最新进度**（2026-08-05 补充）：**Agent 指标可靠投递 M1-M4 已完成**——M1 Server `metrics.ack` 入口确认（`773fc4d`）+ M2 Agent 有界持久化 FIFO、同 UUID 断线重放与单条 in-flight 保序（`7db29b6`）+ M3 ACK deadline 重传、指数退避/equal jitter 和积压重放节流（`d2a9311`、`a41d07c`、`0933872`）+ **M4** Server 永久拒绝分类 `metrics.nack`（`bcbffd0`）、Agent 本地持久化死信 snapshot v2 与 v1 自动迁移（`616e531`）、心跳投递遥测 → Flyway V19 → 状态接口 → 服务器详情页展示（`98c1115`/`dc32918`/`dcb4382`）；loopback fixture 15 项 PASS，真实 Agent→Java/MySQL 独立 schema 场景待 DB 管理员凭据运行；Server 418 tests、Go test/race/vet/build 全通过。队列字节上限仍属后续独立模块（详见 `Develop-log/20260805-Agent指标可靠投递（NACK死信与投递遥测）.md`）。
-**当前状态**（2026-08-03 对齐）：MVP-1 核心 + MVP-2 Go Agent + MVP-3 实时监控 + MVP-5A Web 主页面 + MVP-6 告警业务闭环 + MVP-7 终端（T1-T4） 已完成；**MVP-9 微服务化准备收口完成**（性能基线 7 场景、数据所有权审计、契约冻结）；**MVP-10 Metrics Outbox 收口完成**（发布侧真实 Broker 三阶段验收 PASS）；**MVP-11 告警消费侧收口完成**：消息通道幂等消费 + 评估切换 + DLQ 分类，`verify-alert-ws` 24/24 + `verify-mvp11` 17 项验收 PASS；**MVP-11 收口（2026-08-01）**：outbox 轮询 1000→200ms（告警推送延迟 -71%）、DLQ 受控重放工具、Broker 停机消费侧重连验收 PASS；**2026-08-02 加固收口**：消费失败留痕落地（`FailedConsumeRecordRecoverer` + `upsertFailed`）+ 告警逃逸窗口（`confirm_count` 连续越界确认，V18），401 测试全绿。仍属"未验证"：首管理员独立空库真实并发、M1/M2 Agent 真实断网/重启联合验收、多实例及跨 JVM 事件推送、Monitor 1011 真实背压（历史行"1012"为笔误）。（2026-08-16 注：公网部署环境已验证——明文 HTTP 2026-07-31、HTTPS/WSS 2026-08-07；多消费者并发消费已落地 2026-08-12 Polish-7 M6，`verify-mvp11-concurrency.mjs` 保留为扩容前资产。）
+**最后核对日期**: 2026-08-27
+**当前实施阶段**: **2026-08-27 HEAD `617ccd0` 文档校准**；终端断线中继、心跳超时收口修复、alert.resolved.v1、运维收口、Android、HTTPS/WSS 及首管理员空库并发验收均已记录；当前仍未完成的是多 JVM 实例部署、真实 SMTP、真实 Agent 断网/重启联合 E2E、Monitor 1011 真实背压和备份 crontab 调度。历史明文 HTTP/IP/命令仅作追溯，禁止执行。
+**最新进度**：首管理员空库并发真实验收在独立空 MySQL schema 中 conc=8 与 conc=20 均 PASS；提交链为计划 `ebe96d0`、验收脚本修正 `ebe152e`、验收记录 `617ccd0`。后端 `mvnw test` 基线为 591 条中 590 条通过、1 条既有时间炸弹失败；`mvnw package` 已生成验收所需 JAR。Agent 指标可靠投递 M1-M4 已完成，隔离联合 E2E 已通过，真实断网/重启/公网场景仍待专项验收。
 
 当前状态以本节矩阵和最新开发日志为准，后文历史实施顺序不代表当前完成状态。
 
@@ -16,7 +15,7 @@
 | 请求追踪 | 新契约已实现 | 单元与 MockMvc 已通过 | HTTP 已验证 | 未验证 |
 | Flyway V1-V7 | 已实现 | 已校验 | MySQL 8.4 已验证 | 未验证 |
 | 用户注册 | 已实现 | 已通过 | HTTP 已验证 | 未验证 |
-| 首管理员并发安全 | 状态行锁已实现 | 单元测试已通过 | V7 迁移和回填已验证；空库并发未验证 | 未验证 |
+| 首管理员并发安全 | 状态行锁已实现 | 真实验收已通过（conc=8/20，见 `Develop-log/20260824-首管理员空库并发真实验收.md`） | V7 迁移和独立空库已验证 | 非部署前置 |
 | JWT 配置基础 | 已实现 | 已通过 | 已验证 | 未验证 |
 | JWT 签发、解析和 Bearer 鉴权 | 已实现 | 单元与 MockMvc 已通过 | 真实 HS256 Token、Claims、me/logout 已验证 | 未验证 |
 | login、me、logout | 已实现 | Service 与 MockMvc 已通过 | admin/user 成功、pending/rejected 403 和 me/logout 已验证 | 未验证 |
@@ -122,13 +121,13 @@ SuSuMonitor/
 
 | 阶段 | 内容 | 当前执行 |
 |------|------|----------|
-| MVP-1 | Java 后端新建、MySQL 建表、JWT 登录注册、用户审核、服务器 CRUD、SSH 凭据加密、SSH 连接测试 | 核心实现完成；SSH `50002`/`50003` 分类已于 2026-07-25 受控 SSHD 真实验收，云端明文 HTTP 部署已验（2026-07-31）；仅首管理员空库真实并发未收口 |
+| MVP-1 | Java 后端新建、MySQL 建表、JWT 登录注册、用户审核、服务器 CRUD、SSH 凭据加密、SSH 连接测试 | 核心实现完成；SSH `50002`/`50003` 分类已于 2026-07-25 受控 SSHD 真实验收，首管理员空库并发 conc=8/20 已于 2026-08-24 真实验收通过；公网正式部署目标为 HTTPS/WSS，历史明文记录禁止执行 |
 | MVP-2 | Agent 指标采集、5 秒采集频率、WebSocket 连接、心跳、注册校验 | 已实现并完成本机运行时验收 |
 | MVP-3 | 指标接收、MySQL 存储、WebSocket 推送、历史指标查询、10 天数据清理 | 指标接收/存储/查询/实时推送/清理已实现 |
 | MVP-4 | OpenAPI 契约基线收口、lint、Apifox 导入和实现漂移检查 | 随接口同步，阶段性收口 |
 | MVP-5A | 登录、注册、仪表盘、服务器列表和详情前端，直接对接真实 API | 已实现；告警与 Web SSH 不在本阶段 |
 | MVP-6 | 模块化单体告警业务闭环：规则、状态机去重、记录、查询、已读、恢复和 WebSocket 推送；暂不依赖 RabbitMQ | 已收口（2026-07-28）：后端业务闭环（Commit `7b01a60`，2026-07-25，含 Flyway `V10__create_alert_states_and_soft_delete_rules`、`AlertPushPublisher` 推送 `alert.push`、OpenAPI 6 端点）+ 前端告警页面（2026-07-27 Sprint 0-7 收口）+ 真实 HTTP/WS 端到端链路 2026-07-28 验收通过 |
-| MVP-7 | SSH 后端代理、PTY、多会话、20 分钟超时和 xterm.js 前端 | T1-T4 已完成：Java 端中继、Go Agent Linux PTY、协议契约、真实 WSL 单 JVM 联调 `PTY_RELAY_INTEGRATION_OK`（2026-07-26）、T4 xterm.js 前端最小可用版本（2026-07-28）；T5 云端部署已验证（明文 HTTP，2026-07-31）；仅 T6 家庭 Linux 主机 root systemd 部署待验；Monitor 1012 真实背压未覆盖 |
+| MVP-7 | SSH 后端代理、PTY、多会话、20 分钟超时和 xterm.js 前端 | T1-T4 已完成，T5 HTTPS/WSS 正式部署目标已验证；仅 T6 家庭 Linux 主机 root systemd 部署、Monitor 1011 真实背压未覆盖；历史明文 HTTP/IP/命令仅作追溯，禁止执行 |
 | MVP-8 | 安装、启动、升级、回滚、备份恢复和安全检查文档 | 已收口（2026-07-31）：Use-manual 手册系列（部署安装/升级回滚/备份恢复/安全检查/RabbitMQ 运维）+ `deploy/backup.sh`/`restore.sh` 配套脚本；恢复与安全检查空白已补齐 |
 
 当前 MVP-1 至 MVP-8 默认采用模块化单体架构。微服务只作为 MVP-8 之后的增强路线，不改变当前 MVP-1 的开发顺序，也不作为本机调试前置依赖。
@@ -848,7 +847,7 @@ scripts/
 | 添加配置文件 | 已完成，端口、数据库、JWT、AES、Agent 配置项存在 |
 | 添加 logback 配置 | 已完成，日志格式明确 |
 | 添加 Flyway 目录 | 已补齐，`db/migration/` 目录和 MVP-1 基础表迁移脚本已存在；真实执行待本机 MySQL 账号确认 |
-| 添加基础测试 | 已完成，基础 context 测试存在；历史日志记录 `mvn test` 已通过 |
+| `MVP-1` 基线测试 | 已完成，历史 `mvn test` 通过；当前 HEAD `617ccd0` 的 `mvnw test` 为 590/591 通过，1 个既有时间炸弹失败，详见 20260824 验收日志 |
 
 ### 阶段 3：横切基础能力
 
@@ -1024,7 +1023,7 @@ servers.delete_token 支持软删除后同 host 重建
 
 ## 二十六、AI 运维中枢规划
 
-AI 运维属于 MVP-8 完成后的远期增强能力，不纳入且不阻塞 MVP-1 至 MVP-8 的设计、开发、测试与交付。完整规划见 `Develop-plans/20260724-公网Agent反向终端与云端部署计划.md` 等后续规划文档（原引用的 `20260717-AI运维增强路线.md` 未在仓库落地，AI 运维路线已并入各阶段开发日志）。
+AI 运维属于 MVP-8 完成后的远期增强能力，不纳入且不阻塞 MVP-1 至 MVP-8 的设计、开发、测试与交付。当前相关规划已并入 `Develop-plans/20260724-公网Agent反向终端与云端部署计划.md` 及各阶段开发日志；不再引用未落地的独立 AI 运维路线文件。
 
 ## 二十七、Git、环境配置与 opencode skill 规划
 
