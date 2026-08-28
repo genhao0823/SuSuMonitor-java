@@ -1,6 +1,8 @@
 package com.susumonitor.ui.terminal
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -8,7 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,29 +25,45 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.susumonitor.api.TerminalPhase
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
-/** 功能键行各键：显示名 → 发送字节。 */
-private val SpecialKeys = listOf(
+/** 功能键行各键：显示名 → 发送字节。补充 shell 高频符号与常用控制键。 */
+internal val SpecialKeys = listOf(
     "Ctrl+C" to "\u0003",
     "Ctrl+Z" to "\u001a",
+    "Ctrl+L" to "\u000c",
     "Tab" to "\t",
     "Esc" to "\u001b",
     "↑" to "\u001b[A",
     "↓" to "\u001b[B",
     "←" to "\u001b[D",
     "→" to "\u001b[C",
+    "/" to "/",
+    "~" to "~",
+    "|" to "|",
+    "-" to "-",
+    "_" to "_",
+    "$" to "$",
+    "." to ".",
 )
 
 /**
@@ -94,13 +114,16 @@ fun TerminalScreen(
             )
         },
     ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            // 功能键行：发送控制字节（软键盘没有 Ctrl/方向键）
+        // imePadding：软键盘弹出时收缩终端区高度。edge-to-edge 下 windowSoftInputMode
+        // adjustResize 失效，必须显式消费 IME insets，否则光标与最新输出被键盘遮挡。
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).imePadding()) {
+            // 功能键行：发送控制字节（软键盘没有 Ctrl/方向键），窄屏横向滚动避免溢出
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF2D2D2D))
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 SpecialKeys.forEach { (label, seq) ->
@@ -113,7 +136,7 @@ fun TerminalScreen(
                             text = label,
                             color = Color.White,
                             fontSize = 11.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
                         )
                     }
                 }
@@ -121,23 +144,41 @@ fun TerminalScreen(
 
             // 终端区：按实际尺寸换算 cols/rows
             var opened by remember { mutableStateOf(false) }
+            // 字号（sp）：捏合缩放调整，范围 10–24
+            var fontSizeSp by remember { mutableFloatStateOf(14f) }
+            // 滚动回退偏移（行）：0 = 视口贴底显示最新输出，>0 = 回看历史
+            var scrollOffsetLines by remember { mutableStateOf(0) }
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val charWidth = with(LocalDensity.current) { 14.sp.toDp() * 0.6f }
-                val lineHeight = 20.dp
+                val fontSize = fontSizeSp.sp
+                // 实测等宽字符宽高：与绘制层共用同一来源，消除估算/实测双标准的右缝或裁切
+                val textMeasurer = rememberTextMeasurer()
+                val density = LocalDensity.current
+                val cellSize = remember(textMeasurer, fontSize) {
+                    textMeasurer.measure(
+                        "M",
+                        TextStyle(fontSize = fontSize, fontFamily = FontFamily.Monospace),
+                    ).size
+                }
+                val charWidth = with(density) { cellSize.width.toDp() }
+                val lineHeight = with(density) { cellSize.height.toDp() }
+                val lineHeightPx = cellSize.height.toFloat()
                 val cols = ((maxWidth - 16.dp) / charWidth).toInt().coerceIn(2, 300)
                 val rows = (maxHeight / lineHeight).toInt().coerceIn(1, 100)
 
-                // 缓冲网格跟随尺寸；首次 open 前清空旧缓冲，之后尺寸变化重建网格并发 resize
+                // 缓冲网格跟随尺寸；首次 open 前清空旧缓冲，之后尺寸变化重建网格并发 resize。
+                // resize 帧去抖 150ms：键盘弹出/收起动画期间容器高度连续变化，避免反复触发
+                // 服务端 stty size 与 shell 重绘；本地 buffer.resize 立即执行保证渲染正确。
                 LaunchedEffect(cols, rows) {
                     buffer.resize(cols, rows)
+                    bufferVersion++
                     if (!opened) {
                         buffer.clear()
                         viewModel.open(cols = cols, rows = rows)
                         opened = true
                     } else if (uiState.phase == TerminalPhase.OPEN) {
+                        kotlinx.coroutines.delay(150)
                         viewModel.resize(cols, rows)
                     }
-                    bufferVersion++
                 }
 
                 // 版本号状态读取：每次 feed 递增 → 触发重组（快照由 visibleRows() 每次重建）
@@ -150,9 +191,61 @@ fun TerminalScreen(
                     cursorRow = buffer.cursorScreenRow,
                     cursorCol = buffer.cursorScreenCol,
                     cursorVisible = buffer.isCursorVisible,
+                    fontSize = fontSize,
+                    charWidthPx = cellSize.width.toFloat(),
+                    lineHeightPx = lineHeightPx,
+                    textMeasurer = textMeasurer,
+                    scrollOffsetLines = scrollOffsetLines,
                     onInput = viewModel::sendInput,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // 手势统一由 detectTransformGestures 处理（避免多检测器抢事件）：
+                        // 单指竖向拖动 → 滚动回退历史（pan.y）；双指捏合 → 调整字号（zoom）。
+                        .pointerInput(lineHeightPx) {
+                            var baseSp = fontSizeSp
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                if (zoom != 1f) {
+                                    // zoom 为相对手势起点的累计缩放
+                                    val next = (baseSp * zoom).coerceIn(10f, 24f)
+                                    if (next != fontSizeSp) {
+                                        baseSp = next
+                                        fontSizeSp = next
+                                    }
+                                } else if (abs(pan.y) > abs(pan.x)) {
+                                    // pan 为相对手势起点的累计位移：直接折算行数。
+                                    // 向上滑（pan.y < 0）= 查看更早历史，偏移增大。
+                                    val lineDelta = (pan.y / lineHeightPx).roundToInt()
+                                    if (lineDelta != 0) {
+                                        // buffer 为稳定引用，实时读取 scrollback 行数，避免闭包捕获过期值
+                                        val maxOffset =
+                                            if (buffer.isUsingAlternateScreen) 0 else buffer.scrollbackSize()
+                                        val next =
+                                            (scrollOffsetLines - lineDelta).coerceIn(0, maxOffset)
+                                        if (next != scrollOffsetLines) scrollOffsetLines = next
+                                    }
+                                }
+                            }
+                        },
                 )
+
+                // 回看历史时显示"回到底部"浮动按钮，点击贴回最新输出
+                if (scrollOffsetLines > 0) {
+                    Surface(
+                        onClick = { scrollOffsetLines = 0 },
+                        color = Color(0xFF3C3C3C),
+                        shape = RoundedCornerShape(50),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(12.dp),
+                    ) {
+                        Text(
+                            text = "↓ 回到底部",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
 
                 // 错误/未连接/重连中提示覆盖层
                 val overlayMessage = when {

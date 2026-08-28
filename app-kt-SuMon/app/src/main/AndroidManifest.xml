@@ -17,6 +17,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SuSuMonitor">
 
+        <!-- edge-to-edge(enableEdgeToEdge) 下 adjustResize 在 API 30+ 失效，
+             软键盘避让由 Compose imePadding() 处理（见 TerminalScreen） -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

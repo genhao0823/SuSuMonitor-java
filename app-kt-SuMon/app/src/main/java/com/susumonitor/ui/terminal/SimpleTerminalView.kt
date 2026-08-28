@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -29,20 +28,15 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /** 终端底色（与旧实现一致）。 */
 internal val TerminalBackground = Color(0xFF1E1E1E)
-
-/** 默认前景色（调色板 7 的浅灰）。 */
-private val TerminalDefaultFg = Color(0xFFE5E5E5)
 
 /** 光标块颜色（半透明白）。 */
 private val TerminalCursorColor = Color(0x66FFFFFF)
@@ -50,12 +44,21 @@ private val TerminalCursorColor = Color(0x66FFFFFF)
 /**
  * 自研 ANSI 终端渲染组件：按格绘制（背景色块 + 同样式文本段 + 光标块）+ 软键盘输入。
  *
+ * 字宽/行高由调用方（TerminalScreen）实测后传入，保证列数计算与绘制共用同一来源，
+ * 避免估算值与实测值不一致导致的右侧黑缝或末列裁切。滚动回退与捏合缩放手势由
+ * 调用方通过 Modifier 注入（本组件仅保留点击唤起软键盘）。
+ *
  * @param rows 可视快照（滚动回退 + 当前屏，由 TerminalBuffer.visibleRows() 提供）
  * @param cols 当前终端列数
  * @param screenRows 当前终端行数（快照尾部即屏幕行）
  * @param cursorRow 光标所在屏行（相对屏幕顶部）
  * @param cursorCol 光标列
  * @param cursorVisible 光标是否可见
+ * @param fontSize 终端字号（调用方捏合缩放可调）
+ * @param charWidthPx 单字符宽度（像素，绘制网格用）
+ * @param lineHeightPx 行高（像素，绘制网格用）
+ * @param textMeasurer 文本测量器（与列数计算共用，避免重复测量不一致）
+ * @param scrollOffsetLines 滚动回退偏移行数（0 = 视口贴底，>0 = 回看历史）
  * @param onInput 输入回调（UTF-8 字节 → TerminalClient.sendInput）
  */
 @Composable
@@ -66,11 +69,14 @@ fun SimpleTerminalView(
     cursorRow: Int,
     cursorCol: Int,
     cursorVisible: Boolean,
+    fontSize: TextUnit,
+    charWidthPx: Float,
+    lineHeightPx: Float,
+    textMeasurer: TextMeasurer,
+    scrollOffsetLines: Int,
     onInput: (ByteArray) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val fontSize = 14.sp
-    val lineHeight = 20.dp
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var inputBuffer by remember { mutableStateOf("") }
@@ -78,6 +84,7 @@ fun SimpleTerminalView(
     Box(
         modifier = modifier
             .background(TerminalBackground)
+            // 单击唤起软键盘；滚动回退与捏合缩放由调用方手势层处理
             .pointerInput(Unit) {
                 detectTapGestures { keyboardController?.show() }
             }
@@ -127,7 +134,10 @@ fun SimpleTerminalView(
             cursorCol = cursorCol,
             cursorVisible = cursorVisible,
             fontSize = fontSize,
-            lineHeight = lineHeight,
+            charWidthPx = charWidthPx,
+            lineHeightPx = lineHeightPx,
+            textMeasurer = textMeasurer,
+            scrollOffsetLines = scrollOffsetLines,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -168,7 +178,7 @@ fun SimpleTerminalView(
 /** 终端快照中的光标描述（供 Canvas 绘制定位）。 */
 private data class CursorInfo(val row: Int, val col: Int, val visible: Boolean)
 
-/** 逐格 Canvas 渲染：背景色块 + 同样式文本段 + 光标块。 */
+/** 逐格 Canvas 渲染：背景色块 + 同样式文本段 + 光标块，视口支持滚动回退偏移。 */
 @Composable
 private fun TerminalGridCanvas(
     rows: List<List<Cell>>,
@@ -178,23 +188,24 @@ private fun TerminalGridCanvas(
     cursorCol: Int,
     cursorVisible: Boolean,
     fontSize: TextUnit,
-    lineHeight: androidx.compose.ui.unit.Dp,
+    charWidthPx: Float,
+    lineHeightPx: Float,
+    textMeasurer: TextMeasurer,
+    scrollOffsetLines: Int,
     modifier: Modifier = Modifier,
 ) {
-    val textMeasurer = rememberTextMeasurer()
     val cursor = CursorInfo(cursorRow, cursorCol, cursorVisible)
     Canvas(modifier = modifier) {
-        val lineHeightPx = lineHeight.toPx()
         val visibleCount = (size.height / lineHeightPx).toInt().coerceAtLeast(1)
-        // 视口取快照末尾 visibleCount 行（滚动回退 + 屏幕底部）
-        val visibleRows = rows.takeLast(visibleCount)
-        val charWidthPx = textMeasurer.measure("M", TextStyle(
-            fontSize = fontSize,
-            fontFamily = FontFamily.Monospace,
-        )).size.width.toFloat().coerceAtLeast(1f)
+        // 视口窗口：快照 [0, size) 中取 [size - offset - visibleCount, size - offset)。
+        // offset = 0 贴底显示最新输出；offset > 0 向上回看滚动回退历史。
+        val endIndex = (rows.size - scrollOffsetLines).coerceIn(0, rows.size)
+        val startIndex = (endIndex - visibleCount).coerceAtLeast(0)
+        val visibleRows = rows.subList(startIndex, endIndex)
+        val viewportRowCount = endIndex - startIndex
 
         drawRows(visibleRows, cols, charWidthPx, lineHeightPx, fontSize, textMeasurer)
-        drawCursor(rows, screenRows, cursor, visibleCount, charWidthPx, lineHeightPx)
+        drawCursor(rows, screenRows, cursor, viewportRowCount, charWidthPx, lineHeightPx)
     }
 }
 
@@ -225,7 +236,7 @@ private fun DrawScope.drawRowText(
     y: Float,
     charWidthPx: Float,
     fontSize: TextUnit,
-    textMeasurer: androidx.compose.ui.text.TextMeasurer,
+    textMeasurer: TextMeasurer,
 ) {
     var i = 0
     while (i < row.size) {
@@ -265,7 +276,7 @@ private fun DrawScope.drawRows(
     charWidthPx: Float,
     lineHeightPx: Float,
     fontSize: TextUnit,
-    textMeasurer: androidx.compose.ui.text.TextMeasurer,
+    textMeasurer: TextMeasurer,
 ) {
     visibleRows.forEachIndexed { index, row ->
         val y = index * lineHeightPx
@@ -277,20 +288,20 @@ private fun DrawScope.drawRows(
 
 /**
  * 绘制光标块：屏幕行 r 在快照中的索引 = rows.size - screenRows + r。
- * 视口显示快照末尾 visibleCount 行，光标行不在视口内时不绘制。
+ * 视口显示快照 [size - viewportRowCount, size)，光标行不在视口内时不绘制。
  */
 private fun DrawScope.drawCursor(
     rows: List<List<Cell>>,
     screenRows: Int,
     cursor: CursorInfo,
-    visibleCount: Int,
+    viewportRowCount: Int,
     charWidthPx: Float,
     lineHeightPx: Float,
 ) {
     if (!cursor.visible) return
     val snapshotIndex = rows.size - screenRows + cursor.row
-    val viewportStart = rows.size - visibleCount
-    if (snapshotIndex < viewportStart) return
+    val viewportStart = rows.size - viewportRowCount
+    if (snapshotIndex < viewportStart || snapshotIndex >= rows.size) return
     val x = cursor.col * charWidthPx
     val y = (snapshotIndex - viewportStart) * lineHeightPx
     drawRect(
