@@ -220,7 +220,7 @@
           "servers"
         ],
         "summary": "Update server",
-        "description": "Admin only. All basic fields are required. Omitting password and private_key retains the stored primary credential when ssh_auth_type is unchanged. Blank credentials and submitting both credential types are invalid. Changing ssh_auth_type requires the new matching primary credential. Responses never contain credential plaintext or ciphertext.",
+        "description": "Admin only. PUT is a full replacement of all basic fields: name, host, description (required but may be empty), ssh_host, ssh_port, ssh_user, and ssh_auth_type. Credentials may be omitted only to retain the existing credential when ssh_auth_type is unchanged. If ssh_auth_type changes, the service requires the matching new primary credential. Submitting both credential types or an empty credential is invalid. Responses never contain credential plaintext or ciphertext.",
         "operationId": "updateServer",
         "parameters": [
           {
@@ -1006,7 +1006,7 @@
         "name": "sort_by",
         "in": "query",
         "required": false,
-        "description": "Sort field whitelist.",
+        "description": "Sort field whitelist. status orders by the persisted server status snapshot.",
         "schema": {
           "type": "string",
           "enum": [
@@ -1434,7 +1434,8 @@
           "load_avg": {
             "type": "number",
             "minimum": 0,
-            "nullable": true
+            "nullable": true,
+            "description": "System load average (not a percentage); null when the collecting platform does not provide it."
           },
           "collected_at": {
             "type": "string",

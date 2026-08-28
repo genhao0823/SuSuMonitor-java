@@ -111,7 +111,7 @@
             }
           },
           "500": {
-            "description": "Database is unavailable or an internal server error occurred",
+            "description": "Database is unavailable, Redis is enabled but unavailable, or an internal server error occurred",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
@@ -125,24 +125,32 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
-                "examples": {
-                  "databaseError": {
-                    "summary": "Database connection failed",
-                    "value": {
-                      "code": 50001,
-                      "message": "database error",
-                      "data": null
-                    }
-                  },
-                  "internalServerError": {
-                    "summary": "Internal server error",
-                    "value": {
-                      "code": 50000,
-                      "message": "internal server error",
-                      "data": null
+                  "examples": {
+                    "databaseError": {
+                      "summary": "Database connection failed",
+                      "value": {
+                        "code": 50001,
+                        "message": "database error",
+                        "data": null
+                      }
+                    },
+                    "internalServerError": {
+                      "summary": "Internal server error",
+                      "value": {
+                        "code": 50000,
+                        "message": "internal server error",
+                        "data": null
+                      }
+                    },
+                    "redisUnavailable": {
+                      "summary": "Redis is enabled but unavailable",
+                      "value": {
+                        "code": 50302,
+                        "message": "redis unavailable",
+                        "data": null
+                      }
                     }
                   }
-                }
               }
             }
           },
@@ -187,7 +195,7 @@
         ],
         "parameters": [
           {
-            "": "#/components/parameters/XCorrelationId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "responses": {
@@ -195,16 +203,16 @@
             "description": "Consumer stats snapshot",
             "headers": {
               "X-Request-ID": {
-                "": "#/components/headers/XRequestId"
+                "$ref": "#/components/headers/XRequestId"
               },
               "X-Correlation-ID": {
-                "": "#/components/headers/XCorrelationId"
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
               "application/json": {
                 "schema": {
-                  "": "#/components/schemas/ConsumeStatsListResponse"
+                  "$ref": "#/components/schemas/ConsumeStatsListResponse"
                 },
                 "example": {
                   "code": 0,
@@ -226,10 +234,10 @@
             }
           },
           "401": {
-            "": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -249,7 +257,7 @@
         ],
         "parameters": [
           {
-            "": "#/components/parameters/XCorrelationId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "responses": {
@@ -257,16 +265,16 @@
             "description": "Queue backlog snapshot",
             "headers": {
               "X-Request-ID": {
-                "": "#/components/headers/XRequestId"
+                "$ref": "#/components/headers/XRequestId"
               },
               "X-Correlation-ID": {
-                "": "#/components/headers/XCorrelationId"
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
               "application/json": {
                 "schema": {
-                  "": "#/components/schemas/QueueBacklogListResponse"
+                  "$ref": "#/components/schemas/QueueBacklogListResponse"
                 },
                 "example": {
                   "code": 0,
@@ -286,10 +294,10 @@
             }
           },
           "401": {
-            "": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -464,7 +472,7 @@
           "data": {
             "type": "array",
             "items": {
-              "": "#/components/schemas/ConsumeStats"
+              "$ref": "#/components/schemas/ConsumeStats"
             }
           }
         }
@@ -529,7 +537,7 @@
           "data": {
             "type": "array",
             "items": {
-              "": "#/components/schemas/QueueBacklog"
+              "$ref": "#/components/schemas/QueueBacklog"
             }
           }
         }
@@ -595,16 +603,16 @@
         "description": "Missing or invalid JWT",
         "headers": {
           "X-Request-ID": {
-            "": "#/components/headers/XRequestId"
+            "$ref": "#/components/headers/XRequestId"
           },
           "X-Correlation-ID": {
-            "": "#/components/headers/XCorrelationId"
+            "$ref": "#/components/headers/XCorrelationId"
           }
         },
         "content": {
           "application/json": {
             "schema": {
-              "": "#/components/schemas/ErrorResponse"
+              "$ref": "#/components/schemas/ErrorResponse"
             },
             "example": {
               "code": 40100,
@@ -618,16 +626,16 @@
         "description": "Authenticated but not an administrator",
         "headers": {
           "X-Request-ID": {
-            "": "#/components/headers/XRequestId"
+            "$ref": "#/components/headers/XRequestId"
           },
           "X-Correlation-ID": {
-            "": "#/components/headers/XCorrelationId"
+            "$ref": "#/components/headers/XCorrelationId"
           }
         },
         "content": {
           "application/json": {
             "schema": {
-              "": "#/components/schemas/ErrorResponse"
+              "$ref": "#/components/schemas/ErrorResponse"
             },
             "example": {
               "code": 40300,

@@ -29,11 +29,11 @@
           "alert"
         ],
         "summary": "Create alert rule",
-        "description": "Creates an alert rule. Admin-only. server_id null means a general rule matching all servers. metric must be cpu/memory/disk/temperature/load. operator must be >/>=/</<=. level must be warning/critical.",
+        "description": "Creates an alert rule. Admin-only. server_id null means a general rule matching all servers. metric must be cpu/memory/disk/temperature/load; the load rule evaluates the system load average exposed by metrics.load_avg. operator must be >/>=/</<=. level must be warning/critical.",
         "operationId": "createAlertRule",
         "parameters": [
           {
-            "$ref": "#/components/parameters/XRequestId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "requestBody": {
@@ -73,6 +73,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
@@ -119,7 +122,7 @@
         "operationId": "listAlertRules",
         "parameters": [
           {
-            "$ref": "#/components/parameters/XRequestId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "responses": {
@@ -128,6 +131,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
@@ -183,7 +189,7 @@
             }
           },
           {
-            "$ref": "#/components/parameters/XRequestId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "requestBody": {
@@ -207,6 +213,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
@@ -251,7 +260,7 @@
             }
           },
           {
-            "$ref": "#/components/parameters/XRequestId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "responses": {
@@ -260,6 +269,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
@@ -340,7 +352,7 @@
             }
           },
           {
-            "$ref": "#/components/parameters/XRequestId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "responses": {
@@ -349,6 +361,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
@@ -412,7 +427,7 @@
             }
           },
           {
-            "$ref": "#/components/parameters/XRequestId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "responses": {
@@ -421,6 +436,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
@@ -466,7 +484,7 @@
             }
           },
           {
-            "$ref": "#/components/parameters/XRequestId"
+            "$ref": "#/components/parameters/XCorrelationId"
           }
         ],
         "responses": {
@@ -475,6 +493,9 @@
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
               }
             },
             "content": {
@@ -525,24 +546,53 @@
         "name": "X-Request-ID",
         "in": "header",
         "required": false,
-        "description": "Optional client request trace ID. The server generates a UUID when omitted.",
+        "description": "Client-provided value is ignored; the server generates a UUID request ID for every response.",
         "schema": {
           "type": "string"
+        }
+      },
+      "XCorrelationId": {
+        "name": "X-Correlation-ID",
+        "in": "header",
+        "required": false,
+        "description": "Optional client correlation ID. Invalid values are ignored and never logged.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
         }
       }
     },
     "headers": {
       "XRequestId": {
-        "description": "Server-generated UUID request trace ID.",
+        "description": "UUID request ID generated by the server.",
         "schema": {
           "type": "string",
           "format": "uuid"
+        }
+      },
+      "XCorrelationId": {
+        "description": "Validated client correlation ID, returned only when a valid request header was provided.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]+$"
         }
       }
     },
     "responses": {
       "Unauthorized": {
         "description": "Missing, invalid, or expired JWT (40100)",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {
@@ -558,6 +608,14 @@
       },
       "Forbidden": {
         "description": "Authenticated but not an administrator (40300)",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {
@@ -573,6 +631,14 @@
       },
       "NotFound": {
         "description": "Resource not found (40400)",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {
@@ -588,6 +654,14 @@
       },
       "InvalidRequestParameter": {
         "description": "Invalid request parameter (40002)",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "X-Correlation-ID": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {
@@ -626,7 +700,8 @@
               "disk",
               "temperature",
               "load"
-            ]
+            ],
+            "description": "Alert metric name. load maps to the system load average value exposed as metrics.load_avg."
           },
           "operator": {
             "type": "string",
@@ -863,7 +938,7 @@
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "告警恢复时间；null=未恢复"
+            "description": "Recovery timestamp. Present only when status=resolved; null while unresolved. Stored as alert_records.resolved_at and serialized as UTC ISO-8601."
           },
           "notified_at": {
             "type": "string",

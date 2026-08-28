@@ -177,7 +177,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BatchReviewResult"
+                  "$ref": "#/components/schemas/BatchReviewResponse"
                 }
               }
             }
@@ -226,7 +226,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BatchReviewResult"
+                  "$ref": "#/components/schemas/BatchReviewResponse"
                 }
               }
             }
@@ -603,6 +603,40 @@
             },
             "description": "失败的用户 ID 列表"
           }
+        }
+      },
+      "BatchReviewResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/BatchReviewResult"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponse": {
+        "type": "object",
+        "description": "Unified API response envelope containing code, message, and data.",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
         }
       },
       "AdminUser": {

@@ -2,7 +2,7 @@
 
 > 本目录是 SuSuMonitor 后端 REST API 的权威 OpenAPI 3.0 契约源，供 Apifox 导入、前端类型生成、CI 校验与人工查阅使用。
 >
-> 契约基线：`main @ 21a2061`（2026-08-05；含用户管理批量审核、告警确认窗口、Outbox/消费侧、Agent 指标 ACK/NACK 分类与投递遥测状态字段）；此后增量：`2445645`（通知投递历史端点）、`c2672c8`（SSH 测试历史 + 主机密钥观察）、`2f27587`（AlertRecord.resolved_at，V26）。当前与 `main @ ab22b2e`（2026-08-16）Controller 1:1 一致。
+> 契约基线：当前 PR 分支 `fix/web-glassmorphism-closeout @ 617ccd0`（2026-08-27）；该版本与 Java Controller、前端请求封装和 `openapi:check` 结果一致。
 >
 > 校验命令：`cd web-vue-SuMon && npm run openapi:check`（CI 友好，退出 0 即契约与 Java Controller 完全一致）。
 >
@@ -12,13 +12,13 @@
 
 | 文件 | 覆盖模块 | 端点数 |
 |---|---|---|
-| `openapi-system.json` | 系统健康 / 就绪探针（公开） | 2 |
+| `openapi-system.json` | 系统健康 / 就绪探针 / RabbitMQ consumers 与 queues（公开 + ROLE_ADMIN） | 4 |
 | `openapi-auth.json` | 注册 / 登录 / 当前用户 / 登出 | 4 |
 | `openapi-admin.json` | 管理员用户分页/搜索与单个、批量审核（ROLE_ADMIN） | 5 |
 | `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹与观察 / SSH 测试与历史 / Agent Token / Monitor Ticket / 指标最新值 / 指标历史 | 13 路径 / 16 端点操作 |
 | `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读 / 通知投递历史（ROLE_ADMIN + 已认证） | 5 路径 / 7 端点操作 |
 
-合计 29 条路径 / 34 个端点操作，与全部 Java Controller `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping` 声明 1:1 对齐（`main @ ab22b2e`，2026-08-16）。
+合计 31 条路径 / 36 个端点操作，与全部 Java Controller `@GetMapping/@PostMapping/@PutMapping/@DeleteMapping` 声明 1:1 对齐。
 
 ## 端点索引
 
@@ -27,7 +27,9 @@
 | 方法 | 路径 | 说明 | 错误码 |
 |---|---|---|---|
 | GET | `/api/health` | 进程存活探针，不依赖数据库 | 50000 |
-| GET | `/api/ready` | 进程 + 数据库；Outbox/RabbitMQ 启用时还检查 Broker 就绪 | 50000, 50001, 50301 |
+| GET | `/api/ready` | 进程 + 数据库；Outbox/RabbitMQ 或 Redis 启用时还检查对应依赖就绪 | 50000, 50001, 50301, 50302 |
+| GET | `/api/system/rabbitmq/consumers` | RabbitMQ 消费者耗时与失败率窗口快照（ROLE_ADMIN） | 40100, 40300 |
+| GET | `/api/system/rabbitmq/queues` | RabbitMQ 队列积压快照（ROLE_ADMIN） | 40100, 40300 |
 
 ### 认证（公开 + Bearer）
 
@@ -36,7 +38,7 @@
 | POST | `/api/auth/register` | 注册（首用户 admin/approved，后续 user/pending） | 公开 | 40002, 40900 |
 | POST | `/api/auth/login` | 登录，签发 JWT（Cache-Control: no-store） | 公开 | 40001, 40300 |
 | GET | `/api/auth/me` | 当前数据库用户快照（每请求回查） | Bearer | 40100 |
-| POST | `/api/auth/logout` | 登出确认（无状态，需客户端自删 token） | Bearer | 40100 |
+| POST | `/api/auth/logout` | 登出确认；Redis 启用时按 JWT jti 写入剩余 TTL 黑名单，否则为无状态空操作 | Bearer | 40100 |
 
 ### 管理员（ROLE_ADMIN）
 
@@ -66,7 +68,7 @@
 | PUT | `/api/servers/{id}/ssh/host-key` | 确认 / 轮换 SSH 主机指纹（仅握手 + 指纹校验，不发送凭据） | 40002, 40100, 40300, 40301, 40400, 40900, 40901, 40902, 42900, 50001, 50002, 50400 |
 | POST | `/api/servers/{id}/ssh/host-key/observe` | 观察目标主机指纹（不修改登记） | 40002, 40100, 40300, 40301, 40400, 42900, 50001, 50002, 50400 |
 | POST | `/api/servers/{id}/ssh/test` | 使用已存凭据测 SSH（仅握手指纹 + 认证，不执行命令） | 40002, 40100, 40300, 40301, 40400, 40901, 42900, 50001, 50002, 50400 |
-| GET | `/api/servers/{id}/ssh/test/history` | SSH 测试历史分页（V23，90 天保留） | 40100, 40300, 40400 |
+| GET | `/api/servers/{id}/ssh/test/history` | SSH 测试历史列表（V23，90 天保留，按时间倒序；当前接口不分页） | 40100, 40300, 40400 |
 
 ### Agent Token（ROLE_ADMIN）
 
@@ -94,7 +96,7 @@
 | 方法 | 路径 | 权限 | 说明 | 错误码 |
 |---|---|---|---|---|
 | POST | `/api/alerts/rules` | ADMIN | 创建告警规则（指标、操作符、阈值、等级） | 40002, 40100, 40300, 40400, 40900 |
-| GET | `/api/alerts/rules` | 已认证 | 列出告警规则（分页 + 按 server_id 过滤） | 40002, 40100 |
+| GET | `/api/alerts/rules` | 已认证 | 列出所有未删除告警规则（按 created_at 倒序；当前接口不分页、不接收 server_id 过滤参数） | 40100 |
 | PUT | `/api/alerts/rules/{id}` | ADMIN | 更新阈值、等级或启用标志 | 40002, 40100, 40300, 40400, 40900 |
 | DELETE | `/api/alerts/rules/{id}` | ADMIN | 软删除告警规则 | 40100, 40300, 40400 |
 | GET | `/api/alerts/records` | 已认证 | 告警记录分页（按 server_id/status/时间窗口过滤） | 40002, 40100 |
@@ -128,11 +130,13 @@
 | 42902 | agent message rate limit reached | Agent 心跳或指标消息限流 |
 | 42903 | terminal session limit reached | 终端会话数量上限 |
 | 42904 | terminal message limit reached | 终端控制消息限流 |
+| 42905 | login rate limit reached | 登录防爆破限流，响应 HTTP 429 并带 Retry-After |
 | 50000 | internal server error | 兜底 |
 | 50001 | database error | 数据库异常 |
 | 50002 | ssh connection failed | SSH 连接失败 |
 | 50003 | ssh authentication failed | SSH 凭据认证失败 |
 | 50301 | rabbitmq unavailable | RabbitMQ 启用时 Broker 未就绪 |
+| 50302 | redis unavailable | Redis 启用时 Redis 未就绪 |
 | 50400 | ssh connection timeout | SSH 连接超时 |
 
 ## 字段命名约定
