@@ -175,6 +175,13 @@ class WsClient @Inject constructor(
             delay(200)
             waited += 200
         }
+        // 超时未连接：显式关闭并清空引用，避免旧连接悬挂、后续重连覆盖导致旧回调改写状态。
+        if (_connectionState.value != ConnectionState.CONNECTED) {
+            ws.cancel()
+            if (webSocket === ws) {
+                webSocket = null
+            }
+        }
     }
 
     private val listener = object : WebSocketListener() {

@@ -21,6 +21,12 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 后端连接地址：默认云端 genhaosan.online，可在构建时通过 -PBASE_URL=... 覆盖。
+        val baseUrl = (project.findProperty("BASE_URL") as String?) ?: "https://genhaosan.online"
+        val wsUrl = (project.findProperty("WS_URL") as String?) ?: "wss://genhaosan.online/ws/monitor"
+        buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+        buildConfigField("String", "WS_URL", "\"$wsUrl\"")
     }
 
     buildTypes {
