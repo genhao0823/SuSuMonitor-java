@@ -124,8 +124,16 @@ baseUrl = http://localhost:18080
 
 - 已合入 `main`：上述所有能力（含 `mvnw`/`mvnw.cmd` 与 `deploy/` 部署资产）。
 - 本机 IPv4 可验证：`/api/health`、`/api/ready`、`127.0.0.1:18080` 监听、Nginx 示例配置静态检查。
-- 真实云环境已验证：云端端到端联调记录（2026-07-31）保留在交接文档中；生产入口应使用 HTTPS/WSS（2026-08-07 的加密入口验收记录）。本文不固化具体域名，部署时以 `SERVER_IP_OR_DOMAIN` 或实际受控域名替换。
+- 真实云环境历史验收：云端端到端联调记录（2026-07-31）与 HTTPS/WSS 加密入口验收记录（2026-08-07）均基于旧提交，未在当前基线 `main @ 4e4cd86` 复跑。本文不固化具体域名，部署时以 `SERVER_IP_OR_DOMAIN` 或实际受控域名替换。
 - 真实云环境未验证：MySQL 备份恢复演练、家庭 Linux 主机（T6）部署。
+
+当前已知待解决问题（详见根 README“当前待解决问题”章节）：
+
+1. `AlertEvaluationServiceImpl` 逐条规则评估捕获 `Exception` 后继续，外层消费者仍可能 ACK，告警可能漏处理（最高优先级）。
+2. 告警事件 `load`/`load_avg` 契约断裂：事件工厂输出 `load`，消费校验器要求 `load_avg`。
+3. Metrics `collected_at` 未严格校验 UTC。
+4. 默认 `SSH_ALLOWED_CIDRS` 为空，未配置时 SSH 出站全部被拒。
+5. V4 `commands` 表仅建表，未接入业务。
 
 未纳入 `main` 跟踪的代码或计划：
 

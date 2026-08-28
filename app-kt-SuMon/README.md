@@ -3,6 +3,8 @@
 SuSuMonitor 的 Android 客户端（Kotlin + Jetpack Compose），对接通过 HTTPS/WSS
 反代 `/api/` 与 `/ws/monitor` 的后端入口 `https://SERVER_IP_OR_DOMAIN`。
 
+> **注意（2026-08-28 已修复）**：后端地址已从硬编码改为 BuildConfig 注入——`app/build.gradle.kts` 的 `defaultConfig` 通过 `buildConfigField` 生成 `BASE_URL`/`WS_URL`（默认 `https://genhaosan.online` / `wss://genhaosan.online/ws/monitor`），`Constants.kt` 改读 `BuildConfig`。构建时可用 `-PBASE_URL=... -PWS_URL=...` 覆盖以切换本地/私有部署；`WsClient.connectOnce` 连接超时后也会显式取消旧连接，避免悬挂。
+
 ## 功能（阶段一：Web 端完整移植）
 
 | 模块 | 说明 |

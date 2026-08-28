@@ -52,7 +52,7 @@
         "collected_at": {
           "type": "string",
           "format": "date-time",
-          "description": "采样时间（UTC ISO-8601）"
+          "description": "采样时间（UTC ISO-8601）。注意：JSON Schema 的 date-time 允许非 UTC 偏移，当前实现也未严格校验 offset=UTC；与 message-contracts-v1.md 的 UTC 要求存在差异，见该文档 §十三"
         },
         "cpu_percent": { "type": "number", "minimum": 0, "maximum": 100 },
         "memory_percent": { "type": "number", "minimum": 0, "maximum": 100 },
@@ -63,8 +63,8 @@
         "disk_total": { "type": "integer", "minimum": 0 },
         "net_rx": { "type": "integer", "minimum": 0 },
         "net_tx": { "type": "integer", "minimum": 0 },
-        "temperature": { "type": "number", "minimum": 0, "description": "可选；部分平台缺失" },
-        "load_avg": { "type": "number", "minimum": 0, "description": "可选；部分平台缺失" }
+        "temperature": { "type": ["number", "null"], "minimum": 0, "description": "可选；部分平台缺失，允许 null（与 message-contracts-v1.md §三 一致）" },
+        "load_avg": { "type": ["number", "null"], "minimum": 0, "description": "可选；部分平台缺失，允许 null（与 message-contracts-v1.md §三 一致）" }
       },
       "additionalProperties": true,
       "description": "字段名与 MetricsLatestVo 一致（snake_case）；used<=total 与百分比 0-100 为消费侧不变量"

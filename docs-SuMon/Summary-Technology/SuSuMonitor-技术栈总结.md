@@ -17,7 +17,7 @@
 | Spring Boot 3.4.7 后端 | 当前可用 | `pom.xml:7-26` |
 | Flyway V1-V27 | 当前可用 | `db/migration/` |
 | MySQL 8.4 集成 | 当前可用 | `application.yml:11` |
-| JWT 72h 认证 + 行锁首管理员 | 当前可用，**空库并发仍未验证**（独立库场景留作下一步验收） | `JwtKeyConfig`、`UserService.java:71-105` |
+| JWT 72h 认证 + 行锁首管理员 | 当前可用；空库并发已于 2026-08-24 真实验收（conc=8/20 PASS，基于旧提交 `617ccd0`，未在当前 HEAD `4e4cd86` 复跑） | `JwtKeyConfig`、`UserService.java:71-105` |
 | Go Agent WS 鉴权/心跳/重连 | 当前可用 | `wsclient/client.go` |
 | Agent 真实 metrics 上报 | 已实现（B-005/B-006 已闭环，2026-07-31 更新） | `cmd/susumonitor-agent/main.go:70-71` 已接入 collector/reporter，本机 + 云端端到端验证 |
 | Linux 构建目标 `build-linux` | 已实现（B-007 已闭环，2026-07-31 更新） | `agent-go-SuMon/Makefile:6` 已含 `build-linux` target；`bin/susumonitor-agent-linux-amd64` 已实测 |

@@ -2,9 +2,11 @@
 
 > 本目录是 SuSuMonitor 后端 REST API 的权威 OpenAPI 3.0 契约源，供 Apifox 导入、前端类型生成、CI 校验与人工查阅使用。
 >
-> 契约基线：当前 PR 分支 `fix/web-glassmorphism-closeout @ 617ccd0`（2026-08-27）；该版本与 Java Controller、前端请求封装和 `openapi:check` 结果一致。
+> 契约基线：`main @ 4e4cd86`（2026-08-28）。`openapi:check` 只校验 JSON 结构、本地 `$ref` 与 Java Controller 路径/操作映射，不代表 DTO/VO 字段语义与前端类型完全一致。
 >
-> 校验命令：`cd web-vue-SuMon && npm run openapi:check`（CI 友好，退出 0 即契约与 Java Controller 完全一致）。
+> **当前已知的前端/契约漂移（2026-08-28）**：后端 PUT `/api/servers/{id}` 是全量基础字段更新（`description` 必填可空串），但 Web 类型与 API 注释仍为“可选/省略保留”；Web 指标历史默认 `page_size=500` 超过后端 `@Max(100)` 上限；Web 错误码常量缺 `42905/50301/50302`；Web 告警类型缺 `resolved_at`；Web 服务器排序类型/URL 恢复缺 `status`。详见根 `README.md`“当前待解决问题”章节。
+>
+> 校验命令：`cd web-vue-SuMon && npm run openapi:check`（CI 友好，退出 0 表示 JSON 结构、`$ref` 与 Controller 路径/操作映射一致；不校验 DTO/VO 字段语义、security、响应头和前端类型）。
 >
 > 业务代码位置：`server-java-SuMon/src/main/java/com/susumonitor/server/module/**`（VO/DTO/Controller 是契约唯一来源）。
 

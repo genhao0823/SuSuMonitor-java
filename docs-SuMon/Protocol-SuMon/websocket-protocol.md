@@ -200,3 +200,16 @@ The Agent validation covered authentication, heartbeat, Metrics persistence, lat
 Automated boundary tests additionally verify that a successful transaction sends one `metrics.update`, a rolled-back transaction sends none, a Ticket is usable at 29.999 seconds but rejected at 30 seconds, and two concurrent Ticket consumers produce at most one success.
 
 The first version does not provide cross-JVM connection state, Ticket sharing, subscription routing or broadcast fan-out. These require an external state and messaging layer before multi-instance deployment.
+
+## Current Implementation Gaps（2026-08-28，对照 `main @ 4e4cd86`）
+
+本文档是目标协议定义。以下条目曾为当前代码与本文不一致的已知缺口；**第 1、2、4 项已于 2026-08-28 修复**，第 3、5、6 项保留为当前待办（此前修复曾被回滚提交 `0970c8c`（Web）、`870aec6`（Java）、`4e4cd86`（Go）撤销）：
+
+1. ~~**Metrics `collected_at` 未严格校验 UTC**~~ **已修复**：`MetricsServiceImpl.validatePayload` 现拒绝非 UTC offset 的 `collected_at`。
+2. ~~**Agent UUID fallback 不满足 RFC 4122**~~ **已修复**：Go `newUUID` 随机源失败时 fallback 仍产出合法 UUID v4（`formatUUID(newUUIDFallbackBytes(...))`），并有 `TestNewUUIDFallback` 覆盖。
+3. **终端控制帧超限不关闭 Monitor 连接（待办）**：终端限流超限时服务端只回 `42904` error 帧并保留连接（`MonitorWebSocketHandler`），不再额外断开；验收矩阵中“控制帧洪泛后 Monitor 被断连”的描述应改为“收到 42904 error，连接保持”。
+4. ~~**Agent backend URL 带路径会拼出未注册端点**~~ **已修复**：`config.validate` 解析 URL 并拒绝含 path/query/fragment 的 backend URL，避免拼出 `/api/ws/agent`。
+5. **ACK/NACK 载荷校验不足（待办）**：Go 客户端对 `metrics.ack` 只校验外层 `message_id` 非空，对 `metrics.nack` 只校验可反序列化，未校验 payload 的 `server_id` 归属、`reason` 合法性与 canonical UUID。
+6. **快照时间校验不足（待办）**：Go metricbuffer 快照打开时只校验 `timestamp`/`collected_at` 非空，未解析并校验 UTC ISO-8601。
+
+上述待办（第 3、5、6 项）已记录在根 `README.md`“当前待解决问题”章节；修复后再按本文档重新执行验收。

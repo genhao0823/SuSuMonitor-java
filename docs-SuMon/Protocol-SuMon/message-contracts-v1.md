@@ -240,3 +240,13 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 信封字段与 §五 示例一致（snake_case、`event_type=alert.resolved`、`schema_version=1`、`producer=alert-service`；payload 8 字段不含触发值）。
 - 消费侧：幂等（V15）→ 规则有效且有渠道且记录已 resolved → `scheduleNotifications` 排程"恢复通知"（文案按 status 分支为 `[恢复]` 语义）→ 提交后 `sendScheduled`；错误分类与失败留痕与 §十一 同模式（`FailedConsumeRecordRecoverer` 队列映射含 `susumonitor.alert.resolved`→alert-resolved-notifier）。
 - 验证：真实 broker 验收 `verify-alert-resolved-chain.mjs` 11/11 PASS（2026-08-15）；Maven 全量 541→550 tests 全绿。
+
+## 十三、当前实现差异（2026-08-28，对照 `main @ 4e4cd86`）
+
+以下条目为本契约与代码不一致的已知缺口；**第 1-3 项已于 2026-08-28 修复**，仅保留历史记录供追溯（此前修复曾被回滚提交 `870aec6` 撤销，现重新修复）：
+
+1. ~~**告警事件 metric 命名**~~ **已修复**：`AlertMetric.toEventMetric()` 将规则 `load` 映射为事件契约 `load_avg`，`AlertTriggeredEnvelopeFactory`/`AlertResolvedEnvelopeFactory` 均使用该映射；`load` 规则事件现在与消费者校验器冻结集合一致。
+2. ~~**`collected_at` UTC 约束**~~ **已修复**：`MetricsServiceImpl.validatePayload` 现拒绝非 UTC offset 的 `collected_at`。Schema 的 `format: date-time` 仍允许非 UTC 偏移（JSON Schema 能力限制），但入口校验已按本文档要求执行。
+3. ~~**Schema nullable 不一致**~~ **已修复**：`message-contracts-v1.schema.json` 已将 `temperature`/`load_avg` 定义为 `["number","null"]`，与契约允许 `null` 的语义一致。
+
+修复验证：`AlertTriggeredEnvelopeFactoryTests`/`AlertResolvedEnvelopeFactoryTests` 增加 load → load_avg 映射断言；`MetricsServiceTests` 增加非 UTC 载荷拒绝用例；相关定向测试全部通过。

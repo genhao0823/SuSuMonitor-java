@@ -6,7 +6,9 @@ SuSuMonitor 监控平台的 Web 前端工程，基于 Vue 3 + Vite + Element Plu
 
 **M2-M6 主页面已实现**：认证、主布局、仪表盘、服务器管理、用户审核、实时指标页面以及 MVP-6 告警前端（告警记录 + 告警规则）均已接入真实后端。Web SSH 终端属于 MVP-7，~~当前尚未实现~~（T4 xterm.js 前端已于 2026-07-28 实现最小可用版本，路由 `/terminal/:serverId`，详见 [`docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md`](../docs-SuMon/Develop-log/20260728-MVP7-T4前端Web终端最小可用版本.md)）。
 
-**2026-08-21 前端收口**：统一 `styles/glass.css` 设计令牌与 8px 玻璃表面，完成应用壳层、Dashboard、服务器和告警列表响应式收口；恢复服务器列表 URL query、防抖关键字搜索、30 秒刷新、SSH 错误分类与末页回退；搜索收敛为后端 OpenAPI 的单一 `keyword` 契约。当前 typecheck/lint/build 通过，Vitest 133/133；真实账号 UI E2E 仍需在隔离后端与运行时凭据可用时执行。
+**2026-08-21 前端收口（历史记录，基于旧提交）**：统一 `styles/glass.css` 设计令牌与 8px 玻璃表面，完成应用壳层、Dashboard、服务器和告警列表响应式收口；恢复服务器列表 URL query、防抖关键字搜索、30 秒刷新、SSH 错误分类与末页回退；搜索收敛为后端 OpenAPI 的单一 `keyword` 契约。当前源码静态统计为 Vitest 133/133（22 个 spec 文件）；typecheck/lint/build 未在当前基线 `main @ 4e4cd86` 重新执行。真实账号 UI E2E 仍需在隔离后端与运行时凭据可用时执行。
+
+**2026-08-28 前端/后端契约对齐（已修复）**：指标历史默认 `page_size` 已从 500 调整为 100（与后端 `@Max(100)` 一致）；`UpdateServerRequest` 基础字段改必填、`ServerFormDialog` 提交完整基础字段并在切换认证方式时强制新主凭据；错误码常量补 `42905/50301/50302`；告警类型补 `resolved_at`；服务器排序类型/URL 恢复补 `status`。`api-e2e-test.mjs` 同步修正旧 `/users/pending` 端点与 pending 登录 403 断言。相关 Vitest 133/133、typecheck、lint、build 已通过。
 
 详细计划：[`docs-SuMon/Develop-plans/20260720-Web前端详细开发计划.md`](../docs-SuMon/Develop-plans/20260720-Web前端详细开发计划.md)
 当前总览：[`docs-SuMon/Develop-log/20260722-Web前端总览.md`](../docs-SuMon/Develop-log/20260722-Web前端总览.md)
