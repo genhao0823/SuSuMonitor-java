@@ -61,8 +61,8 @@ export function createServer(
 }
 
 /**
- * 更新服务器。仅传 body 中实际有变化的字段;空字符串凭据会被剔除,
- * 由后端按 OpenAPI 语义"省略=保留原值"处理。
+ * 更新服务器。PUT 为全量基础字段更新（name/host/description/ssh_* 必须完整提交）；
+ * 凭据字段省略表示保留原值，切换 ssh_auth_type 时必须提供对应新主凭据。
  */
 export function updateServer(
   id: number,

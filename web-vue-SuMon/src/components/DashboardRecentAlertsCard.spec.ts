@@ -25,6 +25,7 @@ const alert = {
   read_by: null,
   read_at: null,
   triggered_at: '2026-08-01T12:00:00Z',
+  resolved_at: null,
   notified_at: '2026-08-01T12:00:05Z',
   notify_channels: 'dingtalk',
   created_at: '2026-08-01T12:00:00Z'

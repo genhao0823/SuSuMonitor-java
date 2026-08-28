@@ -24,7 +24,7 @@ export const useMetricsStore = defineStore('metrics', () => {
     try {
       const [latestResponse, historyResponse] = await Promise.all([
         getLatestMetrics(serverId),
-        getMetricsHistory(serverId, startTime.toISOString(), endTime.toISOString(), 1, 500)
+        getMetricsHistory(serverId, startTime.toISOString(), endTime.toISOString(), 1, 100)
       ])
       latest.value = latestResponse.data
       // 按采集时间升序，保证 ECharts 时间轴顺序稳定。

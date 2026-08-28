@@ -181,7 +181,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { ApiBusinessError } from '@/api/client'
 import { createServer, updateServer } from '@/api/server'
 import { ErrorCode } from '@/types/error-code'
-import type { Server } from '@/types/api'
+import type { Server, UpdateServerRequest } from '@/types/api'
 
 interface Props {
   modelValue: boolean
@@ -195,6 +195,10 @@ const emit = defineEmits<{
 }>()
 
 const isEdit = computed<boolean>(() => props.server !== null)
+// 编辑模式下切换认证方式（password ↔ private_key）时，后端要求提交对应的新主凭据。
+const requiresNewPrimaryCredential = computed<boolean>(
+  () => props.server === null || props.server.ssh_auth_type !== form.ssh_auth_type
+)
 
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
@@ -292,7 +296,7 @@ const rules: FormRules = {
   ssh_password: [
     {
       validator: (_rule, value, cb) => {
-        if (!isEdit.value && (typeof value !== 'string' || value.length === 0)) {
+        if (requiresNewPrimaryCredential.value && (typeof value !== 'string' || value.length === 0)) {
           cb(new Error('请输入 SSH 密码'))
         } else if (typeof value === 'string' && value.length > 0 && (value.length < 8 || value.length > 64)) {
           cb(new Error('密码长度 8 到 64'))
@@ -306,7 +310,7 @@ const rules: FormRules = {
   ssh_private_key: [
     {
       validator: (_rule, value, cb) => {
-        if (!isEdit.value && (typeof value !== 'string' || value.length === 0)) {
+        if (requiresNewPrimaryCredential.value && (typeof value !== 'string' || value.length === 0)) {
           cb(new Error('请输入 SSH 私钥'))
         } else {
           cb()
@@ -349,16 +353,16 @@ async function handleSubmit(): Promise<void> {
   try {
     if (isEdit.value && props.server !== null) {
       const id = props.server.id
-      const body: Record<string, unknown> = {
+      const body: UpdateServerRequest = {
         name: form.name,
         host: form.host,
-        description: form.description || null,
+        description: form.description,
         ssh_host: form.ssh_host,
         ssh_port: form.ssh_port,
         ssh_user: form.ssh_user,
         ssh_auth_type: form.ssh_auth_type
       }
-      // 凭据字段:空字符串不发,让后端保留旧值
+      // 凭据字段:空字符串不发,让后端保留旧值;切换认证方式时校验器已强制新凭据必填。
       if (form.ssh_password.length > 0) {
         body.ssh_password = form.ssh_password
       }
@@ -374,7 +378,7 @@ async function handleSubmit(): Promise<void> {
       await createServer({
         name: form.name,
         host: form.host,
-        description: form.description || null,
+        description: form.description,
         ssh_host: form.ssh_host,
         ssh_port: form.ssh_port,
         ssh_user: form.ssh_user,

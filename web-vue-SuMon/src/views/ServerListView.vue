@@ -311,7 +311,7 @@ function restoreQueryFromUrl(): void {
     if (pageSizeOptions.includes(nextPageSize)) pageSize.value = nextPageSize
   }
   if (typeof query.sort_by === 'string') {
-    const allowedSortFields = ['id', 'name', 'host', 'created_at', 'updated_at'] as const
+    const allowedSortFields = ['id', 'name', 'host', 'status', 'created_at', 'updated_at'] as const
     if ((allowedSortFields as readonly string[]).includes(query.sort_by)) {
       sortBy.value = query.sort_by as ServerQuery['sort_by']
     }

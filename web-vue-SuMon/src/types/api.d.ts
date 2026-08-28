@@ -171,7 +171,7 @@ export interface ServerQuery {
   page?: number
   page_size?: number
   keyword?: string
-  sort_by?: 'id' | 'name' | 'host' | 'created_at' | 'updated_at'
+  sort_by?: 'id' | 'name' | 'host' | 'status' | 'created_at' | 'updated_at'
   sort_order?: 'asc' | 'desc'
 }
 
@@ -193,17 +193,18 @@ export interface CreateServerRequest {
 }
 
 /**
- * 更新服务器请求体。所有字段可选;省略的字段后端保留原值。
- * 凭据字段在编辑模式下若保持空字符串则后端不更新该凭据(由调用方过滤)。
+ * 更新服务器请求体。PUT 为全量基础字段更新：name/host/description/ssh_host/ssh_port/
+ * ssh_user/ssh_auth_type 必须完整提交（description 可为空字符串）；凭据字段省略表示
+ * 保留原值，切换 ssh_auth_type 时必须提供对应的新主凭据。
  */
 export interface UpdateServerRequest {
-  name?: string
-  host?: string
-  description?: string | null
-  ssh_host?: string
-  ssh_port?: number
-  ssh_user?: string
-  ssh_auth_type?: SshAuthType
+  name: string
+  host: string
+  description: string | null
+  ssh_host: string
+  ssh_port: number
+  ssh_user: string
+  ssh_auth_type: SshAuthType
   ssh_password?: string
   ssh_private_key?: string
   ssh_private_key_passphrase?: string
@@ -293,6 +294,8 @@ export interface AlertRecord {
   read_by: number | null
   read_at: string | null
   triggered_at: string
+  /** 告警恢复时间;未恢复时为 null。 */
+  resolved_at: string | null
   /** 外部通知发送完成时间;null=未成功发送。 */
   notified_at: string | null
   /** 成功送达的渠道,逗号分隔(email/dingtalk/webhook);null=未成功发送。 */
@@ -334,6 +337,8 @@ export interface AlertPushAlert {
   level: AlertLevel | string
   status: AlertStatus
   triggered_at: string
+  /** 告警恢复时间;未恢复时为 null。 */
+  resolved_at: string | null
 }
 
 /**

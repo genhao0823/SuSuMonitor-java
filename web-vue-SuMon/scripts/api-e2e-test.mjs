@@ -85,10 +85,10 @@ async function testRegister() {
   if (r.status === 200 && r.json?.code === 0) {
     log('INFO', `[/api/auth/register] 200 ✅ (新账号 ${username})`)
     registeredUser = { username, password }
-  } else if (r.status === 40900) {
-    log('INFO', `[/api/auth/register] 40900 — 用户已存在(可能并发测试)`)
+  } else if (r.status === 409 && r.json?.code === 40900) {
+    log('INFO', `[/api/auth/register] 409/40900 — 用户已存在(可能并发测试)`)
   } else {
-    log('ERROR', `[/api/auth/register] ${r.status} ${JSON.stringify(r.json)}`)
+    log('ERROR', `[/api/auth/register] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 
@@ -105,21 +105,21 @@ async function testLogin() {
   if (r.status === 200 && r.json?.code === 0) {
     log('INFO', '[/api/auth/login] 200 ✅')
     registeredToken = r.json?.data?.token
-  } else if (r.status === 40900) {
-    log('WARN', '[/api/auth/login] 40900 — 账号 pending 状态不可登录(预期,M5 admin 应先审核)')
+  } else if (r.status === 403 && r.json?.code === 40300) {
+    log('WARN', '[/api/auth/login] 403/40300 — 账号 pending 状态不可登录(预期,M5 admin 应先审核)')
   } else {
-    log('ERROR', `[/api/auth/login] ${r.status} ${JSON.stringify(r.json)}`)
+    log('ERROR', `[/api/auth/login] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 
 async function testCurrentUser() {
   const r = await api('/api/auth/me')
-  if (r.status === 40100) {
-    log('INFO', '[/api/auth/me] 40100 (无 token,预期)')
+  if (r.status === 401 && r.json?.code === 40100) {
+    log('INFO', '[/api/auth/me] 401/40100 (无 token,预期)')
   } else if (r.status === 200) {
     log('INFO', '[/api/auth/me] 200 ✅')
   } else {
-    log('ERROR', `[/api/auth/me] ${r.status}`)
+    log('ERROR', `[/api/auth/me] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 
@@ -128,10 +128,10 @@ async function testLogout() {
     method: 'POST',
     token: registeredToken || 'fake-token'
   })
-  if (r.status === 40100 || r.status === 200) {
-    log('INFO', `[/api/auth/logout] ${r.status} (预期)`)
+  if ((r.status === 401 && r.json?.code === 40100) || (r.status === 200 && r.json?.code === 0)) {
+    log('INFO', `[/api/auth/logout] HTTP ${r.status} (预期)`)
   } else {
-    log('ERROR', `[/api/auth/logout] ${r.status}`)
+    log('ERROR', `[/api/auth/logout] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 
@@ -142,10 +142,10 @@ let createdServerId = null
 async function testListServers() {
   // 不带 token:40100
   const r1 = await api('/api/servers?page=1&page_size=100&sort_by=id&sort_order=desc')
-  if (r1.status === 40100) {
-    log('INFO', '[/api/servers 无 token] 40100 (预期)')
+  if (r1.status === 401 && r1.json?.code === 40100) {
+    log('INFO', '[/api/servers 无 token] 401/40100 (预期)')
   } else {
-    log('ERROR', `[/api/servers 无 token] ${r1.status}`)
+    log('ERROR', `[/api/servers 无 token] HTTP ${r1.status} ${JSON.stringify(r1.json)}`)
   }
 
   // 带 token:如果 pending 不能登录就跳过
@@ -204,10 +204,10 @@ async function testGetServerStatus() {
 async function testMetricsLatest() {
   if (!createdServerId) return
   const r = await api(`/api/servers/${createdServerId}/metrics/latest`, { token: registeredToken })
-  if (r.status === 200 || r.status === 40400) {
-    log('INFO', `[/api/servers/${createdServerId}/metrics/latest] ${r.status} (200 有数据/40400 无 agent,都算预期)`)
+  if (r.status === 200 || (r.status === 404 && r.json?.code === 40400)) {
+    log('INFO', `[/api/servers/${createdServerId}/metrics/latest] HTTP ${r.status} (200 有数据/404 无 agent,都算预期)`)
   } else {
-    log('ERROR', `[/api/servers/${createdServerId}/metrics/latest] ${r.status}`)
+    log('ERROR', `[/api/servers/${createdServerId}/metrics/latest] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 
@@ -219,10 +219,10 @@ async function testMetricsHistory() {
     `/api/servers/${createdServerId}/metrics?start_time=${start.toISOString()}&end_time=${end.toISOString()}&page=1&page_size=100`,
     { token: registeredToken }
   )
-  if (r.status === 200 || r.status === 40400) {
-    log('INFO', `[/api/servers/${createdServerId}/metrics] ${r.status} (200 有数据/40400 无 agent)`)
+  if (r.status === 200 || (r.status === 404 && r.json?.code === 40400)) {
+    log('INFO', `[/api/servers/${createdServerId}/metrics] HTTP ${r.status} (200 有数据/404 无 agent)`)
   } else {
-    log('ERROR', `[/api/servers/${createdServerId}/metrics] ${r.status}`)
+    log('ERROR', `[/api/servers/${createdServerId}/metrics] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 
@@ -230,19 +230,19 @@ async function testMetricsHistory() {
 
 async function testAdminPaths() {
   const paths = [
-    '/api/admin/users/pending',
+    '/api/admin/users?status=pending',
     '/api/admin/users/1/approve',
     '/api/admin/users/1/reject'
   ]
   for (const p of paths) {
     const method = p.endsWith('/approve') || p.endsWith('/reject') ? 'PUT' : 'GET'
     const r = await api(p, { method, token: registeredToken || 'fake' })
-    if (r.status === 40100) {
-      log('INFO', `[${p} 无 admin] 40100 (预期,非 admin 拒绝)`)
-    } else if (r.status === 40300) {
-      log('INFO', `[${p} 无 admin] 40300 (预期)`)
+    if (r.status === 401 && r.json?.code === 40100) {
+      log('INFO', `[${p} 无 admin] 401/40100 (预期,非 admin 拒绝)`)
+    } else if (r.status === 403 && r.json?.code === 40300) {
+      log('INFO', `[${p} 无 admin] 403/40300 (预期)`)
     } else {
-      log('WARN', `[${p} 无 admin] ${r.status} (非预期,需要 admin)`)
+      log('WARN', `[${p} 无 admin] HTTP ${r.status} (非预期,需要 admin)`)
     }
   }
 }
@@ -256,10 +256,10 @@ async function testListAlertRules() {
   if (r.status === 200 && r.json?.code === 0) {
     const items = r.json?.data || []
     log('INFO', `[/api/alerts/rules] 200 ✅ (${items.length} 条规则)`)
-  } else if (r.status === 40100 || r.status === 40300) {
-    log('INFO', `[/api/alerts/rules] ${r.status} (预期,无 token 或非 admin)`)
+  } else if (r.status === 401 || r.status === 403) {
+    log('INFO', `[/api/alerts/rules] HTTP ${r.status} (预期,无 token 或非 admin)`)
   } else {
-    log('ERROR', `[/api/alerts/rules] ${r.status} ${JSON.stringify(r.json)}`)
+    log('ERROR', `[/api/alerts/rules] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 
@@ -275,10 +275,10 @@ async function testListAlertRecords() {
       firstAlertRecordId = items[0].id
       log('INFO', `  └─ 取第 1 条 id=${firstAlertRecordId}`)
     }
-  } else if (r.status === 40100 || r.status === 40300) {
-    log('INFO', `[/api/alerts/records] ${r.status} (预期,无 token 或非 admin)`)
+  } else if (r.status === 401 || r.status === 403) {
+    log('INFO', `[/api/alerts/records] HTTP ${r.status} (预期,无 token 或非 admin)`)
   } else {
-    log('ERROR', `[/api/alerts/records] ${r.status} ${JSON.stringify(r.json)}`)
+    log('ERROR', `[/api/alerts/records] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 
@@ -291,10 +291,10 @@ async function testMarkAlertRecordAsRead() {
     `/api/alerts/records/${firstAlertRecordId}/read`,
     { method: 'PUT', token: registeredToken || 'fake' }
   )
-  if (r.status === 200 || r.status === 40100 || r.status === 40300 || r.status === 40900) {
-    log('INFO', `[/api/alerts/records/${firstAlertRecordId}/read] ${r.status} (200/40900 预期,40100/40300 无凭据预期)`)
+  if (r.status === 200 || r.status === 401 || r.status === 403 || (r.status === 409 && r.json?.code === 40900)) {
+    log('INFO', `[/api/alerts/records/${firstAlertRecordId}/read] HTTP ${r.status} (200/409 预期,401/403 无凭据预期)`)
   } else {
-    log('ERROR', `[/api/alerts/records/${firstAlertRecordId}/read] ${r.status} ${JSON.stringify(r.json)}`)
+    log('ERROR', `[/api/alerts/records/${firstAlertRecordId}/read] HTTP ${r.status} ${JSON.stringify(r.json)}`)
   }
 }
 

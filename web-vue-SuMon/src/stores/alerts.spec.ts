@@ -52,6 +52,7 @@ function makeRecord(overrides: Partial<AlertRecord> = {}): AlertRecord {
     read_by: null,
     read_at: null,
     triggered_at: '2026-07-22T00:00:00Z',
+    resolved_at: null,
     notified_at: null,
     notify_channels: null,
     created_at: '2026-07-22T00:00:00Z',
@@ -247,7 +248,8 @@ describe('alerts store', () => {
         threshold_value: 80,
         level: 'warning',
         status: 'unread',
-        triggered_at: '2026-07-22T00:00:00Z'
+        triggered_at: '2026-07-22T00:00:00Z',
+        resolved_at: null
       }
     })
     expect(store.pendingPushCount).toBe(1)
