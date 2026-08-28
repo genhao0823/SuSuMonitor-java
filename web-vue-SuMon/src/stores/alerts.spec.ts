@@ -51,7 +51,6 @@ function makeRecord(overrides: Partial<AlertRecord> = {}): AlertRecord {
     message: null,
     read_by: null,
     read_at: null,
-    resolved_at: null,
     triggered_at: '2026-07-22T00:00:00Z',
     notified_at: null,
     notify_channels: null,
@@ -248,7 +247,6 @@ describe('alerts store', () => {
         threshold_value: 80,
         level: 'warning',
         status: 'unread',
-        resolved_at: null,
         triggered_at: '2026-07-22T00:00:00Z'
       }
     })

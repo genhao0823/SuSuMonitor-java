@@ -61,7 +61,8 @@ export function createServer(
 }
 
 /**
- * 更新服务器。PUT 要求提交完整基础字段;凭据字段省略表示保留原值。
+ * 更新服务器。仅传 body 中实际有变化的字段;空字符串凭据会被剔除,
+ * 由后端按 OpenAPI 语义"省略=保留原值"处理。
  */
 export function updateServer(
   id: number,
