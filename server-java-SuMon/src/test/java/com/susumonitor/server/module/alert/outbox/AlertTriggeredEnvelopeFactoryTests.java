@@ -67,6 +67,17 @@ class AlertTriggeredEnvelopeFactoryTests {
         assertEquals(1, AlertTriggeredEnvelopeFactory.SCHEMA_VERSION);
     }
 
+    /** 规则内部 metric=load 必须映射为事件契约 metric=load_avg（message-contracts-v1.md §四）。 */
+    @Test
+    void loadRuleMetricShouldMapToLoadAvgInPayload() throws Exception {
+        AlertRecordVo record = record();
+        record.setMetric("load");
+
+        JsonNode payload = new ObjectMapper().readTree(factory.build(record, EVENT_ID)).get("payload");
+
+        assertEquals("load_avg", payload.get("metric").asText());
+    }
+
     private AlertRecordVo record() {
         AlertRecordVo record = new AlertRecordVo();
         record.setId(789L);

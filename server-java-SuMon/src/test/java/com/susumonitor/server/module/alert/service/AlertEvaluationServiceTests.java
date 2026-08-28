@@ -225,9 +225,9 @@ class AlertEvaluationServiceTests {
         verify(stateMapper, never()).insertState(any());
     }
 
-    /** 单规则评估/写入失败应记录日志但不影响其他规则（逐规则隔离保留）。 */
+    /** 单规则评估/写入失败应向上传播（由消息消费者回滚并重试整条消息），不再逐规则吞异常。 */
     @Test
-    void evaluationFailureShouldNotAffectOtherRules() {
+    void evaluationFailureShouldPropagate() {
         setupService();
         AlertRuleEntity rule1 = rule(1L, "cpu", ">", bd("80"));
         AlertRuleEntity rule2 = rule(2L, "memory", ">=", bd("90"));
@@ -239,10 +239,11 @@ class AlertEvaluationServiceTests {
                 .thenThrow(new RuntimeException("DB error"))
                 .thenReturn(1);
 
-        service.evaluate(metrics);
+        assertThrows(RuntimeException.class, () -> service.evaluate(metrics));
 
-        // rule2 仍应正常评估（rule1 失败被隔离）。
-        verify(recordMapper, times(2)).insertRecord(any(AlertRecordEntity.class));
+        // 异常传播后 rule2 不再被评估；调用方事务回滚、消费幂等记录不写入，等待重试/DLQ。
+        verify(recordMapper, times(1)).insertRecord(any(AlertRecordEntity.class));
+        verify(stateMapper, never()).insertState(any());
     }
 
     // --- 辅助方法 ---

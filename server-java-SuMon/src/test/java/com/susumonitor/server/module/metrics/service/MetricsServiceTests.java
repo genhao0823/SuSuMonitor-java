@@ -189,6 +189,20 @@ class MetricsServiceTests {
         verify(metricsMapper, never()).insertIngestion(any());
     }
 
+    /** 非 UTC offset 的 collected_at 按永久非法载荷拒绝（协议要求 UTC ISO-8601）。 */
+    @Test
+    void nonUtcCollectedAtShouldBeRejected() {
+        OffsetDateTime nonUtc = COLLECTED_AT.withOffsetSameInstant(ZoneOffset.ofHours(8));
+
+        MetricsRejectedException exception = assertThrows(MetricsRejectedException.class,
+                () -> service.report(SERVER_ID, UUID.randomUUID().toString(), payload(nonUtc)));
+
+        org.junit.jupiter.api.Assertions.assertEquals(MetricsRejectionReason.INVALID_METRICS_PAYLOAD,
+                exception.getReason());
+        verify(serverService, never()).existsActiveForUpdate(eq(SERVER_ID));
+        verify(metricsMapper, never()).insertIngestion(any());
+    }
+
     /** 构造满足宽表校验的最小 Metrics 上报载荷。 */
     private MetricsReportPayload payload(OffsetDateTime collectedAt) {
         MetricsReportPayload payload = new MetricsReportPayload();

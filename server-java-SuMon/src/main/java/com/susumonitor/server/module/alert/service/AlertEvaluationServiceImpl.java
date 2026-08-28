@@ -68,12 +68,10 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
         Map<Long, AlertStateEntity> statesByRule = stateMapper.selectByServerId(metrics.getServerId()).stream()
                 .collect(Collectors.toMap(AlertStateEntity::getRuleId, Function.identity(), (first, ignored) -> first));
         for (AlertRuleEntity rule : rules) {
-            try {
-                evaluateRule(rule, metrics, statesByRule.get(rule.getId()));
-            } catch (Exception exception) {
-                log.warn("alert evaluation failed, ruleId={}, serverId={}",
-                        rule.getId(), metrics.getServerId(), exception);
-            }
+            // 单条规则评估失败必须向上传播：调用方（消息消费者）的事务回滚、消费幂等记录
+            // 不写入，容器按有限重试策略重试整条消息，最终进入 DLQ。不能吞异常后继续 ACK，
+            // 否则该规则对应的告警会被静默丢失且无重试机会。
+            evaluateRule(rule, metrics, statesByRule.get(rule.getId()));
         }
     }
 

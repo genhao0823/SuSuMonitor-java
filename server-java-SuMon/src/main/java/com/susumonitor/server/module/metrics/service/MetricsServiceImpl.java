@@ -166,6 +166,9 @@ public class MetricsServiceImpl implements MetricsService {
         if (payload == null || authenticatedServerId == null || !isUuid(messageId)
                 || !authenticatedServerId.equals(payload.getServerId())
                 || payload.getCollectedAt() == null
+                // 协议（websocket-protocol.md）与消息契约（message-contracts-v1.md）要求
+                // collected_at 为 UTC ISO-8601；非 UTC offset 按永久非法载荷拒绝。
+                || !ZoneOffset.UTC.equals(payload.getCollectedAt().getOffset())
                 || payload.getCollectedAt().isAfter(OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5))) {
             throw new MetricsRejectedException(MetricsRejectionReason.INVALID_METRICS_PAYLOAD);
         }

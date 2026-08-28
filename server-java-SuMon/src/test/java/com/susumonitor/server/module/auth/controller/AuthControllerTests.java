@@ -354,9 +354,10 @@ class AuthControllerTests {
     // Redis 启用场景：logout 将当前 token 的 jti 写入黑名单（TTL=剩余有效期），真实失效。
     void logoutShouldRevokeTokenInBlacklistWhenRedisEnabled() throws Exception {
         UserEntity authenticationUser = authenticationUser();
+        // token 过期时间取当前时间 +1 小时，保证 TTL 恒为正（避免历史硬编码日期过期导致时间炸弹）。
         when(jwtTokenService.parseToken("valid-token"))
                 .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id",
-                        java.time.Instant.parse("2026-08-18T00:00:00Z")));
+                        java.time.Instant.now().plusSeconds(3600)));
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(authenticationUser);
         when(redisTokenBlacklist.isRevoked("token-id")).thenReturn(false);
 

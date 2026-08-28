@@ -74,7 +74,8 @@ public class AlertMessageConsumer {
             log.debug("consume idempotent hit, eventId={}", envelope.eventId());
             return;
         }
-        // 业务事务：评估结果与消费幂等记录同事务提交；返回后容器 ACK。
+        // 业务事务：评估结果与消费幂等记录同事务提交；评估异常会回滚事务并使容器按
+        // 有限重试策略重试（默认 3 次），耗尽后进 DLQ，保证告警不因单条规则失败而静默丢失。
         transactionTemplate.executeWithoutResult(status -> {
             evaluationService.evaluate(envelope.payload().toMetricsLatestVo());
             insertConsumeRecord(envelope);
