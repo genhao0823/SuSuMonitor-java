@@ -2,7 +2,6 @@ package com.susumonitor.server.module.alert.outbox;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.susumonitor.server.module.alert.enums.AlertMetric;
 import com.susumonitor.server.module.alert.vo.AlertRecordVo;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -79,7 +78,7 @@ public class AlertResolvedEnvelopeFactory {
         payload.put("server_id", record.getServerId());
         payload.put("rule_id", record.getRuleId());
         payload.put("record_id", record.getId());
-        payload.put("metric", AlertMetric.toEventMetric(record.getMetric()));
+        payload.put("metric", record.getMetric());
         payload.put("level", record.getLevel());
         payload.put("status", record.getStatus());
         payload.put("triggered_at", record.getTriggeredAt().format(CONTRACT_TIMESTAMP));

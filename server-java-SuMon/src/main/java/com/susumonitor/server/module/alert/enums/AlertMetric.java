@@ -34,25 +34,6 @@ public enum AlertMetric {
         return ruleValue;
     }
 
-    /**
-     * 返回异步事件契约（message-contracts-v1）冻结的指标名。
-     * 规则列使用 load，事件载荷按契约映射为 load_avg；其余指标两处同名。
-     */
-    public String eventValue() {
-        return this == LOAD ? "load_avg" : ruleValue;
-    }
-
-    /**
-     * 将规则 metric 字符串映射为事件契约指标名；未知值原样返回，由调用方校验。
-     *
-     * @param ruleValue alert_rules.metric 存储值
-     * @return 事件契约指标名
-     */
-    public static String toEventMetric(String ruleValue) {
-        AlertMetric metric = fromValue(ruleValue);
-        return metric == null ? ruleValue : metric.eventValue();
-    }
-
     /** 从 MetricsLatestVo 提取对应指标值，指标缺失时返回 null。 */
     public BigDecimal extract(MetricsLatestVo metrics) {
         if (metrics == null) {
