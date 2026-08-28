@@ -6,8 +6,10 @@ package wsclient
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -187,15 +189,18 @@ func newHeartbeatMessage() AgentMessage {
 	return newMessage("heartbeat", HeartbeatPayload{})
 }
 
+var uuidFallbackCounter uint64
+
 // newUUID 生成 UUID v4 字符串，用于 message_id。
 //
-// 使用 crypto/rand 生成 16 字节随机数，设置版本位（第 7 字节高 4 位为 0x4）
-// 和变体位（第 9 字节高 2 位为 0b10）。不引入第三方 UUID 库。
+// 优先使用 crypto/rand；随机源异常时使用进程内计数器和当前时间构造
+// 确定性的 16 字节值，并仍设置 RFC 4122 版本/变体位，避免生成违反协议的 ID。
 func newUUID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// crypto/rand 失败极少见；用时间戳兜底，保证不返回空字符串。
-		return fmt.Sprintf("%x", time.Now().UnixNano())
+		seed := fmt.Sprintf("%d:%d", time.Now().UnixNano(), atomic.AddUint64(&uuidFallbackCounter, 1))
+		digest := sha256.Sum256([]byte(seed))
+		copy(b, digest[:16])
 	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
