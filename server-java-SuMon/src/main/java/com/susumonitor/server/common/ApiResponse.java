@@ -1,16 +1,23 @@
 package com.susumonitor.server.common;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * 统一 REST 响应封装。
  *
  * @param <T> 响应数据类型
  */
+// 类级 @Schema 描述统一响应信封，供 springdoc 生成响应模型说明。
+@Schema(description = "统一响应信封：code 为业务状态码，0 表示成功")
 public class ApiResponse<T> {
 
+    @Schema(description = "业务状态码，0 表示成功；非 0 对应 ErrorCode 错误码", example = "0")
     private final int code;
 
+    @Schema(description = "响应消息", example = "success")
     private final String message;
 
+    @Schema(description = "响应数据（错误时为 null）")
     private final T data;
 
     /**

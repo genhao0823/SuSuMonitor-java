@@ -1,6 +1,5 @@
 package com.susumonitor.server.module.system.controller;
 
-import com.susumonitor.server.common.ApiResponse;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.config.AppProperties;
@@ -14,6 +13,11 @@ import com.susumonitor.server.module.system.vo.ConsumeStatsVo;
 import com.susumonitor.server.module.system.vo.HealthStatusVo;
 import com.susumonitor.server.module.system.vo.QueueBacklogVo;
 import com.susumonitor.server.module.system.vo.ReadyStatusVo;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -87,9 +91,22 @@ public class SystemController {
      *
      * @return 健康状态（始终返回 UP）
      */
+    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-system.json 的 getHealth 操作对齐。
+    // 健康检查是公开端点（permitAll），不声明 security，契约中亦无认证要求。
+    @Tag(name = "system", description = "System health and readiness checks")
+    @Operation(
+            summary = "Health check",
+            description = "Checks whether the backend application is alive. "
+                    + "This endpoint does not depend on the database.",
+            operationId = "getHealth")
+    // 声明健康检查的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Application is alive"),
+            @ApiResponse(responseCode = "500", description = "Internal server error (50000)")
+    })
     @GetMapping("/health")
-    public ApiResponse<HealthStatusVo> health() {
-        return ApiResponse.success(new HealthStatusVo("UP", applicationName, OffsetDateTime.now(ZoneOffset.UTC)));
+    public com.susumonitor.server.common.ApiResponse<HealthStatusVo> health() {
+        return com.susumonitor.server.common.ApiResponse.success(new HealthStatusVo("UP", applicationName, OffsetDateTime.now(ZoneOffset.UTC)));
     }
 
     /**
@@ -97,8 +114,27 @@ public class SystemController {
      * RabbitMQ 也必须可用，Redis 启用（存在 RedisHealthChecker Bean）时 Redis 也必须可用——
      * "存活但未就绪"语义，Broker/Redis 不可达返回 50301/50302，应用不退出。
      */
+    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-system.json 的 getReady 操作对齐。
+    // 就绪检查是公开端点（permitAll），不声明 security，契约中亦无认证要求。
+    @Tag(name = "system", description = "System health and readiness checks")
+    @Operation(
+            summary = "Readiness check",
+            description = "Checks whether the backend application and database connection are ready. "
+                    + "When the Outbox/RabbitMQ integration is enabled, it also requires the Broker "
+                    + "health check to pass. A Broker failure leaves the process alive but returns "
+                    + "readiness code 50301 and HTTP 503.",
+            operationId = "getReady")
+    // 声明就绪检查的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
+    @ApiResponses({
+            @ApiResponse(responseCode = "200",
+                    description = "Application, database, and enabled RabbitMQ integration are ready"),
+            @ApiResponse(responseCode = "500",
+                    description = "Database is unavailable (50001), Redis is enabled but unavailable "
+                            + "(50302), or an internal server error occurred (50000)"),
+            @ApiResponse(responseCode = "503", description = "RabbitMQ is enabled but unavailable (50301)")
+    })
     @GetMapping("/ready")
-    public ApiResponse<ReadyStatusVo> ready() {
+    public com.susumonitor.server.common.ApiResponse<ReadyStatusVo> ready() {
         try (Connection connection = dataSource.getConnection()) {
             if (!connection.isValid(DATABASE_VALIDATE_TIMEOUT_SECONDS)) {
                 throw new BusinessException(ErrorCode.DATABASE_ERROR);
@@ -114,7 +150,7 @@ public class SystemController {
         if (redisChecker != null && !redisChecker.isHealthy()) {
             throw new BusinessException(ErrorCode.REDIS_UNAVAILABLE);
         }
-        return ApiResponse.success(new ReadyStatusVo("UP", "ok", OffsetDateTime.now(ZoneOffset.UTC)));
+        return com.susumonitor.server.common.ApiResponse.success(new ReadyStatusVo("UP", "ok", OffsetDateTime.now(ZoneOffset.UTC)));
     }
 
     /**
@@ -122,8 +158,24 @@ public class SystemController {
      *
      * <p>RabbitMQ 未启用时对应注册表/服务为空，返回空列表。</p>
      */
+    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-system.json 的 getRabbitmqConsumers 操作对齐。
+    // 监控快照仅管理员可访问，声明 Bearer JWT 认证。
+    @Tag(name = "rabbitmq-monitor", description = "RabbitMQ runtime monitoring snapshots (ROLE_ADMIN only)")
+    @Operation(
+            summary = "Consume timing and failure-rate window snapshot",
+            description = "Per-consumer processing timing window (in-memory) combined with the "
+                    + "failure-rate window aggregated from message_consume_records (V15). "
+                    + "Returns an empty list when the RabbitMQ integration is disabled.",
+            operationId = "getRabbitmqConsumers",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    // 声明消费统计接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Consumer stats snapshot"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)"),
+            @ApiResponse(responseCode = "403", description = "Authenticated but not an administrator (40300)")
+    })
     @GetMapping("/system/rabbitmq/consumers")
-    public ApiResponse<List<ConsumeStatsVo>> rabbitmqConsumers() {
+    public com.susumonitor.server.common.ApiResponse<List<ConsumeStatsVo>> rabbitmqConsumers() {
         ConsumeTimingStatsRegistry timingRegistry = consumeTimingStatsRegistry.getIfAvailable();
         ConsumeStatsService statsService = consumeStatsService.getIfAvailable();
         Map<String, ConsumeTimingStatsRegistry.ConsumerTimingSnapshot> timing =
@@ -157,7 +209,7 @@ public class SystemController {
             }
             result.add(vo);
         }
-        return ApiResponse.success(result);
+        return com.susumonitor.server.common.ApiResponse.success(result);
     }
 
     /**
@@ -165,11 +217,28 @@ public class SystemController {
      *
      * <p>RabbitMQ 未启用或无探测结果时返回空列表。</p>
      */
+    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-system.json 的 getRabbitmqQueues 操作对齐。
+    // 监控快照仅管理员可访问，声明 Bearer JWT 认证。
+    @Tag(name = "rabbitmq-monitor", description = "RabbitMQ runtime monitoring snapshots (ROLE_ADMIN only)")
+    @Operation(
+            summary = "Queue backlog snapshot",
+            description = "Latest passive-declare probe snapshot of the six frozen queues: "
+                    + "business queues (type=business, warned when exceeding the threshold) and "
+                    + "dead-letter queues (type=dead_letter). Returns an empty list when the RabbitMQ "
+                    + "integration is disabled or no probe has run yet.",
+            operationId = "getRabbitmqQueues",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    // 声明队列积压接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Queue backlog snapshot"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)"),
+            @ApiResponse(responseCode = "403", description = "Authenticated but not an administrator (40300)")
+    })
     @GetMapping("/system/rabbitmq/queues")
-    public ApiResponse<List<QueueBacklogVo>> rabbitmqQueues() {
+    public com.susumonitor.server.common.ApiResponse<List<QueueBacklogVo>> rabbitmqQueues() {
         QueueBacklogSnapshotRegistry registry = queueBacklogSnapshotRegistry.getIfAvailable();
         if (registry == null) {
-            return ApiResponse.success(List.of());
+            return com.susumonitor.server.common.ApiResponse.success(List.of());
         }
         int warnThreshold = appProperties.getRabbitmq().getQueueBacklogWarnThreshold();
         List<QueueBacklogVo> result = new ArrayList<>();
@@ -184,6 +253,6 @@ public class SystemController {
             vo.setError(snapshot.error());
             result.add(vo);
         }
-        return ApiResponse.success(result);
+        return com.susumonitor.server.common.ApiResponse.success(result);
     }
 }
