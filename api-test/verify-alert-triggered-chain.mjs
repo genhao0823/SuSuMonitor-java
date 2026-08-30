@@ -6,7 +6,7 @@
  *   → AlertTriggeredConsumer（alert-notifier：幂等 + 排程通知 + 同事务记录）
  *   → alert_notifications pending 行（消息驱动外部通知）
  *
- * 用法（本机约定：后端 18081 / 管理台 15672 / MySQL susumonitor:732682）：
+ * 用法（本机约定：后端 18081 / 管理台 15672 / MySQL 凭据经 SUSUMONITOR_VALIDATION_MYSQL_PASSWORD 提供）：
  *   SUSUMONITOR_VALIDATION_ADMIN_USERNAME=xxx SUSUMONITOR_VALIDATION_ADMIN_PASSWORD=xxx \
  *   node verify-alert-triggered-chain.mjs
  *
@@ -27,13 +27,13 @@ const managementPassword = process.env.RABBITMQ_MANAGEMENT_PASSWORD ?? 'guest'
 const adminUsername = process.env.SUSUMONITOR_VALIDATION_ADMIN_USERNAME
 const adminPassword = process.env.SUSUMONITOR_VALIDATION_ADMIN_PASSWORD
 const mysqlUser = process.env.SUSUMONITOR_VALIDATION_MYSQL_USER ?? 'susumonitor'
-const mysqlPassword = process.env.SUSUMONITOR_VALIDATION_MYSQL_PASSWORD ?? '732682'
+const mysqlPassword = process.env.SUSUMONITOR_VALIDATION_MYSQL_PASSWORD
 const mysqlDb = process.env.SUSUMONITOR_VALIDATION_MYSQL_DB ?? 'susumonitor'
 const waitTimeoutMs = 20000
 const validationPrefix = 'rmq_closeout_alert'
 
-if (!adminUsername || !adminPassword) {
-  throw new Error('Set SUSUMONITOR_VALIDATION_ADMIN_USERNAME and SUSUMONITOR_VALIDATION_ADMIN_PASSWORD.')
+if (!adminUsername || !adminPassword || !mysqlPassword) {
+  throw new Error('Set SUSUMONITOR_VALIDATION_ADMIN_USERNAME/PASSWORD and SUSUMONITOR_VALIDATION_MYSQL_PASSWORD.')
 }
 
 const checks = []

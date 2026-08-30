@@ -1,8 +1,8 @@
 # SuSuMonitor 面试准备文档导读
 
-> 本文档集是围绕 **SuSuMonitor 服务器监控平台** 整理的面试准备材料,内容全部来自仓库代码、开发日志(142 篇)、Bug 记录、验收文档与交接文档,保证与代码事实一致。
+> 本文档集是围绕 **SuSuMonitor 服务器监控平台** 整理的面试准备材料,内容全部来自仓库代码、开发日志(143 篇)、Bug 记录、验收文档与交接文档,保证与代码事实一致。
 >
-> 整理日期:2026-08-28（对应当前基线 `main @ 4e4cd86`；此前基于旧提交 `617ccd0` 的提交链计划 `ebe96d0`、验收脚本修正 `ebe152e`、验收记录 `617ccd0` 属历史记录）。后端 591/590 是历史日志记录，未在当前 HEAD 复跑；Web Vitest 133 项、Android 85 项、Go 10 个 test 文件为当前源码静态统计。历史明文地址、IP 和命令已脱敏并禁止执行；当前部署目标为 HTTPS/WSS。
+> 整理日期:2026-08-29（对应当前实际 HEAD `main @ 09b3911`；此前基于旧提交 `617ccd0` 的提交链计划 `ebe96d0`、验收脚本修正 `ebe152e`、验收记录 `617ccd0`，以及本文档集中仍出现的 `4e4cd86` 表述，均属历史校准，当前基线以根 README 顶部快照和 `docs-SuMon/Develop-plans/20260829-RC1单实例生产可靠性收口计划.md` 为准）。后端历史日志 591/590、Web Vitest 133、Android 85/89 等数字为历史批次或静态统计，当前 HEAD/工作区需在 RC1 干净提交重新执行后才能作为现状；Spring Boot 版本以工作区 `pom.xml`（已升级 3.4.13，未提交）和提交后 README 为准。历史明文地址、IP 和命令已脱敏并禁止执行；当前部署目标为 HTTPS/WSS，部署边界为单 JVM。
 
 ## 一、文档清单
 
@@ -42,7 +42,7 @@
 - **HTTPS / WSS** 已完成（2026-08-07；正式域名/IP 不在仓库文档中记录，当前以 HTTPS/WSS 为唯一部署目标）
 - **Docker / docker-compose** 已实现（三端 Dockerfile + docker-compose.yml；镜像实机构建 2026-08-16 完成，未推 registry、未做多架构 buildx）
 - **数据库异地备份脚本** 已实现（`scripts/remote-backup.sh`，真实密钥和地址不入库；crontab 调度仍未验证）
-- **Android App** 已完整实现（`app-kt-SuMon/`，Kotlin + Compose；阶段一 Web 完整移植 + 阶段二 SSH 终端，85 单测全绿；云端全链路手测待真机）
+- **Android App** 已完整实现（`app-kt-SuMon/`，Kotlin + Compose；阶段一 Web 完整移植 + 阶段二 SSH 终端；历史单测 85，当前工作区含 Keystore 加密等收尾，测试数量以 RC1 干净提交重新统计为准；云端全链路手测待真机）
 - **告警外部通知渠道** 已实现（邮件 + 钉钉 + Webhook；真实 SMTP 发送待邮箱凭据验收）
 - **alert.resolved 恢复事件链路** 已实现（V25/V26 + alert-resolved-notifier 消费收口）
 - **终端断线中继 E2E** 已实现（`terminal.closed` `agent_disconnected` 语义收口）

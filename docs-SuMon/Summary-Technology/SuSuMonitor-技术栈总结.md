@@ -1,8 +1,8 @@
 # SuSuMonitor 技术栈总结（Java 全栈实习面试参考）
 
-> 最后核对日期：2026-08-16（原 2026-07-23；本次按代码实况修订）
-> 整理范围：`server-java-SuMon`（Java 后端）、`agent-go-SuMon`（Go 采集 Agent）、`web-vue-SuMon`（Vue 前端）、`api-test`（接口验证）及工程化基础设施。
-> 编写原则：只描述代码中真实落地或真实声明的技术，对"已声明但未实际使用"的技术单独标注，不夸大。
+> 最后核对日期：2026-08-29（RC1 规划基线）
+> 整理范围：`server-java-SuMon`（Java 后端）、`agent-go-SuMon`（Go 采集 Agent）、`web-vue-SuMon`（Vue 前端）、`app-kt-SuMon`（Android 客户端）、`api-test`（接口验证）及工程化基础设施。
+> 编写原则：只描述代码中真实落地或真实声明的技术，对“已声明但未使用”“当前工作区未提交”和“需要真实环境验收”的内容分别标注，不夸大当前发布状态。当前实际 HEAD 为 `main @ 09b3911`；上一轮安全审计和收尾改动仍处于工作区，发布前必须在干净提交上重新验证。
 
 > **文档进度对齐说明（2026-07-25 修订，仅文档层）**
 >
@@ -14,22 +14,21 @@
 
 | 能力 | 状态 | 依据 |
 |---|---|---|
-| Spring Boot 3.4.7 后端 | 当前可用 | `pom.xml:7-26` |
+| Spring Boot 3.4.13 后端 | 当前工作区已升级，尚未进入 HEAD 发布提交 | `server-java-SuMon/pom.xml`；RC1 前需在干净提交复验 |
 | Flyway V1-V27 | 当前可用 | `db/migration/` |
-| MySQL 8.4 集成 | 当前可用 | `application.yml:11` |
-| JWT 72h 认证 + 行锁首管理员 | 当前可用；空库并发已于 2026-08-24 真实验收（conc=8/20 PASS，基于旧提交 `617ccd0`，未在当前 HEAD `4e4cd86` 复跑） | `JwtKeyConfig`、`UserService.java:71-105` |
-| Go Agent WS 鉴权/心跳/重连 | 当前可用 | `wsclient/client.go` |
-| Agent 真实 metrics 上报 | 已实现（B-005/B-006 已闭环，2026-07-31 更新） | `cmd/susumonitor-agent/main.go:70-71` 已接入 collector/reporter，本机 + 云端端到端验证 |
-| Linux 构建目标 `build-linux` | 已实现（B-007 已闭环，2026-07-31 更新） | `agent-go-SuMon/Makefile:6` 已含 `build-linux` target；`bin/susumonitor-agent-linux-amd64` 已实测 |
-| 完整 Nginx 站点配置 / Java systemd / Maven Wrapper / `application-prod.yml` | 已实现（2026-07-27 T5 补齐） | `server-java-SuMon/deploy/*` + `mvnw`，云端明文 HTTP 已跑通 |
-| Dockerfile + docker-compose / DB 备份脚本 | 已实现（2026-08-05）→ **实机构建完成（2026-08-16）** | 三端 `Dockerfile` + 根 `docker-compose.yml`（WSL2 Docker 三镜像构建 + compose 全栈实跑 PASS，见 `Develop-log/20260816-Docker镜像实机构建.md`）；备份脚本 `server-java-SuMon/deploy/backup.sh`/`restore.sh`、`scripts/remote-backup.sh` |
-| ECharts 集成 | 已使用（2026-08-16 更新） | `web-vue-SuMon/src/components/MetricsLineChart.vue` 指标折线图（含 `MetricsLineChart.spec.ts` 单测） |
-| openapi-typescript 类型生成 | 当前**未使用** | devDep 已声明，无生成脚本 |
-| MVP-6 告警后端业务 | 当前可用 | `module/alert/` 25 个 .java、`V10__create_alert_states_and_soft_delete_rules.sql`、`AlertPushPublisher` 推送 `alert.push`、MockMvc 完整 |
-| MVP-6 告警前端 | 已实现（2026-07-27 Sprint 0-7 收口，2026-07-31 更新） | `views/AlertRecordsView.vue` + `AlertRulesView.vue` + `alert.push` WS 消费；真实端到端链路 2026-07-28 验收通过 |
-| MVP-7 Web SSH 终端 | 已实现 T1-T4（T4 xterm.js 前端 2026-07-28，2026-07-31 更新） | `views/TerminalView.vue` + 路由 `/terminal/:serverId`；T5 云端部署已验证（明文 HTTP）、T6 家庭 Linux 主机部署待验 |
-| Docker / Android | 已落地（2026-08-16 更新） | Docker：三端 Dockerfile + 根 docker-compose.yml（2026-08-05）→ 三镜像实机构建 + compose 全栈实跑 PASS（2026-08-16）；Android：`app-kt-SuMon` 阶段一+二+Polish-7 |
-| Redis / Prometheus / k8s / GitHub Actions | Redis 已落地（2026-08-17/18）；其余计划中 | Redis：Monitor ticket 共享（GETDEL 一次性 + 双实例跨实例验收 2026-08-18）、JWT 黑名单真实登出、登录防爆破限流（429+Retry-After），均 `REDIS_ENABLED` 可选启用，见 `Develop-log/20260818-WSL修复与Redis安全加固.md`；Prometheus/k8s/GitHub Actions 属增强阶段 |
+| MySQL 8.4 集成 | 当前可用；生产网络边界和恢复演练待验收 | `application.yml`、Docker Compose |
+| JWT 72h 认证 + 行锁首管理员 | 当前可用；首管理员并发历史验收基于旧提交，当前 HEAD 待复跑 | `JwtKeyConfig`、`UserService.java`、历史验收脚本 |
+| Go Agent WS 鉴权/心跳/重连 | 当前可用；真实公网 WSS 联合故障验收待做 | `wsclient/client.go` |
+| Agent 真实 metrics 上报 | 已实现；真实断网/重启/ACK 联合 E2E 待当前基线复跑 | `cmd/susumonitor-agent/main.go`、`api-test/` |
+| Linux 构建目标 `build-linux` | 已实现 | `agent-go-SuMon/Makefile` |
+| 完整 Nginx 站点配置 / Java systemd / Maven Wrapper / `application-prod.yml` | 已实现资产；正式域名 HTTPS/WSS 和网络边界需现场验收 | `server-java-SuMon/deploy/*`、`mvnw` |
+| Dockerfile + docker-compose / DB 备份脚本 | 已实现资产；生产 overlay、定时备份和恢复演练待做 | Dockerfile、`docker-compose.yml`、`deploy/backup.sh`/`restore.sh` |
+| ECharts 集成 | 已使用 | `web-vue-SuMon/src/components/MetricsLineChart.vue` |
+| openapi-typescript 类型生成 | 当前未使用 | devDep 已声明，无生成脚本 |
+| MVP-6 告警后端业务 | 当前可用；真实 SMTP/外部通知仍待验收 | `module/alert/`、V10 迁移 |
+| MVP-6 告警前端 | 已实现；真实账号 UI E2E 待运行时凭据与后端环境 | `AlertRecordsView.vue`、`AlertRulesView.vue` |
+| MVP-7 Web SSH 终端 | 已实现 T1-T4；当前终端 WS 权限策略为 admin-only；T6 家庭 Linux 和慢消费者真实验收待做 | `TerminalView.vue`、Java/Go terminal 模块 |
+| Redis / Prometheus / k8s / GitHub Actions | Redis Ticket/黑名单/限流已落地；Prometheus/k8s/GitHub Actions 仍计划中 | Redis 实现、RC1 计划 |
 
 ---
 

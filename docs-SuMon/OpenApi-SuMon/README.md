@@ -2,9 +2,9 @@
 
 > 本目录是 SuSuMonitor 后端 REST API 的权威 OpenAPI 3.0 契约源，供 Apifox 导入、前端类型生成、CI 校验与人工查阅使用。
 >
-> 契约基线：`main @ 4e4cd86`（2026-08-28）。`openapi:check` 只校验 JSON 结构、本地 `$ref` 与 Java Controller 路径/操作映射，不代表 DTO/VO 字段语义与前端类型完全一致。
+> 契约基线：`main`（2026-08-29 安全审计后）。`openapi:check` 只校验 JSON 结构、本地 `$ref` 与 Java Controller 路径/操作映射，不代表 DTO/VO 字段语义与前端类型完全一致。
 >
-> **当前已知的前端/契约漂移（2026-08-28）**：后端 PUT `/api/servers/{id}` 是全量基础字段更新（`description` 必填可空串），但 Web 类型与 API 注释仍为“可选/省略保留”；Web 指标历史默认 `page_size=500` 超过后端 `@Max(100)` 上限；Web 错误码常量缺 `42905/50301/50302`；Web 告警类型缺 `resolved_at`；Web 服务器排序类型/URL 恢复缺 `status`。详见根 `README.md`“当前待解决问题”章节。
+> **漂移状态（2026-08-29）**：2026-08-28 列出的前端/契约漂移（PUT 全量语义、指标历史 `page_size` 上限、错误码 `42905/50301/50302`、`resolved_at`、`status` 排序）**均已修复**；2026-08-29 新增行为变更：`GET /api/alerts/rules` 的通知渠道详情（`notify_email/notify_dingtalk/notify_webhook`）仅 admin 可见，非 admin 返回 null（前端 TS 类型 `string | null` 兼容，渠道标签对非 admin 隐藏）；注册接口增加 IP 限流（HTTP 429 + 42905，独立于登录计数）。
 >
 > 校验命令：`cd web-vue-SuMon && npm run openapi:check`（CI 友好，退出 0 表示 JSON 结构、`$ref` 与 Controller 路径/操作映射一致；不校验 DTO/VO 字段语义、security、响应头和前端类型）。
 >
@@ -37,7 +37,7 @@
 
 | 方法 | 路径 | 说明 | 权限 | 错误码 |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | 注册（首用户 admin/approved，后续 user/pending） | 公开 | 40002, 40900 |
+| POST | `/api/auth/register` | 注册（首用户 admin/approved，后续 user/pending；IP 限流 42905） | 公开 | 40002, 40900, 42905 |
 | POST | `/api/auth/login` | 登录，签发 JWT（Cache-Control: no-store） | 公开 | 40001, 40300 |
 | GET | `/api/auth/me` | 当前数据库用户快照（每请求回查） | Bearer | 40100 |
 | POST | `/api/auth/logout` | 登出确认；Redis 启用时按 JWT jti 写入剩余 TTL 黑名单，否则为无状态空操作 | Bearer | 40100 |
@@ -98,7 +98,7 @@
 | 方法 | 路径 | 权限 | 说明 | 错误码 |
 |---|---|---|---|---|
 | POST | `/api/alerts/rules` | ADMIN | 创建告警规则（指标、操作符、阈值、等级） | 40002, 40100, 40300, 40400, 40900 |
-| GET | `/api/alerts/rules` | 已认证 | 列出所有未删除告警规则（按 created_at 倒序；当前接口不分页、不接收 server_id 过滤参数） | 40100 |
+| GET | `/api/alerts/rules` | 已认证 | 列出所有未删除告警规则（按 created_at 倒序；当前接口不分页、不接收 server_id 过滤参数；通知渠道详情仅 admin 可见，非 admin 返回 null） | 40100 |
 | PUT | `/api/alerts/rules/{id}` | ADMIN | 更新阈值、等级或启用标志 | 40002, 40100, 40300, 40400, 40900 |
 | DELETE | `/api/alerts/rules/{id}` | ADMIN | 软删除告警规则 | 40100, 40300, 40400 |
 | GET | `/api/alerts/records` | 已认证 | 告警记录分页（按 server_id/status/时间窗口过滤） | 40002, 40100 |
@@ -132,7 +132,7 @@
 | 42902 | agent message rate limit reached | Agent 心跳或指标消息限流 |
 | 42903 | terminal session limit reached | 终端会话数量上限 |
 | 42904 | terminal message limit reached | 终端控制消息限流 |
-| 42905 | login rate limit reached | 登录防爆破限流，响应 HTTP 429 并带 Retry-After |
+| 42905 | login rate limit reached | 登录/注册防滥用限流（独立计数），响应 HTTP 429 并带 Retry-After |
 | 50000 | internal server error | 兜底 |
 | 50001 | database error | 数据库异常 |
 | 50002 | ssh connection failed | SSH 连接失败 |

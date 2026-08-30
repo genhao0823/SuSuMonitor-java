@@ -6,7 +6,8 @@ import java.util.List;
 import lombok.Data;
 
 /**
- * 通用分页查询结果，由 MyBatis Plus 分页插件填充。
+ * 通用分页查询结果，由各 Service 手写 offset + COUNT/LIMIT 分页查询填充
+ * （未使用 MyBatis Plus 分页插件）。
  *
  * @param <T> 列表数据类型
  */

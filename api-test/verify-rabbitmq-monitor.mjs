@@ -7,7 +7,7 @@
  *   → GET /api/system/rabbitmq/consumers：alert-resolved-notifier 出现耗时采样
  *   → 二次探测后快照 checked_at 前进（调度器真实运行）
  *
- * 用法（本机约定：后端 18081 / 管理台 15672 / MySQL susumonitor:732682）：
+ * 用法（本机约定：后端 18081 / 管理台 15672 / MySQL 凭据经 SUSUMONITOR_VALIDATION_MYSQL_PASSWORD 提供）：
  *   SUSUMONITOR_VALIDATION_ADMIN_USERNAME=xxx SUSUMONITOR_VALIDATION_ADMIN_PASSWORD=xxx \
  *   node verify-rabbitmq-monitor.mjs
  *
@@ -28,13 +28,13 @@ const managementPassword = process.env.RABBITMQ_MANAGEMENT_PASSWORD ?? 'guest'
 const adminUsername = process.env.SUSUMONITOR_VALIDATION_ADMIN_USERNAME
 const adminPassword = process.env.SUSUMONITOR_VALIDATION_ADMIN_PASSWORD
 const mysqlUser = process.env.SUSUMONITOR_VALIDATION_MYSQL_USER ?? 'susumonitor'
-const mysqlPassword = process.env.SUSUMONITOR_VALIDATION_MYSQL_PASSWORD ?? '732682'
+const mysqlPassword = process.env.SUSUMONITOR_VALIDATION_MYSQL_PASSWORD
 const mysqlDb = process.env.SUSUMONITOR_VALIDATION_MYSQL_DB ?? 'susumonitor'
 const waitTimeoutMs = 20000
 const validationPrefix = 'mvp14_monitor'
 
-if (!adminUsername || !adminPassword) {
-  throw new Error('Set SUSUMONITOR_VALIDATION_ADMIN_USERNAME and SUSUMONITOR_VALIDATION_ADMIN_PASSWORD.')
+if (!adminUsername || !adminPassword || !mysqlPassword) {
+  throw new Error('Set SUSUMONITOR_VALIDATION_ADMIN_USERNAME/PASSWORD and SUSUMONITOR_VALIDATION_MYSQL_PASSWORD.')
 }
 
 const checks = []
