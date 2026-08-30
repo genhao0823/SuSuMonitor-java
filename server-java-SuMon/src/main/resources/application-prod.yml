@@ -24,6 +24,14 @@ server:
   port: ${SERVER_PORT:18080}
   forward-headers-strategy: framework
 
+# 生产环境关闭 Swagger UI 与 OpenAPI 文档，避免向公网暴露全部接口结构与鉴权模型；
+# 本地/测试 profile 不受影响（springdoc 默认开启）。
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 susumonitor:
   agent:
     # 生产反代仅信任本机 Nginx，实际值必须在 root-only 环境文件中明确配置。

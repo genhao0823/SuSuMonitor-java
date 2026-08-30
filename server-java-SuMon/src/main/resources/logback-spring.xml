@@ -16,6 +16,10 @@
         <appender-ref ref="CONSOLE"/>
     </root>
 
-    <logger name="com.susumonitor.server" level="DEBUG"/>
+    <!-- 仅 local profile 输出应用 DEBUG 日志；其他环境级别统一由 application-*.yml 管理，
+         避免遗漏覆盖时向生产输出 SQL 参数、SSH 指纹、Webhook URL 等敏感内容。 -->
+    <springProfile name="local">
+        <logger name="com.susumonitor.server" level="DEBUG"/>
+    </springProfile>
     <logger name="com.susumonitor.server.module.auth.mapper" level="INFO"/>
 </configuration>

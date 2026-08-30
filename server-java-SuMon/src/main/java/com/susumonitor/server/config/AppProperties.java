@@ -262,6 +262,36 @@ public class AppProperties {
         public void setLoginLimitWindowSeconds(int loginLimitWindowSeconds) {
             this.loginLimitWindowSeconds = loginLimitWindowSeconds;
         }
+
+        /** 注册防滥用（2026-08-29）：窗口内每 IP 最大注册次数，默认 60 高于登录阈值。 */
+        @Min(value = 1, message = "Register limit max attempts must be at least one")
+        @Max(value = 10000, message = "Register limit max attempts must not exceed 10000")
+        private int registerLimitMaxAttempts = 60;
+
+        /** 注册防滥用：固定窗口时长（秒）。 */
+        @Min(value = 5, message = "Register limit window must be at least 5 seconds")
+        @Max(value = 3600, message = "Register limit window must not exceed 3600 seconds")
+        private int registerLimitWindowSeconds = 60;
+
+        /** 获取注册防滥用窗口内每 IP 最大尝试次数。 */
+        public int getRegisterLimitMaxAttempts() {
+            return registerLimitMaxAttempts;
+        }
+
+        /** 设置注册防滥用窗口内每 IP 最大尝试次数。 */
+        public void setRegisterLimitMaxAttempts(int registerLimitMaxAttempts) {
+            this.registerLimitMaxAttempts = registerLimitMaxAttempts;
+        }
+
+        /** 获取注册防滥用固定窗口时长（秒）。 */
+        public int getRegisterLimitWindowSeconds() {
+            return registerLimitWindowSeconds;
+        }
+
+        /** 设置注册防滥用固定窗口时长（秒）。 */
+        public void setRegisterLimitWindowSeconds(int registerLimitWindowSeconds) {
+            this.registerLimitWindowSeconds = registerLimitWindowSeconds;
+        }
     }
 
     public static class Agent {
@@ -1762,6 +1792,111 @@ public class AppProperties {
         @Min(value = 1, message = "Alert notification cleanup max batches must be at least one")
         @Max(value = 1000, message = "Alert notification cleanup max batches must not exceed 1000")
         private int notificationCleanupMaxBatchesPerRun = 100;
+
+        /** 单渠道通知最大尝试次数（首次 + 重试，达上限置 failed）。 */
+        @Min(value = 1, message = "Notification retry max attempts must be at least one")
+        @Max(value = 20, message = "Notification retry max attempts must not exceed 20")
+        private int notificationRetryMaxAttempts = 5;
+
+        /** 通知重试退避上限（秒）。 */
+        @Min(value = 1, message = "Notification retry max backoff must be at least one second")
+        @Max(value = 3600, message = "Notification retry max backoff must not exceed 3600 seconds")
+        private int notificationRetryMaxBackoffSeconds = 60;
+
+        /** 重试调度单轮最多处理的通知数。 */
+        @Min(value = 1, message = "Notification retry batch limit must be at least one")
+        @Max(value = 500, message = "Notification retry batch limit must not exceed 500")
+        private int notificationRetryBatchLimit = 50;
+
+        /** 重试调度扫描间隔（毫秒）。 */
+        @Min(value = 1000, message = "Notification retry poll interval must be at least 1000 ms")
+        @Max(value = 600000, message = "Notification retry poll interval must not exceed 600000 ms")
+        private long notificationRetryPollIntervalMs = 30000;
+
+        /** 通知 HTTP 连接超时（毫秒），防止渠道挂起拖死通知线程。 */
+        @Min(value = 500, message = "Notification HTTP connect timeout must be at least 500 ms")
+        @Max(value = 60000, message = "Notification HTTP connect timeout must not exceed 60000 ms")
+        private int notificationHttpConnectTimeoutMs = 5000;
+
+        /** 通知 HTTP 读取超时（毫秒）。 */
+        @Min(value = 500, message = "Notification HTTP read timeout must be at least 500 ms")
+        @Max(value = 120000, message = "Notification HTTP read timeout must not exceed 120000 ms")
+        private int notificationHttpReadTimeoutMs = 10000;
+
+        /** SMTP 连接/读写超时（毫秒）。 */
+        @Min(value = 500, message = "Notification SMTP timeout must be at least 500 ms")
+        @Max(value = 120000, message = "Notification SMTP timeout must not exceed 120000 ms")
+        private int notificationSmtpTimeoutMs = 10000;
+
+        /** 获取单渠道通知最大尝试次数。 */
+        public int getNotificationRetryMaxAttempts() {
+            return notificationRetryMaxAttempts;
+        }
+
+        /** 设置单渠道通知最大尝试次数。 */
+        public void setNotificationRetryMaxAttempts(int notificationRetryMaxAttempts) {
+            this.notificationRetryMaxAttempts = notificationRetryMaxAttempts;
+        }
+
+        /** 获取通知重试退避上限（秒）。 */
+        public int getNotificationRetryMaxBackoffSeconds() {
+            return notificationRetryMaxBackoffSeconds;
+        }
+
+        /** 设置通知重试退避上限（秒）。 */
+        public void setNotificationRetryMaxBackoffSeconds(int notificationRetryMaxBackoffSeconds) {
+            this.notificationRetryMaxBackoffSeconds = notificationRetryMaxBackoffSeconds;
+        }
+
+        /** 获取重试调度单轮批量上限。 */
+        public int getNotificationRetryBatchLimit() {
+            return notificationRetryBatchLimit;
+        }
+
+        /** 设置重试调度单轮批量上限。 */
+        public void setNotificationRetryBatchLimit(int notificationRetryBatchLimit) {
+            this.notificationRetryBatchLimit = notificationRetryBatchLimit;
+        }
+
+        /** 获取重试调度扫描间隔（毫秒）。 */
+        public long getNotificationRetryPollIntervalMs() {
+            return notificationRetryPollIntervalMs;
+        }
+
+        /** 设置重试调度扫描间隔（毫秒）。 */
+        public void setNotificationRetryPollIntervalMs(long notificationRetryPollIntervalMs) {
+            this.notificationRetryPollIntervalMs = notificationRetryPollIntervalMs;
+        }
+
+        /** 获取通知 HTTP 连接超时（毫秒）。 */
+        public int getNotificationHttpConnectTimeoutMs() {
+            return notificationHttpConnectTimeoutMs;
+        }
+
+        /** 设置通知 HTTP 连接超时（毫秒）。 */
+        public void setNotificationHttpConnectTimeoutMs(int notificationHttpConnectTimeoutMs) {
+            this.notificationHttpConnectTimeoutMs = notificationHttpConnectTimeoutMs;
+        }
+
+        /** 获取通知 HTTP 读取超时（毫秒）。 */
+        public int getNotificationHttpReadTimeoutMs() {
+            return notificationHttpReadTimeoutMs;
+        }
+
+        /** 设置通知 HTTP 读取超时（毫秒）。 */
+        public void setNotificationHttpReadTimeoutMs(int notificationHttpReadTimeoutMs) {
+            this.notificationHttpReadTimeoutMs = notificationHttpReadTimeoutMs;
+        }
+
+        /** 获取 SMTP 超时（毫秒）。 */
+        public int getNotificationSmtpTimeoutMs() {
+            return notificationSmtpTimeoutMs;
+        }
+
+        /** 设置 SMTP 超时（毫秒）。 */
+        public void setNotificationSmtpTimeoutMs(int notificationSmtpTimeoutMs) {
+            this.notificationSmtpTimeoutMs = notificationSmtpTimeoutMs;
+        }
 
         /**
          * 返回外部通知是否启用。

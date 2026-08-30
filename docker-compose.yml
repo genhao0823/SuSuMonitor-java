@@ -40,11 +40,12 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
-    command: ["redis-server", "--appendonly", "yes"]
+    # 开启 Redis 认证（REDIS_ENABLED=true 时 REDIS_PASSWORD 必填；默认空保持本机零配置兼容）。
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -77,6 +78,7 @@ services:
       REDIS_ENABLED: ${REDIS_ENABLED:-false}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       ALERT_NOTIFICATION_ENABLED: ${ALERT_NOTIFICATION_ENABLED:-false}
       MAIL_HOST: ${MAIL_HOST:-}
       MAIL_PORT: ${MAIL_PORT:-587}

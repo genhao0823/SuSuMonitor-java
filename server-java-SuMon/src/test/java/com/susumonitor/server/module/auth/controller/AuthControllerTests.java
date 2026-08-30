@@ -158,6 +158,9 @@ class AuthControllerTests {
     // 登录防爆破替身（避免真实内存实现跨用例累计计数；限流行为用独立用例验证）。
     @MockitoBean
     private com.susumonitor.server.module.auth.limit.LoginRateLimiter loginRateLimiter;
+    // 注册防滥用替身（独立于登录计数；限流行为用独立用例验证）。
+    @MockitoBean
+    private com.susumonitor.server.module.auth.limit.RegisterRateLimiter registerRateLimiter;
     @MockitoBean
     private OutboxMapper outboxMapper;
     @MockitoBean
@@ -240,6 +243,25 @@ class AuthControllerTests {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value(40900))
                 .andExpect(jsonPath("$.message").value("resource conflict"));
+    }
+
+    @Test
+    // 注册防滥用：限流器拒绝时返回 429 + code 42905，且不触达注册业务。
+    void registerShouldReturn429WhenRateLimited() throws Exception {
+        RegisterRequest request = request("admin", "Password123");
+        org.mockito.Mockito.doThrow(new com.susumonitor.server.common.BusinessException(
+                        com.susumonitor.server.common.ErrorCode.LOGIN_RATE_LIMIT_REACHED))
+                .when(registerRateLimiter).checkAttempt(org.mockito.ArgumentMatchers.anyString());
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.code").value(42905))
+                .andExpect(jsonPath("$.message").value("login rate limit reached"));
+        org.mockito.Mockito.verify(userService, org.mockito.Mockito.never())
+                .register(any(RegisterRequest.class));
     }
 
     @Test
@@ -328,9 +350,10 @@ class AuthControllerTests {
     // 验证合法 Token 使用数据库最新用户快照访问 me 和无状态 logout。
     void authenticatedUserShouldAccessMeAndLogout() throws Exception {
         UserEntity authenticationUser = authenticationUser();
+        // token 过期时间取当前时间 +1 小时，保证 TTL 恒为正（避免历史硬编码日期过期导致时间炸弹）。
         when(jwtTokenService.parseToken("valid-token"))
                 .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id",
-                        java.time.Instant.parse("2026-08-18T00:00:00Z")));
+                        java.time.Instant.now().plusSeconds(3600)));
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(authenticationUser);
 
         mockMvc.perform(get("/api/auth/me")
@@ -399,7 +422,8 @@ class AuthControllerTests {
         authenticationUser.setUsername("normal_user");
         authenticationUser.setRole("user");
         when(jwtTokenService.parseToken("user-token"))
-                .thenReturn(new JwtTokenService.ParsedToken(2L, "normal_user", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
+                .thenReturn(new JwtTokenService.ParsedToken(2L, "normal_user", "token-id",
+                        java.time.Instant.now().plusSeconds(3600)));
         when(userMapper.selectAuthenticationUserById(2L)).thenReturn(authenticationUser);
 
         mockMvc.perform(get("/api/admin/users/pending")

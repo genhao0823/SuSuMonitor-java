@@ -7,7 +7,9 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.7</version>
+        <!-- 2026-08-29 安全升级：3.4.7 → 3.4.13（Spring Framework 6.2.13），
+             修复 spring-web multipart/请求处理 DoS（CVE-2025-35249/CVE-2025-35250）。 -->
+        <version>3.4.13</version>
         <relativePath/>
     </parent>
 
