@@ -73,6 +73,7 @@ tmp/
 # AI 工具本地目录（不入库，skills 以 .opencode/skills 为正式副本）
 .agents/
 .zcode/
+.workbuddy-ai/
 
 # 临时备份文件
 *.bak
