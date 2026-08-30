@@ -9,9 +9,25 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sync/atomic"
 	"time"
 )
+
+// canonicalUUIDPattern 匹配小写 canonical UUID（8-4-4-4-12）。
+var canonicalUUIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// isCanonicalUUID 判断字符串是否为规范 UUID 形状（协议要求 message_id 为 UUID）。
+func isCanonicalUUID(s string) bool {
+	return canonicalUUIDPattern.MatchString(s)
+}
+
+// validNackReasons 是 metrics.nack reason 的合法枚举（协议冻结，见 websocket-protocol.md）。
+var validNackReasons = map[string]bool{
+	"invalid_metrics_payload": true,
+	"stale_collected_at":      true,
+	"server_not_found":        true,
+}
 
 // AgentMessage 是 WebSocket 通用消息结构，与后端协议文档一致。
 //
@@ -58,6 +74,15 @@ func NewHeartbeatPayloadWithDeliveryStats(pendingCount, pendingBytes int, oldest
 		payload.OldestCollectedAt = &oldestCollectedAt
 	}
 	return payload
+}
+
+// MetricsAck 是服务端确认 metrics.report 已入库的载荷。
+//
+// 服务端在指标入库事务提交后返回，payload 携带被接受行的
+// server_id 与 collected_at（UTC ISO-8601），供 Agent 校验归属。
+type MetricsAck struct {
+	ServerID   int64  `json:"server_id"`
+	CollectedAt string `json:"collected_at"`
 }
 
 // MetricsNack 是服务端对永久无效 metrics.report 的拒绝载荷。

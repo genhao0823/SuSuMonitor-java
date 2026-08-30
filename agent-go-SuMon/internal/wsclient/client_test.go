@@ -89,12 +89,17 @@ func TestMetricsAckUsesDedicatedHandler(t *testing.T) {
 	client.SetMetricsAckHandler(func(messageID string) { acknowledged <- messageID })
 	client.SetMessageHandler(func(_ context.Context, message AgentMessage) { forwarded <- message })
 
-	client.handleMessage(context.Background(), AgentMessage{Type: "metrics.ack", MessageID: "ack-1"})
+	messageID := newUUID()
+	client.handleMessage(context.Background(), AgentMessage{
+		Type:      "metrics.ack",
+		MessageID: messageID,
+		Payload:   json.RawMessage(`{"server_id":42,"collected_at":"2026-08-29T08:00:00Z"}`),
+	})
 
 	select {
-	case messageID := <-acknowledged:
-		if messageID != "ack-1" {
-			t.Fatalf("ack message ID = %q, want ack-1", messageID)
+	case received := <-acknowledged:
+		if received != messageID {
+			t.Fatalf("ack message ID = %q, want %q", received, messageID)
 		}
 	case <-time.After(testTimeout):
 		t.Fatal("metrics acknowledgement handler was not called")
@@ -121,16 +126,17 @@ func TestMetricsNackUsesDedicatedHandler(t *testing.T) {
 	})
 	client.SetMessageHandler(func(_ context.Context, message AgentMessage) { forwarded <- message })
 
+	messageID := newUUID()
 	client.handleMessage(context.Background(), AgentMessage{
 		Type:      "metrics.nack",
-		MessageID: "nack-1",
+		MessageID: messageID,
 		Payload:   json.RawMessage(`{"server_id":42,"code":40002,"reason":"stale_collected_at","message":"stale"}`),
 	})
 
 	select {
 	case result := <-rejected:
-		if result.id != "nack-1" {
-			t.Fatalf("nack message ID = %q, want nack-1", result.id)
+		if result.id != messageID {
+			t.Fatalf("nack message ID = %q, want %q", result.id, messageID)
 		}
 		if result.nack.ServerID != 42 || result.nack.Code != 40002 || result.nack.Reason != "stale_collected_at" {
 			t.Fatalf("nack payload = %+v, want correlated rejection", result.nack)
@@ -169,13 +175,82 @@ func TestMetricsNackMalformedPayloadIgnored(t *testing.T) {
 
 	client.handleMessage(context.Background(), AgentMessage{
 		Type:      "metrics.nack",
-		MessageID: "nack-1",
+		MessageID: newUUID(),
 		Payload:   json.RawMessage(`{"code":`),
 	})
 
 	select {
 	case messageID := <-rejected:
 		t.Fatalf("malformed metrics rejection reached handler: %q", messageID)
+	case <-time.After(testTimeout):
+	}
+}
+
+func TestMetricsAckWrongServerIgnored(t *testing.T) {
+	client := newTestClient("ws://127.0.0.1:1", 42, 100*time.Millisecond)
+	acknowledged := make(chan string, 1)
+	client.SetMetricsAckHandler(func(messageID string) { acknowledged <- messageID })
+
+	// payload server_id 归属其他 Agent（应为 42），必须被忽略
+	client.handleMessage(context.Background(), AgentMessage{
+		Type:      "metrics.ack",
+		MessageID: newUUID(),
+		Payload:   json.RawMessage(`{"server_id":99,"collected_at":"2026-08-29T08:00:00Z"}`),
+	})
+
+	select {
+	case messageID := <-acknowledged:
+		t.Fatalf("metrics acknowledgement for other server reached handler: %q", messageID)
+	case <-time.After(testTimeout):
+	}
+}
+
+func TestMetricsNackUnknownReasonIgnored(t *testing.T) {
+	client := newTestClient("ws://127.0.0.1:1", 42, 100*time.Millisecond)
+	rejected := make(chan string, 1)
+	client.SetMetricsNackHandler(func(messageID string, _ MetricsNack) { rejected <- messageID })
+
+	// reason 不在协议枚举内，必须被忽略
+	client.handleMessage(context.Background(), AgentMessage{
+		Type:      "metrics.nack",
+		MessageID: newUUID(),
+		Payload:   json.RawMessage(`{"server_id":42,"code":40002,"reason":"mystery_reason","message":"x"}`),
+	})
+
+	select {
+	case messageID := <-rejected:
+		t.Fatalf("metrics rejection with unknown reason reached handler: %q", messageID)
+	case <-time.After(testTimeout):
+	}
+}
+
+func TestAckNackNonCanonicalMessageIDIgnored(t *testing.T) {
+	client := newTestClient("ws://127.0.0.1:1", 42, 100*time.Millisecond)
+	acknowledged := make(chan string, 1)
+	rejected := make(chan string, 1)
+	client.SetMetricsAckHandler(func(messageID string) { acknowledged <- messageID })
+	client.SetMetricsNackHandler(func(messageID string, _ MetricsNack) { rejected <- messageID })
+
+	// 非 canonical UUID（缺短横线）的 message_id 一律忽略
+	client.handleMessage(context.Background(), AgentMessage{
+		Type:      "metrics.ack",
+		MessageID: "not-a-canonical-uuid",
+		Payload:   json.RawMessage(`{"server_id":42,"collected_at":"2026-08-29T08:00:00Z"}`),
+	})
+	client.handleMessage(context.Background(), AgentMessage{
+		Type:      "metrics.nack",
+		MessageID: "not-a-canonical-uuid",
+		Payload:   json.RawMessage(`{"server_id":42,"reason":"server_not_found"}`),
+	})
+
+	select {
+	case messageID := <-acknowledged:
+		t.Fatalf("ack with non-canonical message ID reached handler: %q", messageID)
+	case <-time.After(testTimeout):
+	}
+	select {
+	case messageID := <-rejected:
+		t.Fatalf("nack with non-canonical message ID reached handler: %q", messageID)
 	case <-time.After(testTimeout):
 	}
 }

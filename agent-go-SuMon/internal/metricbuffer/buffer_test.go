@@ -487,3 +487,51 @@ func TestQueuePermanentNackDeadLettersImmediately(t *testing.T) {
 		t.Fatalf("queued messages after rejection = %d, want 0", queue.Len())
 	}
 }
+
+// TestIsValidUTCTime verifies the UTC ISO-8601 gate rejects local times,
+// non-UTC offsets, and unparseable strings.
+func TestIsValidUTCTime(t *testing.T) {
+	valid := []string{
+		"2026-08-29T08:00:00Z",
+		"2026-08-29T08:00:00.123Z",
+		"2026-08-29T08:00:00.123456789Z",
+		"2026-08-29T08:00:00+00:00",
+	}
+	for _, value := range valid {
+		if !isValidUTCTime(value) {
+			t.Errorf("isValidUTCTime(%q) = false, want true", value)
+		}
+	}
+	invalid := []string{
+		"",                          // 空
+		"2026-08-29T08:00:00",       // 无时区偏移
+		"2026-08-29T08:00:00+08:00", // 非 UTC 偏移
+		"2026-08-29",                // 仅日期
+		"not-a-time",                // 不可解析
+	}
+	for _, value := range invalid {
+		if isValidUTCTime(value) {
+			t.Errorf("isValidUTCTime(%q) = true, want false", value)
+		}
+	}
+}
+
+// TestOpenRejectsNonUTCTimes verifies snapshot loading fails on non-UTC
+// collected_at / timestamp instead of silently accepting corrupted data.
+func TestOpenRejectsNonUTCTimes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "metrics.json")
+	// 手工构造非 UTC 偏移的 collected_at 帧（绕过 Enqueue 校验直接持久化）。
+	frame := metricsMessage("11111111-1111-4111-8111-111111111111", 42, "2026-08-03T08:00:00+08:00")
+	raw, err := json.Marshal(snapshot{Version: snapshotVersion, ServerID: 42,
+		Entries: []QueueEntry{{Frame: frame}}})
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write snapshot: %v", err)
+	}
+
+	if _, err := Open(path, 42, 3, 0); err == nil {
+		t.Fatal("Open() accepted non-UTC collected_at snapshot, want error")
+	}
+}

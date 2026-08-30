@@ -394,8 +394,28 @@ func (c *Client) handleMessage(ctx context.Context, msg AgentMessage) {
 	case "heartbeat.ack":
 		c.logger.Debug("heartbeat ack received", "message_id", msg.MessageID)
 	case "metrics.ack":
-		if msg.MessageID == "" {
-			c.logger.Warn("ignored metrics acknowledgement without message ID")
+		// 载荷校验：外层 message_id 必须为 canonical UUID，payload 的
+		// server_id 必须归属本 Agent 且 collected_at 非空（协议 §Agent Messages）。
+		if !isCanonicalUUID(msg.MessageID) {
+			c.logger.Warn("ignored metrics acknowledgement with non-canonical message ID",
+				"message_id", msg.MessageID)
+			return
+		}
+		var ack MetricsAck
+		if err := json.Unmarshal(msg.Payload, &ack); err != nil {
+			c.logger.Warn("ignored malformed metrics acknowledgement",
+				"message_id", msg.MessageID, "error", err)
+			return
+		}
+		if ack.ServerID != c.serverID {
+			c.logger.Warn("ignored metrics acknowledgement for other server",
+				"message_id", msg.MessageID, "payload_server_id", ack.ServerID,
+				"expected_server_id", c.serverID)
+			return
+		}
+		if ack.CollectedAt == "" {
+			c.logger.Warn("ignored metrics acknowledgement without collected_at",
+				"message_id", msg.MessageID)
 			return
 		}
 		if c.metricsAckHandler != nil {
@@ -404,13 +424,28 @@ func (c *Client) handleMessage(ctx context.Context, msg AgentMessage) {
 		}
 		c.logger.Debug("metrics acknowledgement received", "message_id", msg.MessageID)
 	case "metrics.nack":
-		if msg.MessageID == "" {
-			c.logger.Warn("ignored metrics rejection without message ID")
+		// 载荷校验：外层 message_id 必须为 canonical UUID，payload 的
+		// server_id 必须归属本 Agent，reason 必须为协议枚举值。
+		if !isCanonicalUUID(msg.MessageID) {
+			c.logger.Warn("ignored metrics rejection with non-canonical message ID",
+				"message_id", msg.MessageID)
 			return
 		}
 		var nack MetricsNack
 		if err := json.Unmarshal(msg.Payload, &nack); err != nil {
-			c.logger.Warn("ignored malformed metrics rejection", "message_id", msg.MessageID, "error", err)
+			c.logger.Warn("ignored malformed metrics rejection",
+				"message_id", msg.MessageID, "error", err)
+			return
+		}
+		if nack.ServerID != c.serverID {
+			c.logger.Warn("ignored metrics rejection for other server",
+				"message_id", msg.MessageID, "payload_server_id", nack.ServerID,
+				"expected_server_id", c.serverID)
+			return
+		}
+		if !validNackReasons[nack.Reason] {
+			c.logger.Warn("ignored metrics rejection with unknown reason",
+				"message_id", msg.MessageID, "reason", nack.Reason)
 			return
 		}
 		if c.metricsNackHandler != nil {

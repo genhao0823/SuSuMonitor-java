@@ -379,8 +379,8 @@ func validateMessage(message wsclient.AgentMessage, serverID int64) error {
 	if !isUUID(message.MessageID) {
 		return fmt.Errorf("message ID must be a UUID")
 	}
-	if message.Timestamp == "" {
-		return fmt.Errorf("message timestamp is required")
+	if !isValidUTCTime(message.Timestamp) {
+		return fmt.Errorf("message timestamp must be UTC ISO-8601")
 	}
 	var payload wsclient.MetricsPayload
 	if err := json.Unmarshal(message.Payload, &payload); err != nil {
@@ -389,10 +389,21 @@ func validateMessage(message wsclient.AgentMessage, serverID int64) error {
 	if payload.ServerID != serverID {
 		return fmt.Errorf("metrics payload server ID %d does not match %d", payload.ServerID, serverID)
 	}
-	if payload.CollectedAt == "" {
-		return fmt.Errorf("metrics payload collected_at is required")
+	if !isValidUTCTime(payload.CollectedAt) {
+		return fmt.Errorf("metrics payload collected_at must be UTC ISO-8601")
 	}
 	return nil
+}
+
+// isValidUTCTime 校验字符串为 UTC ISO-8601（RFC3339Nano 可解析且时区偏移为 0）。
+// 拒绝无时区偏移或非 UTC 偏移的时间，保证快照/队列时间语义与协议一致。
+func isValidUTCTime(value string) bool {
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return false
+	}
+	_, offset := parsed.Zone()
+	return offset == 0
 }
 
 func isUUID(value string) bool {
