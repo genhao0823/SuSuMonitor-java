@@ -27,6 +27,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.util.UUID
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -51,16 +52,21 @@ class WsClient @Inject constructor(
     private val json: Json,
 ) {
 
+    private val TAG = "WsClient"
+
     /** 连接状态。 */
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
     /** 解析后的业务消息流（metrics.update / alert.push / server.status.update / error）。 */
-    private val _messages = MutableSharedFlow<WsMessage>(extraBufferCapacity = 64)
+    private val _messages = MutableSharedFlow<WsMessage>(extraBufferCapacity = 256)
     val messages: SharedFlow<WsMessage> = _messages.asSharedFlow()
 
-    /** 当前订阅的服务器 ID 集合（去重）。 */
-    private val subscribedServers = LinkedHashSet<Long>()
+    /** tryEmit 溢出丢弃的消息计数（慢消费者/高吞吐时终端可能丢字符，用于定位）。 */
+    private val droppedMessages = java.util.concurrent.atomic.AtomicLong(0)
+
+    /** 当前订阅的服务器 ID 集合（去重；OkHttp 回调线程与调用线程并发读写，用 COW 集保证安全）。 */
+    private val subscribedServers = CopyOnWriteArraySet<Long>()
 
     @Volatile
     private var webSocket: WebSocket? = null
@@ -199,7 +205,12 @@ class WsClient @Inject constructor(
                 if (message is WsMessage.Error) {
                     _connectionState.value = ConnectionState.ERROR
                 }
-                _messages.tryEmit(message)
+                if (!_messages.tryEmit(message)) {
+                    val dropped = droppedMessages.incrementAndGet()
+                    if (dropped <= 10 || dropped % 100 == 0L) {
+                        android.util.Log.w(TAG, "ws message dropped (buffer full), total=$dropped")
+                    }
+                }
             } catch (e: Exception) {
                 // 解析失败（契约漂移）静默丢弃，避免拖垮连接
             }

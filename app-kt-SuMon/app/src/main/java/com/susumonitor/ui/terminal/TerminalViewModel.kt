@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -26,6 +27,9 @@ data class TerminalUiState(
 
 /**
  * 终端页 ViewModel：驱动 TerminalClient 状态机，向 UI 暴露会话状态。
+ *
+ * 终端缓冲 [buffer] 与版本号随 ViewModel 存活，配置变更（旋转）后内容不丢失；
+ * 版本号以 StateFlow 暴露，UI 收集后驱动重组。
  */
 @HiltViewModel
 class TerminalViewModel @Inject constructor(
@@ -36,6 +40,12 @@ class TerminalViewModel @Inject constructor(
 
     val serverId: Long = savedStateHandle.get<Long>("serverId") ?: 0L
 
+    /** ANSI 终端缓冲（跨配置变更保留，旋转不清屏）。 */
+    val buffer = TerminalBuffer()
+
+    private val _bufferVersion = MutableStateFlow(0L)
+    val bufferVersion: StateFlow<Long> = _bufferVersion.asStateFlow()
+
     private val _uiState = MutableStateFlow(TerminalUiState())
     val uiState: StateFlow<TerminalUiState> = _uiState.asStateFlow()
 
@@ -44,6 +54,12 @@ class TerminalViewModel @Inject constructor(
         terminalClient.onStateChanged = { state ->
             _uiState.value = mapState(state)
         }
+        // 终端输出直接喂入本地缓冲；CSI 状态报告应答回传 PTY 输入通道。
+        terminalClient.onOutput = { bytes ->
+            buffer.feed(bytes)
+            _bufferVersion.update { it + 1 }
+        }
+        buffer.reportOutput = { report -> sendInput(report.toByteArray(Charsets.UTF_8)) }
         // 初始同步当前状态
         _uiState.value = mapState(terminalClient.state)
     }
@@ -101,9 +117,16 @@ class TerminalViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(ready = true)
     }
 
-    /** 输出回调（由 TerminalView 组件注入到 TerminalClient）。 */
-    fun setOutputCallback(callback: (ByteArray) -> Unit) {
-        terminalClient.onOutput = callback
+    /** 清空本地缓冲并递增版本（新会话建立时由 UI 调用）。 */
+    fun clearBuffer() {
+        buffer.clear()
+        _bufferVersion.update { it + 1 }
+    }
+
+    /** 本地缓冲网格调整并递增版本（驱动 UI 重绘；服务端 resize 走 [resize]）。 */
+    fun resizeBuffer(cols: Int, rows: Int) {
+        buffer.resize(cols, rows)
+        _bufferVersion.update { it + 1 }
     }
 
     override fun onCleared() {

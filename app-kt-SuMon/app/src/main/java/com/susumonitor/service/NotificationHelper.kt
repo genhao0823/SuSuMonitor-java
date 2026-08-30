@@ -40,6 +40,9 @@ class NotificationHelper @Inject constructor(
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+    /** 告警通知 ID 自增序列：避免同毫秒多条告警取模冲突互相顶掉。 */
+    private val alertNotificationSequence = java.util.concurrent.atomic.AtomicInteger(0)
+
     /** 初始化通知渠道（幂等）。 */
     fun createChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -119,7 +122,10 @@ class NotificationHelper @Inject constructor(
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(NOTIFICATION_ID_ALERT_BASE + System.currentTimeMillis().toInt().mod(1000), notification)
+        notificationManager.notify(
+            NOTIFICATION_ID_ALERT_BASE + alertNotificationSequence.getAndIncrement(),
+            notification,
+        )
     }
 
     private fun alertsPendingIntent(): PendingIntent {

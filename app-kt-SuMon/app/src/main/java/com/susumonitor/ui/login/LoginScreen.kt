@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,6 +57,8 @@ fun LoginScreen(
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
+    // 本地表单校验错误（如两次密码不一致），与服务端错误分开展示
+    var localErrorMessage by remember { mutableStateOf<String?>(null) }
 
     // 登录成功后跳转
     LaunchedEffect(uiState.loggedInUser) {
@@ -139,10 +142,10 @@ fun LoginScreen(
                     )
                 }
 
-                if (uiState.errorMessage != null) {
+                if (uiState.errorMessage != null || localErrorMessage != null) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = uiState.errorMessage.orEmpty(),
+                        text = localErrorMessage ?: uiState.errorMessage.orEmpty(),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
@@ -155,15 +158,17 @@ fun LoginScreen(
                     onClick = {
                         if (isRegister) {
                             if (password != confirmPassword) {
-                                // 简单一致性校验，直接复用 error 通道
+                                localErrorMessage = "两次输入的密码不一致"
                                 return@Button
                             }
+                            localErrorMessage = null
                             viewModel.register(username, password) {
                                 username = ""
                                 password = ""
                                 isRegister = false
                             }
                         } else {
+                            localErrorMessage = null
                             viewModel.login(username, password)
                         }
                     },

@@ -39,9 +39,9 @@ class AuthRepository @Inject constructor(
         return response.data
     }
 
-    /** 登出：调用后端并清除本地会话。 */
+    /** 登出：先清除本地会话（立即生效，不依赖网络），再尽力通知后端撤销 token。 */
     suspend fun logout() {
-        runCatching { authApi.logout() }
         sessionStore.clear()
+        runCatching { authApi.logout() }
     }
 }

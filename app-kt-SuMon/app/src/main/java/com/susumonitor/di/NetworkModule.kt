@@ -41,6 +41,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideTokenCipher(): com.susumonitor.data.security.TokenCipher =
+        com.susumonitor.data.security.AndroidKeystoreTokenCipher()
+
+    @Provides
+    @Singleton
     fun provideOkHttpClient(
         @ApplicationContext context: Context,
         authInterceptor: AuthInterceptor,

@@ -87,9 +87,9 @@ fun MetricsLineChart(
 
         // 各指标折线
         lines.forEach { line ->
-            val points = data.mapNotNull { m ->
-                val v = extractMetric(m, line.key) ?: return@mapNotNull null
-                Offset(xPoint(m, data, chartLeft, chartRight), yOf(v))
+            val points = data.mapIndexedNotNull { index, m ->
+                val v = extractMetric(m, line.key) ?: return@mapIndexedNotNull null
+                Offset(xPoint(index, data.size, chartLeft, chartRight), yOf(v))
             }
             if (points.size < 2) return@forEach
             val path = Path()
@@ -122,8 +122,6 @@ private fun extractMetric(m: Metrics, key: String): Double? = when (key) {
     else -> null
 }
 
-private fun xPoint(m: Metrics, all: List<Metrics>, left: Float, right: Float): Float {
-    val index = all.indexOfFirst { it.collectedAt == m.collectedAt }
-    if (index < 0) return left
-    return if (all.size > 1) left + (right - left) * index / (all.size - 1) else left
-}
+/** 按数据索引线性映射 x 坐标（O(1)，避免 indexOfFirst 的 O(n²) 与重复时间点错位）。 */
+private fun xPoint(index: Int, size: Int, left: Float, right: Float): Float =
+    if (size > 1) left + (right - left) * index / (size - 1) else left

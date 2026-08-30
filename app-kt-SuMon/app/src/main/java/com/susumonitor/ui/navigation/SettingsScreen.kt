@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.susumonitor.BuildConfig
 import com.susumonitor.util.Constants
 
 /**
@@ -124,7 +125,7 @@ fun SettingsScreen(
                     Text(text = "关于", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "SuSuMonitor · 涂山苏苏主题服务器监控\n版本 0.2.0（阶段一完整版）",
+                        text = "SuSuMonitor · 涂山苏苏主题服务器监控\n版本 ${BuildConfig.VERSION_NAME}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

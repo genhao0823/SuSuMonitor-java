@@ -26,9 +26,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -81,26 +81,14 @@ fun TerminalScreen(
     viewModel: TerminalViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val buffer = remember { TerminalBuffer() }
-    // 每次 feed 递增版本号，驱动 Compose 重组并重绘
-    var bufferVersion by remember { mutableLongStateOf(0L) }
-
-    // 输出回调：WS terminal.output → 终端模拟器（UTF-8/ANSI 增量解析）
-    // 注意：必须读 bufferVersion 触发重组（缓冲为普通对象，不通知 Compose 快照）
-    LaunchedEffect(Unit) {
-        viewModel.setOutputCallback { bytes ->
-            buffer.feed(bytes)
-            bufferVersion++
-        }
-        // CSI n 状态报告应答回传 PTY 输入通道
-        buffer.reportOutput = { report -> viewModel.sendInput(report.toByteArray(Charsets.UTF_8)) }
-    }
+    // 缓冲与版本号由 ViewModel 持有：配置变更（旋转）后内容保留，不清屏不重开会话。
+    val buffer = viewModel.buffer
+    val bufferVersion by viewModel.bufferVersion.collectAsStateWithLifecycle()
 
     // 新会话建立（首开/断线重连/手动重试）时清空旧缓冲
     LaunchedEffect(uiState.phase) {
         if (uiState.phase == TerminalPhase.AWAITING_OPEN) {
-            buffer.clear()
-            bufferVersion++
+            viewModel.clearBuffer()
         }
     }
 
@@ -143,7 +131,8 @@ fun TerminalScreen(
             }
 
             // 终端区：按实际尺寸换算 cols/rows
-            var opened by remember { mutableStateOf(false) }
+            // opened 用 rememberSaveable：旋转/配置变更后恢复 true，避免重复 clear+open 清屏
+            var opened by rememberSaveable { mutableStateOf(false) }
             // 字号（sp）：捏合缩放调整，范围 10–24
             var fontSizeSp by remember { mutableFloatStateOf(14f) }
             // 滚动回退偏移（行）：0 = 视口贴底显示最新输出，>0 = 回看历史
@@ -169,15 +158,18 @@ fun TerminalScreen(
                 // resize 帧去抖 150ms：键盘弹出/收起动画期间容器高度连续变化，避免反复触发
                 // 服务端 stty size 与 shell 重绘；本地 buffer.resize 立即执行保证渲染正确。
                 LaunchedEffect(cols, rows) {
-                    buffer.resize(cols, rows)
-                    bufferVersion++
+                    viewModel.resizeBuffer(cols, rows)
                     if (!opened) {
                         buffer.clear()
                         viewModel.open(cols = cols, rows = rows)
                         opened = true
                     } else if (uiState.phase == TerminalPhase.OPEN) {
+                        // 尺寸变化：去抖后发 resize，保留会话与缓冲（旋转不清屏）
                         kotlinx.coroutines.delay(150)
                         viewModel.resize(cols, rows)
+                    } else if (uiState.phase == TerminalPhase.IDLE) {
+                        // 进程重建恢复：rememberSaveable 保留了 opened，但会话已随进程消亡，重新打开
+                        viewModel.open(cols = cols, rows = rows)
                     }
                 }
 

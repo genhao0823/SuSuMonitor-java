@@ -75,10 +75,15 @@ class MonitorForegroundService : Service() {
             context.startForegroundService(intent)
         }
 
-        /** 停止监控服务。 */
+        /** 停止监控服务：优先让运行中的实例自行 stopSelf（无后台 startService 崩溃风险）。 */
         fun stop(context: Context) {
-            val intent = Intent(context, MonitorForegroundService::class.java).setAction(ACTION_STOP)
-            context.startService(intent)
+            val instance = runningInstance
+            if (instance != null) {
+                instance.stopSelf()
+            } else {
+                // 实例未运行（已被系统回收）时按组件停止兜底；stopService 无后台调用限制。
+                context.stopService(Intent(context, MonitorForegroundService::class.java))
+            }
         }
     }
 
