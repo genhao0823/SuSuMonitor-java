@@ -192,7 +192,7 @@ class AlertRuleServiceTests {
         verify(ruleMapper).softDeleteRule(eq(1L), any(LocalDateTime.class));
     }
 
-    /** 列表查询应返回所有未删除规则。 */
+    /** 列表查询应返回所有未删除规则（admin 视角含通知渠道）。 */
     @Test
     void listRulesShouldReturnAllActiveRules() {
         service = new AlertRuleServiceImpl(ruleMapper, CLOCK);
@@ -200,11 +200,29 @@ class AlertRuleServiceTests {
                 ruleEntity(1L, "cpu", ">", "80", "warning"),
                 ruleEntity(2L, "memory", ">=", "90", "critical")));
 
-        var rules = service.listRules();
+        var rules = service.listRules(true);
 
         assertEquals(2, rules.size());
         assertEquals("cpu", rules.get(0).getMetric());
         assertEquals("memory", rules.get(1).getMetric());
+    }
+
+    /** 非 admin 查询时通知渠道详情（邮件/钉钉/Webhook URL）应被脱敏为 null。 */
+    @Test
+    void listRulesWithoutNotifyExposureShouldMaskChannelDetails() {
+        service = new AlertRuleServiceImpl(ruleMapper, CLOCK);
+        AlertRuleEntity entity = ruleEntity(1L, "cpu", ">", "80", "warning");
+        entity.setNotifyEmail("ops@example.com");
+        entity.setNotifyDingtalk("https://oapi.dingtalk.com/robot/send?access_token=secret");
+        entity.setNotifyWebhook("https://example.com/hook?key=secret");
+        when(ruleMapper.selectActiveRules()).thenReturn(List.of(entity));
+
+        var masked = service.listRules(false);
+
+        assertEquals(1, masked.size());
+        assertEquals(null, masked.get(0).getNotifyEmail());
+        assertEquals(null, masked.get(0).getNotifyDingtalk());
+        assertEquals(null, masked.get(0).getNotifyWebhook());
     }
 
     private CreateAlertRuleRequest createRequest(String threshold, String level) {

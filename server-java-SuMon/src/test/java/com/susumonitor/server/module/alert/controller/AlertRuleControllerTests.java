@@ -211,11 +211,23 @@ class AlertRuleControllerTests {
                 .andExpect(jsonPath("$.code").value(40400));
     }
 
-    /** 查询规则列表应返回 200。 */
+    /** 查询规则列表应返回 200（admin 可见完整通知渠道）。 */
     @Test
     void listRulesShouldReturnOk() throws Exception {
         authenticateAdmin();
-        when(alertRuleService.listRules()).thenReturn(java.util.List.of(ruleVo(1L)));
+        when(alertRuleService.listRules(true)).thenReturn(java.util.List.of(ruleVo(1L)));
+
+        mockMvc.perform(get("/api/alerts/rules").header(AUTHORIZATION, ADMIN_BEARER))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data[0].id").value(1));
+    }
+
+    /** 普通用户查询规则列表时服务端应以脱敏模式（exposeNotify=false）调用。 */
+    @Test
+    void listRulesForNonAdminShouldRequestMaskedNotify() throws Exception {
+        authenticateUser();
+        when(alertRuleService.listRules(false)).thenReturn(java.util.List.of(ruleVo(1L)));
 
         mockMvc.perform(get("/api/alerts/rules").header(AUTHORIZATION, ADMIN_BEARER))
                 .andExpect(status().isOk())
@@ -233,6 +245,18 @@ class AlertRuleControllerTests {
         user.setReviewStatus("approved");
         user.setCreatedAt(LocalDateTime.now());
         when(userMapper.selectAuthenticationUserById(1L)).thenReturn(user);
+    }
+
+    private void authenticateUser() {
+        when(jwtTokenService.parseToken(ADMIN_TOKEN))
+                .thenReturn(new JwtTokenService.ParsedToken(2L, "alice", "token-id", java.time.Instant.parse("2026-08-18T00:00:00Z")));
+        com.susumonitor.server.module.auth.entity.UserEntity user = new com.susumonitor.server.module.auth.entity.UserEntity();
+        user.setId(2L);
+        user.setUsername("alice");
+        user.setRole("user");
+        user.setReviewStatus("approved");
+        user.setCreatedAt(LocalDateTime.now());
+        when(userMapper.selectAuthenticationUserById(2L)).thenReturn(user);
     }
 
     private AlertRuleVo ruleVo(Long id) {

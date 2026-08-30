@@ -52,7 +52,7 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         entity.setCreatedBy(createdBy);
         ensureNoActiveRuleWithSameSignature(entity, null);
         insertRule(entity);
-        return toVo(ruleMapper.selectActiveRuleById(entity.getId()));
+        return toVo(ruleMapper.selectActiveRuleById(entity.getId()), true);
     }
 
     /** 更新规则阈值、等级和启用状态，不允许修改 metric/operator/serverId。 */
@@ -66,7 +66,7 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         ensureNoActiveRuleWithSameSignature(entity.getServerId(), entity.getMetric(), entity.getOperator(),
                 request.getThresholdValue(), request.getLevel(), ruleId);
         updateRuleWithConflictTranslation(ruleId, request);
-        return toVo(ruleMapper.selectActiveRuleById(ruleId));
+        return toVo(ruleMapper.selectActiveRuleById(ruleId), true);
     }
 
     /** 软删除规则，标记 deleted=1。 */
@@ -79,10 +79,11 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         ruleMapper.softDeleteRule(ruleId, LocalDateTime.now(clock));
     }
 
-    /** 查询所有未删除规则。 */
+    /** 查询所有未删除规则；非 admin（exposeNotify=false）时脱敏通知渠道详情。 */
     @Transactional(readOnly = true)
-    public List<AlertRuleVo> listRules() {
-        return ruleMapper.selectActiveRules().stream().map(this::toVo).toList();
+    public List<AlertRuleVo> listRules(boolean exposeNotify) {
+        return ruleMapper.selectActiveRules().stream()
+                .map(entity -> toVo(entity, exposeNotify)).toList();
     }
 
     /** 校验创建请求中 metric、operator 和 level 的合法性。 */
@@ -138,7 +139,7 @@ public class AlertRuleServiceImpl implements AlertRuleService {
     }
 
     /** 将 Entity 转换为 VO，时间字段转为 UTC OffsetDateTime。 */
-    private AlertRuleVo toVo(AlertRuleEntity entity) {
+    private AlertRuleVo toVo(AlertRuleEntity entity, boolean exposeNotify) {
         if (entity == null) {
             return null;
         }
@@ -150,9 +151,12 @@ public class AlertRuleServiceImpl implements AlertRuleService {
         vo.setThresholdValue(entity.getThresholdValue());
         vo.setLevel(entity.getLevel());
         vo.setConfirmCount(entity.getConfirmCount());
-        vo.setNotifyEmail(entity.getNotifyEmail());
-        vo.setNotifyDingtalk(entity.getNotifyDingtalk());
-        vo.setNotifyWebhook(entity.getNotifyWebhook());
+        // 通知渠道详情（邮件地址、钉钉/Webhook URL）仅 admin 可见；脱敏时保持 null 由 JSON 省略。
+        if (exposeNotify) {
+            vo.setNotifyEmail(entity.getNotifyEmail());
+            vo.setNotifyDingtalk(entity.getNotifyDingtalk());
+            vo.setNotifyWebhook(entity.getNotifyWebhook());
+        }
         vo.setEnabled(entity.getEnabled());
         vo.setCreatedBy(entity.getCreatedBy());
         vo.setCreatedAt(AlertRuleVo.toOffset(entity.getCreatedAt()));

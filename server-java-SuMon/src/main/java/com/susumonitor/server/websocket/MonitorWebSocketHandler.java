@@ -23,11 +23,16 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 /**
- * 处理已通过一次性 ticket 握手的浏览器指标订阅。
+ * 处理已通过一次性 ticket 握手的浏览器指标订阅与终端中继。
  *
- * <p>当前授权策略：admin 或 review_status=approved 的已认证用户均可订阅任意存在的服务器指标。
- * 上游 JWT 过滤器强制要求所有通过认证的用户 review_status=approved，故此处 approved 判断恒为真，
- * 实际起作用的是 role=admin 的分支；该判断保留以明确授权意图，便于后续按服务器粒度收紧。</p>
+ * <p>当前授权策略：
+ * <ul>
+ *   <li>指标订阅：admin 或 review_status=approved 的已认证用户均可订阅任意存在的服务器指标。
+ *       上游 JWT 过滤器强制要求所有通过认证的用户 review_status=approved，故此处 approved 判断恒为真，
+ *       实际起作用的是 role=admin 的分支；该判断保留以明确授权意图，便于后续按服务器粒度收紧。</li>
+ *   <li>终端通道：与 REST 面 SSH 操作一致，仅 admin 可对服务器打开交互式终端会话；
+ *       普通用户发送 terminal.* 帧回 40302 error 帧并保留连接。</li>
+ * </ul></p>
  */
 @Component
 public class MonitorWebSocketHandler extends TextWebSocketHandler {
@@ -114,6 +119,12 @@ public class MonitorWebSocketHandler extends TextWebSocketHandler {
         String messageId = body != null && body.has("message_id") && body.get("message_id").isTextual()
                 ? body.get("message_id").textValue() : null;
         if (type.startsWith("terminal.")) {
+            // 终端通道与 REST 面 SSH 一致，仅 admin 可打开交互式会话（40302），
+            // 避免普通用户通过 WS 通道绕过 REST 的 admin 限制获得服务器 Shell。
+            if (!"admin".equals(monitorSession.user().role())) {
+                sendError(monitorSession, messageId, ErrorCode.TERMINAL_ACCESS_DENIED);
+                return;
+            }
             try {
                 TerminalMessage terminalMessage = objectMapper.treeToValue(body, TerminalMessage.class);
                 TerminalProtocolValidator.validateMonitorMessage(terminalMessage);

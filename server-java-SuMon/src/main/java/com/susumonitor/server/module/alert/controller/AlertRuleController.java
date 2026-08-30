@@ -76,13 +76,14 @@ public class AlertRuleController {
         return com.susumonitor.server.common.ApiResponse.success(alertRuleService.createRule(request, operator.id()));
     }
 
-    /** 查询所有未删除规则，已认证用户可查。 */
+    /** 查询所有未删除规则，已认证用户可查；通知渠道详情（Webhook URL 等）仅 admin 可见。 */
     // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-alert.json 的 listAlertRules 操作对齐。
     // 规则查询任意已认证用户可访问，声明 Bearer JWT 认证。
     @Operation(
             summary = "List alert rules",
             description = "Returns all non-deleted alert rules, ordered by created_at DESC. "
-                    + "Authenticated users only.",
+                    + "Authenticated users only. Notification channel details "
+                    + "(notify_email/notify_dingtalk/notify_webhook) are only returned to admins.",
             operationId = "listAlertRules",
             security = @SecurityRequirement(name = "bearerAuth"))
     // 声明列表接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
@@ -91,8 +92,12 @@ public class AlertRuleController {
             @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)")
     })
     @GetMapping
-    public com.susumonitor.server.common.ApiResponse<List<AlertRuleVo>> listRules() {
-        return com.susumonitor.server.common.ApiResponse.success(alertRuleService.listRules());
+    public com.susumonitor.server.common.ApiResponse<List<AlertRuleVo>> listRules(
+            // 从 Spring SecurityContext 注入当前认证用户，判断是否返回通知渠道详情。
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        // Webhook URL 可能内嵌 access_token 等密钥，非 admin 一律脱敏（与前端路由 requiresAdmin 对齐）。
+        boolean exposeNotify = "admin".equals(user.role());
+        return com.susumonitor.server.common.ApiResponse.success(alertRuleService.listRules(exposeNotify));
     }
 
     /** 更新规则，仅 admin。 */

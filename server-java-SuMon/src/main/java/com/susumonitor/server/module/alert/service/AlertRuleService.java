@@ -19,6 +19,11 @@ public interface AlertRuleService {
     /** 软删除告警规则。 */
     void deleteRule(Long ruleId);
 
-    /** 查询启用的告警规则。 */
-    List<AlertRuleVo> listRules();
+    /**
+     * 查询启用的告警规则。
+     *
+     * @param exposeNotify 是否返回通知渠道详情（邮件地址、钉钉/Webhook URL）；
+     *                     非 admin 查询时应传 false 脱敏，避免泄露可能内嵌密钥的 Webhook URL
+     */
+    List<AlertRuleVo> listRules(boolean exposeNotify);
 }
