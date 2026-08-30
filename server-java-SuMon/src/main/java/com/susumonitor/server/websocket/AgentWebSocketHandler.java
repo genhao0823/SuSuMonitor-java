@@ -107,7 +107,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         pendingSessions.put(session.getId(), new AgentWebSocketSession(session, clock));
     }
 
-    /** 解析并分发 Agent 消息。 */
+    /** 解析并分发 Agent 消息。  将json反序列化为AgentMessage对象 按照type进行分发  */
     @Override
     protected void handleTextMessage(WebSocketSession socketSession, TextMessage message) throws IOException {
         if (message.asBytes().length > MAX_MESSAGE_BYTES) {
