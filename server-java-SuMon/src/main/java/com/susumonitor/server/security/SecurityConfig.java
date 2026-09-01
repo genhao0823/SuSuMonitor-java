@@ -109,6 +109,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/alerts/records", "/api/alerts/records/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/alerts/records/*/read").authenticated()
                          .requestMatchers(HttpMethod.GET, "/api/servers", "/api/servers/**").authenticated()
+                         // 只读 AI 诊断显式限制为管理员，避免被 anyRequest 的认证规则意外放宽。
+                         .requestMatchers(HttpMethod.POST, "/api/ai/diagnoses").hasRole("ADMIN")
                          // RabbitMQ 运行监控快照仅管理员可见（MVP-14 监控收尾）。
                          .requestMatchers(HttpMethod.GET, "/api/system/rabbitmq/**").hasRole("ADMIN")
                          .requestMatchers("/ws/agent", "/ws/monitor").permitAll()

@@ -29,13 +29,18 @@ public enum ErrorCode {
     TERMINAL_SESSION_LIMIT_REACHED(42903, "terminal session limit reached", HttpStatus.TOO_MANY_REQUESTS),
     TERMINAL_MESSAGE_LIMIT_REACHED(42904, "terminal message limit reached", HttpStatus.TOO_MANY_REQUESTS),
     LOGIN_RATE_LIMIT_REACHED(42905, "login rate limit reached", HttpStatus.TOO_MANY_REQUESTS),
+    AI_RATE_LIMIT_REACHED(42906, "AI rate limit reached", HttpStatus.TOO_MANY_REQUESTS),
     INTERNAL_SERVER_ERROR(50000, "internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
     DATABASE_ERROR(50001, "database error", HttpStatus.INTERNAL_SERVER_ERROR),
     SSH_CONNECTION_FAILED(50002, "ssh connection failed", HttpStatus.BAD_GATEWAY),
     SSH_AUTHENTICATION_FAILED(50003, "ssh authentication failed", HttpStatus.BAD_GATEWAY),
     RABBITMQ_UNAVAILABLE(50301, "rabbitmq unavailable", HttpStatus.SERVICE_UNAVAILABLE),
     REDIS_UNAVAILABLE(50302, "redis unavailable", HttpStatus.SERVICE_UNAVAILABLE),
-    SSH_CONNECTION_TIMEOUT(50400, "ssh connection timeout", HttpStatus.GATEWAY_TIMEOUT);
+    SSH_CONNECTION_TIMEOUT(50400, "ssh connection timeout", HttpStatus.GATEWAY_TIMEOUT),
+    AI_PROVIDER_UNAVAILABLE(50303, "AI provider unavailable", HttpStatus.BAD_GATEWAY),
+    AI_DISABLED_OR_REDACTION_FAILED(50304, "AI diagnosis unavailable", HttpStatus.SERVICE_UNAVAILABLE),
+    AI_RESPONSE_INVALID(50305, "AI provider response invalid", HttpStatus.BAD_GATEWAY),
+    AI_PROVIDER_TIMEOUT(50401, "AI provider timeout", HttpStatus.GATEWAY_TIMEOUT);
 
     private final int code;
 

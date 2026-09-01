@@ -43,6 +43,10 @@ const CONTROLLER_DIR = join(
 )
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch', 'options', 'head'])
 
+// Planned parallel contracts are structurally linted but are not yet Java Controller operations.
+// Remove an entry when the corresponding implementation is merged into the Java mainline.
+const PLANNED_PARALLEL_OPERATIONS = new Set(['POST /api/ai/diagnoses'])
+
 /**
  * 从原始对象读取字符串字段,允许任意路径。
  * 若路径不存在或不是非空字符串,返回 null。
@@ -281,8 +285,12 @@ function main() {
   const results = files.map((name) => validateFile(join(OPENAPI_DIR, name), operationIds))
   const documentedOperations = new Set(results.flatMap((result) => [...(result.operations || [])]))
   const controllerOperations = collectControllerOperations()
-  const missingFromOpenApi = [...controllerOperations].filter((item) => !documentedOperations.has(item))
-  const missingFromCode = [...documentedOperations].filter((item) => !controllerOperations.has(item))
+  const missingFromOpenApi = [...controllerOperations].filter(
+    (item) => !documentedOperations.has(item) && !PLANNED_PARALLEL_OPERATIONS.has(item)
+  )
+  const missingFromCode = [...documentedOperations].filter(
+    (item) => !controllerOperations.has(item) && !PLANNED_PARALLEL_OPERATIONS.has(item)
+  )
 
   process.stdout.write('OpenAPI 契约与 Controller 路径校验\n')
   process.stdout.write('================================\n\n')

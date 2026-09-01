@@ -150,7 +150,7 @@ When an alert recovers (the evaluation transaction marks the record `resolved`),
 
 Terminal messages use the common outer structure, require a UUID `message_id`, and use a UTC ISO-8601 `timestamp`. Java routes browser control frames to the matching authenticated Agent and routes Agent responses only to the browser connection that created the session.
 
-All users whose latest database `review_status` is `approved` may request a root terminal regardless of role. This grants control equivalent to root access on the target family Linux host. Java must recheck the latest user state for every `terminal.open`, `terminal.input`, `terminal.resize`, and `terminal.close`; it must not rely only on the Monitor handshake snapshot.
+All `terminal.*` control operations are admin-only. Terminal response frames are delivered only to sessions created by an admin. A user whose latest database `review_status` is not an active admin role receives `error.payload.code=40302`; the frame is not relayed and the connection remains open. Java must recheck the latest admin role for every `terminal.open`, `terminal.input`, `terminal.resize`, and `terminal.close`; it must not rely only on the Monitor handshake snapshot. AI diagnosis never directly consumes or emits any terminal frame, and this REST-only read-only MVP cannot open terminal sessions, use SSH, execute commands, or perform write operations.
 
 Browser to `/ws/monitor`:
 

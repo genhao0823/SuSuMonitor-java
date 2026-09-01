@@ -92,6 +92,25 @@ susumonitor:
     notification-cleanup-max-batches-per-run: ${ALERT_NOTIFICATION_CLEANUP_MAX_BATCHES_PER_RUN:100}
     record-cleanup-batch-size: ${ALERT_RECORD_CLEANUP_BATCH_SIZE:1000}
     record-cleanup-max-batches-per-run: ${ALERT_RECORD_CLEANUP_MAX_BATCHES_PER_RUN:100}
+  ai:
+    # 只读诊断默认关闭；启用时必须显式提供固定 provider、endpoint、model 和 API key。
+    enabled: ${AI_ENABLED:false}
+    provider: ${AI_PROVIDER:openai-compatible}
+    base-url: ${AI_BASE_URL:}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:}
+    prompt-version: ${AI_PROMPT_VERSION:ai-diagnosis-v1}
+    connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${AI_READ_TIMEOUT_MS:30000}
+    max-response-bytes: ${AI_MAX_RESPONSE_BYTES:1048576}
+    max-history-minutes: ${AI_MAX_HISTORY_MINUTES:1440}
+    max-question-length: ${AI_MAX_QUESTION_LENGTH:4000}
+    max-concurrent-requests: ${AI_MAX_CONCURRENT_REQUESTS:2}
+    audit-retention-days: ${AI_AUDIT_RETENTION_DAYS:30}
+    audit-cleanup-cron: ${AI_AUDIT_CLEANUP_CRON:0 30 3 * * ?}
+    audit-cleanup-enabled: ${AI_AUDIT_CLEANUP_ENABLED:true}
+    audit-cleanup-batch-size: ${AI_AUDIT_CLEANUP_BATCH_SIZE:1000}
+    audit-cleanup-max-batches-per-run: ${AI_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
   ssh-test-history:
     retention-days: ${SSH_TEST_HISTORY_RETENTION_DAYS:90}
     cleanup-cron: ${SSH_TEST_HISTORY_CLEANUP_CRON:0 0 3 * * ?}

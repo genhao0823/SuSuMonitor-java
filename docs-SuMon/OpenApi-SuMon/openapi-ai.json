@@ -1,0 +1,594 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SuSuMonitor AI Read-only Diagnosis API",
+    "description": "Planned, admin-only read-only diagnosis contract. This document is a parallel MVP design artifact, not evidence that the Java endpoint is implemented or that RC1 production acceptance has passed. The service may send only allowlisted, validated, fail-closed redacted monitoring summaries to a configured provider. It never sends credentials, SSH data, terminal frames, raw terminal input/output, or write-operation instructions, and it never grants tools or execution access to a model.",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:18080",
+      "description": "Local development server; planned endpoint"
+    }
+  ],
+  "tags": [
+    {
+      "name": "ai-diagnosis",
+      "description": "Structured, read-only monitoring diagnosis for administrators"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/ai/diagnoses": {
+      "post": {
+        "tags": [
+          "ai-diagnosis"
+        ],
+        "summary": "Generate a read-only AI diagnosis",
+        "description": "Planned MVP endpoint. Requires an active admin Bearer JWT. The service validates server access, reads only an allowlisted monitoring summary, applies fail-closed redaction, and calls a provider selected from a server-side whitelist. The request cannot select a provider URL, API key, tool, callback, or prompt. AI output is advisory only: it cannot open or consume terminal frames, use SSH, execute commands, or perform any write operation. This planned contract does not count as a Java Controller implementation or RC1 production acceptance.",
+        "operationId": "createAiDiagnosis",
+        "x-contract-status": "planned",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiDiagnosisRequest"
+              },
+              "example": {
+                "server_id": 123,
+                "question": "Why did CPU usage rise during the selected window?",
+                "history_minutes": 60
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured read-only diagnosis returned",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiDiagnosisResponse"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "summary": "CPU saturation coincided with elevated load and reduced available memory.",
+                    "severity": "warning",
+                    "findings": [
+                      {
+                        "title": "Sustained CPU utilization",
+                        "description": "CPU remained above the warning range for part of the selected window.",
+                        "confidence": "medium"
+                      }
+                    ],
+                    "evidence": [
+                      {
+                        "metric": "cpu_percent",
+                        "value": 92.5,
+                        "observed_at": "2026-08-30T10:00:00Z",
+                        "source": "monitoring_summary"
+                      }
+                    ],
+                    "recommendations": [
+                      "Review the workload associated with the observed interval using approved operational procedures."
+                    ],
+                    "limitations": [
+                      "This is an advisory, read-only analysis and does not execute or validate any remediation.",
+                      "No terminal, SSH, raw log, or credential data was provided to the model."
+                    ],
+                    "model_used": true,
+                    "provider": "approved-provider",
+                    "model": "approved-model",
+                    "prompt_version": "ai-diagnosis-v1",
+                    "usage": {
+                      "input_tokens": 850,
+                      "output_tokens": 220,
+                      "total_tokens": 1070,
+                      "estimated_cost": 0.0021,
+                      "currency": "USD"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/AiRateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/AiInternalError"
+          },
+          "502": {
+            "$ref": "#/components/responses/AiProviderUnavailable"
+          },
+          "503": {
+            "$ref": "#/components/responses/AiDisabledOrRedactionFailed"
+          },
+          "504": {
+            "$ref": "#/components/responses/AiProviderTimeout"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT for an active user with the admin role."
+      }
+    },
+    "parameters": {
+      "XRequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "description": "Optional client correlation ID; the server returns or generates a request ID. Do not include credentials or prompt content.",
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "XCorrelationId": {
+        "name": "X-Correlation-ID",
+        "in": "header",
+        "required": false,
+        "description": "Optional trace correlation ID. Do not include credentials or prompt content.",
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "headers": {
+      "XRequestId": {
+        "description": "Server request ID for audit and support correlation.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XCorrelationId": {
+        "description": "Correlation ID propagated for request tracing.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "InvalidRequestParameter": {
+        "description": "Invalid request parameter or body (candidate business code 40002).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40002,
+              "message": "invalid request parameter",
+              "data": null
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing, invalid, expired, or inactive JWT (40100).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40100,
+              "message": "unauthorized",
+              "data": null
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Authenticated user is not an active administrator (40300).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40300,
+              "message": "forbidden",
+              "data": null
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Server does not exist or is soft-deleted (40400).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 40400,
+              "message": "resource not found",
+              "data": null
+            }
+          }
+        }
+      },
+      "AiRateLimited": {
+        "description": "AI request, concurrency, or budget rate limit reached (candidate 42906).",
+        "headers": {
+          "Retry-After": {
+            "description": "Seconds before retrying, when available.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 42906,
+              "message": "AI rate limit reached",
+              "data": null
+            }
+          }
+        }
+      },
+      "AiInternalError": {
+        "description": "Unexpected internal AI orchestration failure (candidate 50003; Java may map this differently).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 50003,
+              "message": "AI diagnosis failed",
+              "data": null
+            }
+          }
+        }
+      },
+      "AiProviderUnavailable": {
+        "description": "Provider is unavailable, rejected by policy, or the provider response is unusable (candidate 50303).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 50303,
+              "message": "AI provider unavailable",
+              "data": null
+            }
+          }
+        }
+      },
+      "AiDisabledOrRedactionFailed": {
+        "description": "AI kill switch is off, provider configuration is not allowed, or fail-closed redaction/policy validation failed (candidate 50304). No provider request is made.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 50304,
+              "message": "AI diagnosis unavailable",
+              "data": null
+            }
+          }
+        }
+      },
+      "AiProviderTimeout": {
+        "description": "Provider connection or response timeout (candidate 50401).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": 50401,
+              "message": "AI provider timeout",
+              "data": null
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "AiDiagnosisRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "server_id",
+          "question",
+          "history_minutes"
+        ],
+        "properties": {
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Non-deleted server to diagnose; access is rechecked server-side."
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Administrator question. Treated as untrusted text and cannot override system policy or request tools/actions."
+          },
+          "history_minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1440,
+            "description": "UTC monitoring history window in minutes. Final required/default/range semantics require Java confirmation."
+          }
+        }
+      },
+      "AiDiagnosisResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AiDiagnosis"
+          }
+        }
+      },
+      "AiDiagnosis": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "summary",
+          "severity",
+          "findings",
+          "evidence",
+          "recommendations",
+          "limitations",
+          "model_used",
+          "provider",
+          "model",
+          "prompt_version",
+          "usage"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "Concise advisory diagnosis; not a statement that any remediation was executed."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "critical",
+              "unknown"
+            ]
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiFinding"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiEvidence"
+            }
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "model_used": {
+            "type": "boolean",
+            "description": "Whether a provider model actually produced the diagnosis; false for deterministic fallback if Java supports one."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Server-selected allowlisted provider identifier; never a user-supplied URL or secret."
+          },
+          "model": {
+            "type": "string",
+            "description": "Server-selected model identifier."
+          },
+          "prompt_version": {
+            "type": "string",
+            "description": "Version of the server-controlled prompt and output policy."
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AiUsage"
+          }
+        }
+      },
+      "AiFinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "description",
+          "confidence"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "unknown"
+            ]
+          }
+        }
+      },
+      "AiEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "metric",
+          "value",
+          "observed_at",
+          "source"
+        ],
+        "properties": {
+          "metric": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "value": {
+            "description": "Allowlisted numeric or null metric summary value.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "maxLength": 256
+              }
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "monitoring_summary",
+              "alert_summary"
+            ]
+          }
+        }
+      },
+      "AiUsage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "total_tokens",
+          "estimated_cost",
+          "currency"
+        ],
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "estimated_cost": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Server-calculated estimate; final currency and precision require Java/provider confirmation."
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "Candidate AI codes are provisional and must align with Java ErrorCode before implementation."
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

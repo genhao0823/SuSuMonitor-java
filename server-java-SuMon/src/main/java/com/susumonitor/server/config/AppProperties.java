@@ -2,6 +2,7 @@ package com.susumonitor.server.config;
 
 import com.susumonitor.server.websocket.TerminalProtocolValidator;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -58,6 +59,10 @@ public class AppProperties {
     /** 多实例化阶段一（2026-08-17）：Redis 共享存储（Monitor ticket）开关与参数。 */
     @Valid
     private final Redis redis = new Redis();
+
+    /** AI 只读诊断配置，默认关闭且不影响现有监控链路。 */
+    @Valid
+    private final Ai ai = new Ai();
 
     /** SSH 测试历史保留期与清理批次配置。 */
     @Valid
@@ -2150,6 +2155,95 @@ public class AppProperties {
         public void setTicketTtlSeconds(int ticketTtlSeconds) {
             this.ticketTtlSeconds = ticketTtlSeconds;
         }
+    }
+
+    /**
+     * 获取 AI 只读诊断配置。
+     *
+     * @return AI 配置
+     */
+    public Ai getAi() {
+        return ai;
+    }
+
+    /**
+     * SSH 测试历史（ssh_test_history）保留期与分批清理配置。
+     */
+    public static class Ai {
+
+        private boolean enabled = false;
+        @NotBlank(message = "AI provider must not be blank when AI is enabled")
+        private String provider = "openai-compatible";
+        private String baseUrl;
+        private String apiKey;
+        private String model;
+        @NotBlank(message = "AI prompt version must not be blank")
+        private String promptVersion = "ai-diagnosis-v1";
+        @Min(value = 100, message = "AI connect timeout must be at least 100 ms")
+        @Max(value = 60000, message = "AI connect timeout must not exceed 60000 ms")
+        private int connectTimeoutMs = 5000;
+        @Min(value = 100, message = "AI read timeout must be at least 100 ms")
+        @Max(value = 120000, message = "AI read timeout must not exceed 120000 ms")
+        private int readTimeoutMs = 30000;
+        @Min(value = 1024, message = "AI max response bytes must be at least 1024")
+        @Max(value = 16 * 1024 * 1024, message = "AI max response bytes must not exceed 16777216")
+        private int maxResponseBytes = 1024 * 1024;
+        @Min(value = 1, message = "AI max history minutes must be at least one")
+        @Max(value = 1440, message = "AI max history minutes must not exceed 1440")
+        private int maxHistoryMinutes = 1440;
+        @Min(value = 1, message = "AI max question length must be at least one")
+        @Max(value = 4000, message = "AI max question length must not exceed 4000")
+        private int maxQuestionLength = 4000;
+        @Min(value = 1, message = "AI max concurrent requests must be at least one")
+        @Max(value = 100, message = "AI max concurrent requests must not exceed 100")
+        private int maxConcurrentRequests = 2;
+        @Min(value = 1, message = "AI audit retention days must be at least one")
+        @Max(value = 3650, message = "AI audit retention days must not exceed 3650")
+        private int auditRetentionDays = 30;
+        @NotBlank(message = "AI audit cleanup cron must not be blank")
+        private String auditCleanupCron = "0 30 3 * * ?";
+        @Min(value = 1, message = "AI audit cleanup batch size must be at least one")
+        @Max(value = 10000, message = "AI audit cleanup batch size must not exceed 10000")
+        private int auditCleanupBatchSize = 1000;
+        @Min(value = 1, message = "AI audit cleanup max batches must be at least one")
+        @Max(value = 1000, message = "AI audit cleanup max batches must not exceed 1000")
+        private int auditCleanupMaxBatchesPerRun = 100;
+        private boolean auditCleanupEnabled = true;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getProvider() { return provider; }
+        public void setProvider(String provider) { this.provider = provider; }
+        public String getBaseUrl() { return baseUrl; }
+        public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+        public String getModel() { return model; }
+        public void setModel(String model) { this.model = model; }
+        public String getPromptVersion() { return promptVersion; }
+        public void setPromptVersion(String promptVersion) { this.promptVersion = promptVersion; }
+        public int getConnectTimeoutMs() { return connectTimeoutMs; }
+        public void setConnectTimeoutMs(int value) { connectTimeoutMs = value; }
+        public int getReadTimeoutMs() { return readTimeoutMs; }
+        public void setReadTimeoutMs(int value) { readTimeoutMs = value; }
+        public int getMaxResponseBytes() { return maxResponseBytes; }
+        public void setMaxResponseBytes(int value) { maxResponseBytes = value; }
+        public int getMaxHistoryMinutes() { return maxHistoryMinutes; }
+        public void setMaxHistoryMinutes(int value) { maxHistoryMinutes = value; }
+        public int getMaxQuestionLength() { return maxQuestionLength; }
+        public void setMaxQuestionLength(int value) { maxQuestionLength = value; }
+        public int getMaxConcurrentRequests() { return maxConcurrentRequests; }
+        public void setMaxConcurrentRequests(int value) { maxConcurrentRequests = value; }
+        public int getAuditRetentionDays() { return auditRetentionDays; }
+        public void setAuditRetentionDays(int value) { auditRetentionDays = value; }
+        public String getAuditCleanupCron() { return auditCleanupCron; }
+        public void setAuditCleanupCron(String value) { auditCleanupCron = value; }
+        public int getAuditCleanupBatchSize() { return auditCleanupBatchSize; }
+        public void setAuditCleanupBatchSize(int value) { auditCleanupBatchSize = value; }
+        public int getAuditCleanupMaxBatchesPerRun() { return auditCleanupMaxBatchesPerRun; }
+        public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
+        public boolean isAuditCleanupEnabled() { return auditCleanupEnabled; }
+        public void setAuditCleanupEnabled(boolean value) { auditCleanupEnabled = value; }
     }
 
     /**
