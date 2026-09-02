@@ -1,8 +1,8 @@
 # AI 数据流与威胁模型
 
-**版本**：AI 只读诊断 MVP v0.2  
-**日期**：2026-08-30（2026-09-02 增补实现状态标注）  
-**状态**：代码级已实现（main @ 389bd9e），默认关闭；真实 provider 与生产验收证据缺失，不构成生产验收。与 RC1 并行。
+**版本**：AI 只读诊断 MVP v0.3  
+**日期**：2026-08-30（2026-09-02 增补实现状态标注；2026-09-03 启用前收口更新）  
+**状态**：代码级已实现并完成治理收口（限流/预算/重试/明文开关），默认关闭；真实 provider 联调证据见 §十一，生产验收仍以独立验收记录为准。与 RC1 并行。
 
 ## 一、范围与安全目标
 
@@ -97,7 +97,7 @@ ApiResponse<AiDiagnosis>（不返回原始 prompt、密钥或终端/SSH 数据�
 ## 五、第三方 provider 与密钥
 
 - provider 只能从服务端配置的白名单中选择；客户端不得提交 URL、代理地址、模型工具或 function calling 配置。
-- 出站只允许固定 HTTPS 域名/端口和 TLS 校验；禁止任意 URL、重定向到未白名单主机和 provider 回调入站。
+- 出站默认只允许 HTTPS 端点和 TLS 校验；`susumonitor.ai.allow-insecure-http=true` 可显式放宽明文 HTTP endpoint（2026-09-03 新增，仅用于受控内网/联调环境——明文传输会暴露 API key，生产不得开启；其余 scheme 永远拒绝）。禁止任意 URL、重定向到未白名单主机和 provider 回调入站。
 - API key 从 secret manager、受控环境变量或等价密钥配置读取；不得硬编码、进入 Git、日志、审计、异常、响应或数据库诊断上下文。
 - key 按 provider/环境隔离，遵循最小权限和定期轮换；轮换失败时 fail-closed。
 - provider 请求设置连接/读取超时、最大响应体、有限重试和退避；不对不可重试的策略拒绝进行重试。
@@ -192,9 +192,34 @@ AI MVP 永不直接使用 `terminal.open`、`terminal.input`、`terminal.resize`
 
 ### 未实现 / 未验证（启用前必须补齐）
 
+> 2026-09-03 收口更新：第 2~5 项已补齐并有测试/联调证据（见"已实现"增补与 §十一末尾 E2E 记录）；第 1 项的真实网关已联通并完成四路径 E2E，但 provider 条款/数据地域/训练留存确认与密钥轮换仍待产品/安全责任人完成；秘密扫描仍未建立独立组件。
+
 - 真实第三方 provider 联调：出站域名确认、条款/数据地域/训练留存确认（§五最后一条——未确认前应保持关闭）。
 - `AiDiagnosticRunMySqlValidationIT` 在隔离 MySQL 的实际执行（`RUN_MYSQL_VALIDATION_TESTS=true`）。
 - 独立 prompt injection / 重放 / 越权 fixture 安全测试套件。
 - 日志与审计链路的秘密扫描验证记录。
 - 成本观测与预算策略；按维度的精细化限流。
 - provider 条款与密钥轮换流程（当前仅环境变量注入，无轮换机制）。
+
+### 已实现（2026-09-03 启用前收口增补）
+
+| 控制项 | 实现 | 测试证据 |
+|---|---|---|
+| 按管理员固定窗口限流 | `AiRateLimiterConfig`：`InMemory`（Redis 关闭默认）/`Redis`（跨实例）互斥实现，`ai.rate-limit-max-requests`（默认 10）/`rate-limit-window-seconds`（默认 3600），超限 `42906`；位于并发许可之前，命中不建审计 | `AiDiagnosisRateLimiterTests` 4 例（上限/窗口推进/边界内保留/按 actor 隔离）+ Service 集成断言 |
+| 按天 token 预算 | `ai.daily-token-budget`（0=不限）：当日 UTC completed 调用 `total_tokens` 聚合（V28 现有索引，零 DDL），达到上限 `42906` | Service 2 例（耗尽拒绝 / 未配置跳过聚合）+ MySQL IT 聚合断言 |
+| provider 有界重试 | 仅 429 与瞬时网络错误重试，`ai.retry-max-attempts`（默认 2）+ 指数短退避 `retry-backoff-base-ms`（默认 500ms）；读超时/5xx/4xx 非限流/响应无效不重试；重试在并发许可内 | Provider 3 例（429 重试成功 / 耗尽仍 42906 / 5xx 不重试） |
+| HTTP 明文显式放宽 | `ai.allow-insecure-http`（默认 false）：开启后仅放行 `http://`，其余 scheme 始终拒绝 | Provider 2 例（开启后 http 放行 / ftp 始终拒绝） |
+| 输出 schema 固化与围栏容忍 | system prompt 固定完整 JSON schema（含 severity/confidence/source 枚举）；解析前剥离 markdown 围栏（真实网关实测会包裹 ```json），围栏剥离不放宽字段校验 | Provider 2 例（围栏内容解析成功 / severity 越界拒绝） |
+
+### 真实 provider E2E 证据（2026-09-03，OpenAI-compatible 网关，HTTP 明文联调实例）
+
+| 路径 | 结果 | 证据 |
+|---|---|---|
+| 真实模型诊断 | ✅ | `model_used=true`、`severity=critical`（合法枚举）、中文摘要与人工排查建议、`total_tokens=1394/1318`；审计行 `status=completed` |
+| provider 超时降级 | ✅ | 真实读超时（30s）→ 审计 `status=failed, error_code=50401` → HTTP 200 确定性摘要 `model_used=false` |
+| 错误密钥降级 | ✅ | provider 401 → 审计 `error_code=50303` → HTTP 200 降级；原始错误不透传 |
+| 按管理员限流 | ✅ | 窗口上限 3 次，第 4 次 HTTP 429 `42906`，命中不建审计 |
+| 按天 token 预算 | ✅ | 预算 1000、当日已耗 2712 → 直接 429 `42906`；日志 `budget exhausted, usedTokens=2712, budget=1000` |
+| 反伪造 | ✅ | 模型自造 evidence（`observed_at:"current"` 等不可解析行）被整体替换为 Java 白名单证据（空上下文时响应 evidence 为空数组，与事实一致） |
+| 密钥泄漏扫描 | ✅ | 四个后端日志文件 grep API key 前缀均 0 命中 |
+| 隔离库 IT | ✅ | `susumonitor_metrics_validation`：V28 迁移 success=1；AI IT 7 例全过（建表/索引/回填/complete/fail/cutoff 清理/token 聚合），全部 6 类 IT 26 例 0 失败 |

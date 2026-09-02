@@ -7,20 +7,21 @@
 [![Status](https://img.shields.io/badge/Polish--7%20%2B%20%E8%BF%90%E7%BB%B4%E6%94%B6%E5%8F%A3%E5%AE%8C%E6%88%90-brightgreen)](#%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6)
 [![Docs](https://img.shields.io/badge/docs--alignment-2026--08--27-blue)](docs-SuMon/Develop-log/20260824-首管理员空库并发真实验收.md)
 
-## 🚀 当前进度快照（2026-08-29）
+## 🚀 当前进度快照（2026-09-03）
 
 | 项 | 状态 / 值 |
 |---|---|
 | GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-jvav-> |
-| 当前基线 | `main @ 09b3911`（HEAD 与 `origin/main` 一致；当前工作区含 2026-08-29 安全审计与收尾改动，尚未形成干净发布提交） |
+| 当前基线 | `main @ bc1b5e0`（AI 只读诊断收口提交；HEAD 与 `origin/main` 一致，Android 终端工作区改动除外） |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
 | 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/增长表保留期清理（幂等接收记录 7 天、消费记录 30 天、告警记录 90 天、SSH 测试历史 90 天、**通知投递记录 90 天（V27）**、**Outbox 已发布 30 天（默认开启）**，Flyway V22/V24/V27）/告警消费多消费者并发（V15 唯一键幂等，本地 broker 验收并发 4 消费 100 条零重复）/Agent nack 有限重试（retriable_server_error + snapshot v3 持久化预算）/告警事件 Broker 发布+消费（alert.triggered.v1：Outbox 按行路由 V25 发布，alert-notifier 幂等消费并驱动外部通知，Broker 中断恢复可补发触发）/**告警恢复事件链路（alert.resolved.v1：评估器恢复时同事务登记 V26 resolved_at 落库 + Outbox 发布，alert-resolved-notifier 幂等消费驱动恢复通知，真实 broker 验收 11/11）**/**终端断线中继（Agent 断开时服务端推送 terminal.closed(agent_disconnected)，20260814 WSL E2E 真实验收）**/**心跳超时路径终端收口修复（90s 心跳超时同样收口，AGENT_HEARTBEAT_TIMEOUT_SECONDS 参数化）**/**MVP-14 监控收尾（队列积压探测与阈值告警 + 消费耗时/失败率窗口统计，ADMIN 端点 /api/system/rabbitmq/queues|consumers，真实 broker 验收 9/9）**/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
 | Web 前端 | 2026-08-21 完成克制玻璃设计系统、应用壳层、Dashboard 与列表页收口；恢复服务器列表 URL/防抖/自动刷新/SSH 错误映射，搜索收敛为 OpenAPI 的 keyword 契约；移动端表格不再被固定操作列覆盖；静态测试声明 133 个（22 个 spec），历史运行记录曾 133/133；当前工作区测试需在 RC1 干净提交重新执行。真实账号 UI E2E 待运行时隔离凭据与后端环境。 |
+| AI 只读诊断 | **MVP 已实现并完成启用前收口（2026-08-31~09-03，`module/ai`）**：`POST /api/ai/diagnoses`（admin-only，`AI_ENABLED` 默认关闭、关闭时端点 404 零触达）；白名单脱敏上下文 + OpenAI-compatible provider（HTTPS 默认，`AI_ALLOW_INSECURE_HTTP` 显式放宽明文）+ 结构化输出严格校验 + 确定性降级；按管理员限流/按天 token 预算/有界重试；V28 最小审计（不存原文）+ 30 天清理。Java 641 单测、26 MySQL IT 全绿；真实网关 E2E：真实模型诊断/超时降级/限流/预算四路径均验证（见 `20260903` 开发日志）。**非目标**：无终端/SSH/命令执行/写操作，无 RAG/工具调用/自主运维；AI 永不使用 `terminal.*`。 |
 | Android App | **阶段一+阶段二+Polish-7 已完整实现（2026-08-12）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情/排序、实时指标（WS + OkHttp pingInterval 心跳）、告警记录（通知深链到告警 Tab）、DataStore 通知开关持久化、前台服务告警通知、SSH 终端（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl + **自研 ANSI 终端模拟器**：增量 CSI 解析/双屏/滚动回退/256 色/备用屏，支持 top/htop 类 TUI + **断线自动重连**：指数退避自动重开）；历史提交记录为 89 个单测，当前工作区安全收尾后的测试需在 RC1 干净提交重新统计；云端全链路手测待真机 |
 | 云端部署 | HTTPS/WSS 生产入口与反向代理资产已具备；2026-07-31 的明文 HTTP 联调仅作为历史验收记录保留，禁止作为生产配置。后端 `18080`、RabbitMQ `5672` 仅供内网/回环访问，Agent 不监听入站端口。 |
 | 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、真实 SMTP 发送、Monitor 慢消费者 1011 背压、Android App 云端全链路手测、数据库异地备份定时调度（crontab）仍需外部环境；多 JVM 的 Agent/Monitor/Terminal 连接状态和事件广播仍未分布式化。首管理员空库并发历史结果基于旧提交，需在当前 RC1 提交复跑；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接为自研模拟器边界外。 |
 
-> 本节反映 2026-08-29 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录（原文保留，当前值以本快照和 RC1 计划为准）。历史命令和临时公网配置均禁止直接执行。注意：当前 `main @ 09b3911` 与 `origin/main` 一致，但工作区含尚未提交的 2026-08-29 安全审计与收尾改动；这些改动在形成干净发布提交前只能视为候选工作区状态。
+> 本节反映 2026-09-03 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录（原文保留，当前值以本快照和 RC1 计划为准）。AI 只读诊断的详细实现状态与威胁模型见 `docs-SuMon/Protocol-SuMon/ai-data-flow-threat-model.md` 与 `docs-SuMon/Develop-plans/20260830-大模型只读诊断MVP开发计划.md` §八。
 
 > **文档进度对齐说明（2026-07-25 修订，仅文档层）**
 >
