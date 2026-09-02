@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "SuSuMonitor AI Read-only Diagnosis API",
-    "description": "Read-only diagnosis contract implemented at code level (main @ 389bd9e, Java module ai). The endpoint is gated by susumonitor.ai.enabled (default false): while disabled the Controller bean is not loaded and requests receive 404 after the security chain. When enabled, the service sends only allowlisted, validated, fail-closed monitoring summaries to a configured HTTPS provider. It never sends credentials, SSH data, terminal frames, raw terminal input/output, or write-operation instructions, and it never grants tools or execution access to a model. Provider failures (timeout/5xx/429/invalid response) currently return HTTP 200 with a deterministic fallback and model_used=false; the provider error code is recorded in ai_diagnostic_runs.error_code. Code-level tests pass; real-provider and production validation remain pending.",
-    "version": "0.2.0"
+    "description": "Read-only diagnosis contract implemented at code level (Java module ai). The endpoint is gated by susumonitor.ai.enabled (default false): while disabled the Controller bean is not loaded and requests receive 404 after the security chain. When enabled, the service sends only allowlisted, validated, fail-closed monitoring summaries to a configured provider. It never sends credentials, SSH data, terminal frames, raw terminal input/output, or write-operation instructions, and it never grants tools or execution access to a model. Provider failures (timeout/5xx/invalid response) return HTTP 200 with a deterministic fallback and model_used=false; the provider error code is recorded in ai_diagnostic_runs.error_code. 429 responses with a Retry-After-capable provider are retried in-process (bounded, default 2 attempts); only 429 and transient network errors are retried. Governance: per-admin fixed-window rate limit and a daily token budget (susumonitor.ai.daily-token-budget, 0=unlimited) both reject with 42906 before any provider call. By default the provider endpoint must use HTTPS; susumonitor.ai.allow-insecure-http=true explicitly permits plaintext http:// for controlled intranet/integration use only (the API key then transits unencrypted - not recommended for production).",
+    "version": "0.3.0"
   },
   "servers": [
     {
@@ -254,7 +254,7 @@
         }
       },
       "AiRateLimited": {
-        "description": "Global AI concurrency limit reached (42906). Surfaced when max-concurrent-requests permits are exhausted; no provider request is made and no audit row is created.",
+        "description": "AI limit reached (42906): per-admin fixed-window rate limit, daily token budget exhausted, or global concurrency permits exhausted. No provider request is made; rate-limit and budget rejections create no audit row.",
         "headers": {
           "Retry-After": {
             "description": "Seconds before retrying, when available.",

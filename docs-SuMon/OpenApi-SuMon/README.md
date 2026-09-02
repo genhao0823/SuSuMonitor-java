@@ -112,7 +112,7 @@
 |---|---|---|---|---|
 | POST | `/api/ai/diagnoses` | ADMIN Bearer | 读取白名单、脱敏后的监控摘要并返回结构化建议；不读取/发送终端或 SSH 数据，不执行任何写操作；`susumonitor.ai.enabled=false`（默认）时 Controller 不加载，请求在安全链后得到 404 | 40002, 40100, 40300, 40400, 42906, 50000, 50303, 50304, 50401 |
 
-AI 错误码已由 Java 主线定稿（`ErrorCode.java`）：`42906` AI 并发限流、`50303` provider 不可用、`50304` AI 关闭/脱敏失败、`50401` provider 超时；`50305`（provider 响应无效）仅内部使用。`50003` 保持 SSH authentication failed 语义，AI 不复用。当前 MVP 行为：`50303/50304/50401/50305` 在服务层被转换为 HTTP 200 的确定性降级（`model_used=false`），原始错误码记录于 `ai_diagnostic_runs.error_code`，不透传客户端；`42906` 在并发令牌耗尽时直接返回。代码级测试与契约检查通过不等于接口生产验收通过。
+AI 错误码已由 Java 主线定稿（`ErrorCode.java`）：`42906` AI 限流（按管理员窗口限流 / 按天 token 预算耗尽 / 全局并发上限）、`50303` provider 不可用、`50304` AI 关闭/配置无效/脱敏失败、`50401` provider 超时；`50305`（provider 响应无效）仅内部使用。`50003` 保持 SSH authentication failed 语义，AI 不复用。当前 MVP 行为：`50303/50304/50401/50305` 在服务层被转换为 HTTP 200 的确定性降级（`model_used=false`），原始错误码记录于 `ai_diagnostic_runs.error_code`，不透传客户端；`42906` 在限流/预算/并发命中时直接返回。provider 429 与瞬时网络错误按 `AI_RETRY_MAX_ATTEMPTS`（默认 2）进程内有界重试。默认仅允许 HTTPS provider endpoint；`AI_ALLOW_INSECURE_HTTP=true` 显式放宽明文 HTTP（仅内网/联调，明文会暴露 API key）。代码级测试与契约检查通过不等于接口生产验收通过。
 
 
 既有已实现契约的错误码以 `ErrorCode.java`（含 2026-08-31 新增 AI 段）与对应 OpenAPI `ErrorResponse.code` 定义为准：
@@ -141,7 +141,7 @@ AI 错误码已由 Java 主线定稿（`ErrorCode.java`）：`42906` AI 并发�
 | 42903 | terminal session limit reached | 终端会话数量上限 |
 | 42904 | terminal message limit reached | 终端控制消息限流 |
 | 42905 | login rate limit reached | 登录/注册防滥用限流（独立计数），响应 HTTP 429 并带 Retry-After |
-| 42906 | AI rate limit reached | AI 诊断并发上限（429，MVP 不带 Retry-After） |
+| 42906 | AI rate limit reached | AI 按管理员窗口限流 / 按天 token 预算耗尽 / 全局并发上限（HTTP 429） |
 | 50000 | internal server error | 兜底 |
 | 50001 | database error | 数据库异常 |
 | 50002 | ssh connection failed | SSH 连接失败 |
