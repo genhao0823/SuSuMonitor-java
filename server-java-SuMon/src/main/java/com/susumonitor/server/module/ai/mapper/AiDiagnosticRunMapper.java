@@ -14,4 +14,14 @@ public interface AiDiagnosticRunMapper {
     int completeRun(@Param("run") AiDiagnosticRunEntity run);
     int failRun(@Param("run") AiDiagnosticRunEntity run);
     int deleteExpiredBatch(@Param("cutoffTime") LocalDateTime cutoffTime, @Param("batchSize") int batchSize);
+
+    /**
+     * 统计时间窗口内 completed 调用的 token 总量，供按天预算校验使用。
+     *
+     * @param startTime 窗口起点（含）
+     * @param endTime 窗口终点（不含）
+     * @return token 总量；无记录时返回 0
+     */
+    Long selectTotalTokensBetween(@Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime);
 }

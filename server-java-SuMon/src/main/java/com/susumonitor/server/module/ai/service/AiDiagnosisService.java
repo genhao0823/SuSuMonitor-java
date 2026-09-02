@@ -7,6 +7,7 @@ import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.ai.entity.AiDiagnosticRunEntity;
+import com.susumonitor.server.module.ai.limit.AiDiagnosisRateLimiter;
 import com.susumonitor.server.module.ai.mapper.AiDiagnosticRunMapper;
 import com.susumonitor.server.module.ai.model.AiDiagnosisContext;
 import com.susumonitor.server.module.ai.provider.AiProvider;
@@ -46,21 +47,24 @@ public class AiDiagnosisService {
     private final MetricsService metricsService;
     private final AlertRecordService alertRecordService;
     private final AiProvider aiProvider;
+    private final AiDiagnosisRateLimiter rateLimiter;
     private final AiDiagnosticRunMapper auditMapper;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final Semaphore permits;
 
-    /** 注入只读业务契约、模型端口和审计组件；不接触任何凭据或终端服务。 */
+    /** 注入只读业务契约、模型端口、限流器与审计组件；不接触任何凭据或终端服务。 */
     public AiDiagnosisService(ServerService serverService, MetricsService metricsService,
             AlertRecordService alertRecordService, AiProvider aiProvider,
+            AiDiagnosisRateLimiter rateLimiter,
             AiDiagnosticRunMapper auditMapper, AppProperties appProperties,
             ObjectMapper objectMapper, Clock clock) {
         this.serverService = serverService;
         this.metricsService = metricsService;
         this.alertRecordService = alertRecordService;
         this.aiProvider = aiProvider;
+        this.rateLimiter = rateLimiter;
         this.auditMapper = auditMapper;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
@@ -76,6 +80,10 @@ public class AiDiagnosisService {
             throw new BusinessException(ErrorCode.AI_DISABLED_OR_REDACTION_FAILED);
         }
         validateRequest(ai, serverId, question, historyMinutes);
+        // 按管理员固定窗口限流：检查即计数，超限抛 42906（不占并发许可、不调 provider）。
+        rateLimiter.checkAllowed(actorId);
+        // 按天 token 预算：当日 completed 调用总量达到上限后拒绝新请求，防止成本失控。
+        checkDailyTokenBudget(ai);
         if (!permits.tryAcquire()) {
             throw new BusinessException(ErrorCode.AI_RATE_LIMIT_REACHED);
         }
@@ -160,7 +168,8 @@ public class AiDiagnosisService {
         AiEvidenceVo item = new AiEvidenceVo();
         item.setMetric(metric);
         item.setValue(value);
-        item.setObservedAt(at.withOffsetSameInstant(ZoneOffset.UTC));
+        // 服务端组装的 ISO-8601 UTC 字符串；响应契约 observed_at 保持 date-time 语义。
+        item.setObservedAt(at.withOffsetSameInstant(ZoneOffset.UTC).format(UTC_FORMAT));
         item.setSource("monitoring_summary");
         evidence.add(item);
     }
@@ -219,8 +228,26 @@ public class AiDiagnosisService {
         audit.setCompletedAt(java.time.LocalDateTime.now(clock)); auditMapper.failRun(audit);
     }
 
-    private void validateRequest(AppProperties.Ai ai, Long serverId, String question, Integer historyMinutes) {
-        if (serverId == null || serverId <= 0 || question == null || question.isBlank()
+    /**
+     * 校验当日（UTC）token 预算；预算为 0 表示不限。
+     *
+     * <p>以 completed 调用的 total_tokens 聚合为口径，命中 created_at 索引，
+     * 管理诊断频次下为毫秒级查询；达到上限即拒绝，不预估本次消耗。</p>
+     */
+    private void checkDailyTokenBudget(AppProperties.Ai ai) {
+        if (ai.getDailyTokenBudget() <= 0) {
+            return;
+        }
+        java.time.LocalDate today = java.time.LocalDate.now(clock);
+        java.time.LocalDateTime start = today.atStartOfDay();
+        Long used = auditMapper.selectTotalTokensBetween(start, start.plusDays(1));
+        if (used != null && used >= ai.getDailyTokenBudget()) {
+            log.info("AI daily token budget exhausted, usedTokens={}, budget={}", used, ai.getDailyTokenBudget());
+            throw new BusinessException(ErrorCode.AI_RATE_LIMIT_REACHED);
+        }
+    }
+
+    private void validateRequest(AppProperties.Ai ai, Long serverId, String question, Integer historyMinutes) {        if (serverId == null || serverId <= 0 || question == null || question.isBlank()
                 || question.length() > ai.getMaxQuestionLength() || historyMinutes == null
                 || historyMinutes < 0 || historyMinutes > ai.getMaxHistoryMinutes()
                 || containsSensitiveOrActionRequest(question)) {

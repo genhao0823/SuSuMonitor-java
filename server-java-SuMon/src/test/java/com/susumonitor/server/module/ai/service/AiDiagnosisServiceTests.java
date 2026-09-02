@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,7 @@ import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.ai.entity.AiDiagnosticRunEntity;
+import com.susumonitor.server.module.ai.limit.AiDiagnosisRateLimiter;
 import com.susumonitor.server.module.ai.mapper.AiDiagnosticRunMapper;
 import com.susumonitor.server.module.ai.model.AiDiagnosisContext;
 import com.susumonitor.server.module.ai.provider.AiProvider;
@@ -64,6 +66,7 @@ class AiDiagnosisServiceTests {
     @Mock private MetricsService metricsService;
     @Mock private AlertRecordService alertRecordService;
     @Mock private AiProvider aiProvider;
+    @Mock private AiDiagnosisRateLimiter rateLimiter;
     @Mock private AiDiagnosticRunMapper auditMapper;
 
     private AppProperties appProperties;
@@ -83,7 +86,7 @@ class AiDiagnosisServiceTests {
         ai.setMaxQuestionLength(80);
         objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         service = new AiDiagnosisService(serverService, metricsService, alertRecordService, aiProvider,
-                auditMapper, appProperties, objectMapper, CLOCK);
+                rateLimiter, auditMapper, appProperties, objectMapper, CLOCK);
     }
 
     /** 成功诊断只向 provider 提供白名单字段，并写入完成审计而不保存原始问题。 */
@@ -160,6 +163,53 @@ class AiDiagnosisServiceTests {
         verify(auditMapper, never()).insertRun(any());
     }
 
+    /** 管理员窗口限流命中时直接拒绝，不查询监控数据、不调用 provider、不建审计。 */
+    @Test
+    void rateLimiterRejectionShouldShortCircuit() {
+        when(serverService.existsActive(SERVER_ID)).thenReturn(true);
+        doThrow(new BusinessException(ErrorCode.AI_RATE_LIMIT_REACHED)).when(rateLimiter).checkAllowed(ACTOR_ID);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 0));
+
+        assertEquals(ErrorCode.AI_RATE_LIMIT_REACHED, exception.getErrorCode());
+        verify(metricsService, never()).latest(any());
+        verify(aiProvider, never()).diagnose(any(), any());
+        verify(auditMapper, never()).insertRun(any());
+    }
+
+    /** 当日 token 预算耗尽时拒绝新诊断，不查询监控数据、不调用 provider、不建审计。 */
+    @Test
+    void dailyBudgetExhaustedShouldRejectBeforeProvider() {
+        // 预算检查位于服务器状态查询之前，只 stub 存在性校验避免未消费的 stub。
+        when(serverService.existsActive(SERVER_ID)).thenReturn(true);
+        appProperties.getAi().setDailyTokenBudget(100);
+        when(auditMapper.selectTotalTokensBetween(any(), any())).thenReturn(100L);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 0));
+
+        assertEquals(ErrorCode.AI_RATE_LIMIT_REACHED, exception.getErrorCode());
+        verify(metricsService, never()).latest(any());
+        verify(aiProvider, never()).diagnose(any(), any());
+        verify(auditMapper, never()).insertRun(any());
+    }
+
+    /** 预算未配置（0=不限）时跳过聚合查询；正常路径确认限流器被调用。 */
+    @Test
+    void unlimitedBudgetShouldSkipAggregateQuery() {
+        allowActiveServer();
+        when(metricsService.latest(SERVER_ID)).thenReturn(metrics());
+        when(alertRecordService.listRecords(SERVER_ID, null, 1, 20)).thenReturn(emptyAlerts());
+        when(auditMapper.insertRun(any())).thenReturn(1);
+        when(aiProvider.diagnose(any(), any())).thenAnswer(invocation -> diagnosis());
+
+        service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 0);
+
+        verify(auditMapper, never()).selectTotalTokensBetween(any(), any());
+        verify(rateLimiter).checkAllowed(ACTOR_ID);
+    }
+
     /** provider 超时时仍向管理员返回确定性监控摘要，且不把原始 provider 错误透传。 */
     @Test
     void providerTimeoutShouldReturnDeterministicFallbackAndFailAudit() {
@@ -207,7 +257,7 @@ class AiDiagnosisServiceTests {
         when(auditMapper.insertRun(any())).thenReturn(1);
         appProperties.getAi().setMaxConcurrentRequests(1);
         service = new AiDiagnosisService(serverService, metricsService, alertRecordService, aiProvider,
-                auditMapper, appProperties, objectMapper, CLOCK);
+                rateLimiter, auditMapper, appProperties, objectMapper, CLOCK);
 
         CountDownLatch enteredProvider = new CountDownLatch(1);
         CountDownLatch releaseProvider = new CountDownLatch(1);

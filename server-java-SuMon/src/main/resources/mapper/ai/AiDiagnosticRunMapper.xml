@@ -30,4 +30,12 @@
         ORDER BY id
         LIMIT #{batchSize}
     </delete>
+    <!-- 按天预算聚合：仅统计 completed 调用，命中 idx_ai_diagnostic_runs_created_at 范围扫描。 -->
+    <select id="selectTotalTokensBetween" resultType="java.lang.Long">
+        SELECT COALESCE(SUM(total_tokens), 0)
+        FROM ai_diagnostic_runs
+        WHERE status = 'completed'
+          AND created_at &gt;= #{startTime}
+          AND created_at &lt; #{endTime}
+    </select>
 </mapper>

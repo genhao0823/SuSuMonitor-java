@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.susumonitor.server.module.ai.entity.AiDiagnosticRunEntity;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,7 @@ class AiDiagnosticRunMySqlValidationIT {
     private JdbcTemplate jdbcTemplate;
 
     private Long insertedRunId;
+    private final List<Long> insertedRunIds = new ArrayList<>();
 
     /** 验证 V28 已执行、表存在、时间列和清理索引就绪。 */
     @Test
@@ -171,11 +174,52 @@ class AiDiagnosticRunMySqlValidationIT {
                 first.getId(), second.getId()));
     }
 
+    /** 预算聚合：只累计窗口内 completed 调用的 total_tokens（token 由 completeRun 落库），failed 与窗外行不计入。 */
+    @Test
+    void totalTokensAggregateShouldSumCompletedWithinWindow() {
+        LocalDateTime start = LocalDateTime.of(2026, 9, 2, 0, 0, 0);
+        LocalDateTime end = start.plusDays(1);
+        // 窗口内 completed：insert → completeRun 写入 tokens（与生产写入路径一致）。
+        AiDiagnosticRunEntity inWindow = newRun("running", start.plusHours(1));
+        insertAndTrack(inWindow);
+        inWindow.setStatus("completed");
+        inWindow.setTotalTokens(15);
+        inWindow.setCompletedAt(start.plusHours(1));
+        aiDiagnosticRunMapper.completeRun(inWindow);
+        // 窗口内 failed：failRun 不写 tokens。
+        AiDiagnosticRunEntity failedInWindow = newRun("running", start.plusHours(2));
+        insertAndTrack(failedInWindow);
+        failedInWindow.setStatus("failed");
+        failedInWindow.setErrorCode(50401);
+        failedInWindow.setCompletedAt(start.plusHours(2));
+        aiDiagnosticRunMapper.failRun(failedInWindow);
+        // 窗口外 completed：不计入本窗口聚合。
+        AiDiagnosticRunEntity completedOutside = newRun("running", end.plusHours(1));
+        insertAndTrack(completedOutside);
+        completedOutside.setStatus("completed");
+        completedOutside.setTotalTokens(99);
+        completedOutside.setCompletedAt(end.plusHours(1));
+        aiDiagnosticRunMapper.completeRun(completedOutside);
+
+        Long sum = aiDiagnosticRunMapper.selectTotalTokensBetween(start, end);
+
+        assertEquals(15L, sum);
+    }
+
+    /** 插入并登记待清理主键，避免测试数据残留。 */
+    private void insertAndTrack(AiDiagnosticRunEntity run) {
+        aiDiagnosticRunMapper.insertRun(run);
+        insertedRunIds.add(run.getId());
+    }
+
     /** 清理由测试产生的记录，避免影响真实 AI 审计数据。 */
     @AfterEach
     void tearDown() {
         if (insertedRunId != null) {
             jdbcTemplate.update("DELETE FROM ai_diagnostic_runs WHERE id = ?", insertedRunId);
+        }
+        for (Long id : insertedRunIds) {
+            jdbcTemplate.update("DELETE FROM ai_diagnostic_runs WHERE id = ?", id);
         }
     }
 

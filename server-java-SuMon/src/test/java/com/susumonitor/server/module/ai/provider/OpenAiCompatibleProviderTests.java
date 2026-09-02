@@ -55,6 +55,9 @@ class OpenAiCompatibleProviderTests {
         ai.setBaseUrl(BASE_URL);
         ai.setApiKey(API_KEY);
         ai.setModel(MODEL);
+        // 默认关闭重试，使既有错误映射用例保持单次请求；重试用例自行打开并使用毫秒级退避。
+        ai.setRetryMaxAttempts(0);
+        ai.setRetryBackoffBaseMs(1);
         objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         restClientBuilder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(restClientBuilder).build();
@@ -175,7 +178,7 @@ class OpenAiCompatibleProviderTests {
     @Test
     void shouldRejectResponseWithUnknownTopLevelFields() {
         mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
-                .andRespond(withSuccess(openAiSuccessBody("\"unexpected_field\": true"), MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess(openAiSuccessBody(",\"unexpected_field\": true"), MediaType.APPLICATION_JSON));
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> provider.diagnose("why high?", context()));
@@ -183,11 +186,140 @@ class OpenAiCompatibleProviderTests {
         assertEquals(ErrorCode.AI_RESPONSE_INVALID, exception.getErrorCode());
     }
 
+    /** 429 限流按有界重试后成功，重试发生在同一调用内。 */
+    @Test
+    void shouldRetryOnRateLimitThenSucceed() {
+        appProperties.getAi().setRetryMaxAttempts(2);
+        appProperties.getAi().setRetryBackoffBaseMs(1);
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withSuccess(openAiSuccessBody(), MediaType.APPLICATION_JSON));
+
+        AiDiagnosisVo result = provider.diagnose("why high?", context());
+
+        assertTrue(result.isModelUsed());
+        assertEquals(10, result.getUsage().getInputTokens());
+        mockServer.verify();
+    }
+
+    /** 重试次数耗尽后仍映射为 42906，不吞掉限流语义。 */
+    @Test
+    void shouldExhaustRetriesOnRateLimit() {
+        appProperties.getAi().setRetryMaxAttempts(1);
+        appProperties.getAi().setRetryBackoffBaseMs(1);
+        mockServer.expect(org.springframework.test.web.client.ExpectedCount.twice(),
+                        requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> provider.diagnose("why high?", context()));
+
+        assertEquals(ErrorCode.AI_RATE_LIMIT_REACHED, exception.getErrorCode());
+        mockServer.verify();
+    }
+
+    /** 5xx 不属于可重试错误：仅一次请求，立即映射为不可用。 */
+    @Test
+    void shouldNotRetryOnServerError() {
+        appProperties.getAi().setRetryMaxAttempts(2);
+        appProperties.getAi().setRetryBackoffBaseMs(1);
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withServerError());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> provider.diagnose("why high?", context()));
+
+        assertEquals(ErrorCode.AI_PROVIDER_UNAVAILABLE, exception.getErrorCode());
+        mockServer.verify();
+    }
+
+    /** 显式开启 allow-insecure-http 后允许 HTTP endpoint（联调/内网用途）。 */
+    @Test
+    void shouldAllowInsecureHttpWhenExplicitlyEnabled() {
+        appProperties.getAi().setAllowInsecureHttp(true);
+        appProperties.getAi().setBaseUrl("http://model.example.test/v1");
+        provider = new OpenAiCompatibleProvider(appProperties, restClientBuilder, objectMapper, true);
+        mockServer.expect(requestTo("http://model.example.test/v1/chat/completions"))
+                .andExpect(header("Authorization", "Bearer " + API_KEY))
+                .andRespond(withSuccess(openAiSuccessBody(), MediaType.APPLICATION_JSON));
+
+        AiDiagnosisVo result = provider.diagnose("why high?", context());
+
+        assertTrue(result.isModelUsed());
+        mockServer.verify();
+    }
+
+    /** 明文放宽只覆盖 http://，其他 scheme 即使开启开关也始终拒绝。 */
+    @Test
+    void shouldRejectOtherSchemesEvenWhenInsecureAllowed() {
+        appProperties.getAi().setAllowInsecureHttp(true);
+        appProperties.getAi().setBaseUrl("ftp://model.example.test");
+        provider = new OpenAiCompatibleProvider(appProperties, restClientBuilder, objectMapper, true);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> provider.diagnose("why high?", context()));
+
+        assertEquals(ErrorCode.AI_DISABLED_OR_REDACTION_FAILED, exception.getErrorCode());
+    }
+
+    /** 模型输出被 markdown 围栏包裹时仍可解析（真实网关实测行为），且不放宽字段校验。 */
+    @Test
+    void shouldParseFencedJsonContent() {
+        String content = "```json\n" + openAiContent() + "\n```";
+        // JSON 字符串中换行必须转义，与真实网关的序列化行为一致。
+        String escapedContent = content.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withSuccess("{\"choices\":[{\"message\":{\"content\":\"" + escapedContent
+                        + "\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}}",
+                        MediaType.APPLICATION_JSON));
+
+        AiDiagnosisVo result = provider.diagnose("why high?", context());
+
+        assertTrue(result.isModelUsed());
+        assertEquals("warning", result.getSeverity());
+        mockServer.verify();
+    }
+
+    /** severity 不在允许枚举内时按响应无效处理（实测模型曾返回 "high"）。 */
+    @Test
+    void shouldRejectSeverityOutsideAllowedEnum() {
+        String content = openAiContent().replace("\"severity\":\"warning\"", "\"severity\":\"high\"");
+        String escapedContent = content.replace("\"", "\\\"");
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withSuccess("{\"choices\":[{\"message\":{\"content\":\"" + escapedContent + "\"}}]}",
+                        MediaType.APPLICATION_JSON));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> provider.diagnose("why high?", context()));
+
+        assertEquals(ErrorCode.AI_RESPONSE_INVALID, exception.getErrorCode());
+    }
+
+    /** 反伪造：模型自造的 evidence（含不可解析时间）被整体替换为 Java 白名单上下文证据。 */
+    @Test
+    void shouldReplaceModelEvidenceWithContextEvidence() {
+        String content = openAiContent().replace("\"evidence\":[]",
+                "\"evidence\":[{\"metric\":\"fabricated\",\"value\":\"x\","
+                        + "\"observed_at\":\"current\",\"source\":\"monitoring_summary\"}]");
+        String escapedContent = content.replace("\"", "\\\"");
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withSuccess("{\"choices\":[{\"message\":{\"content\":\"" + escapedContent + "\"}}]}",
+                        MediaType.APPLICATION_JSON));
+
+        AiDiagnosisVo result = provider.diagnose("why high?", context());
+
+        assertEquals(1, result.getEvidence().size());
+        assertEquals("cpu_percent", result.getEvidence().get(0).getMetric());
+        assertEquals("2026-08-31T00:00:00Z", result.getEvidence().get(0).getObservedAt());
+        mockServer.verify();
+    }
+
     private AiDiagnosisContext context() {
         AiEvidenceVo evidence = new AiEvidenceVo();
         evidence.setMetric("cpu_percent");
         evidence.setValue(88.5);
-        evidence.setObservedAt(OffsetDateTime.of(2026, 8, 31, 0, 0, 0, 0, ZoneOffset.UTC));
+        evidence.setObservedAt("2026-08-31T00:00:00Z");
         evidence.setSource("monitoring_summary");
         return new AiDiagnosisContext(7L, "online", "online", 30, List.of(evidence), List.of());
     }
@@ -196,16 +328,23 @@ class OpenAiCompatibleProviderTests {
         return openAiSuccessBody("");
     }
 
-    /** 组装 OpenAI-compatible 200 响应，content 为固定结构化 JSON。 */
+    /** 组装 OpenAI-compatible 200 响应，content 为固定结构化 JSON；extraField 以逗号开头插入收尾前。 */
     private String openAiSuccessBody(String extraField) {
-        String content = "{\"summary\":\"CPU elevated\",\"severity\":\"warning\","
-                + "\"findings\":[{\"title\":\"High CPU\",\"description\":\"CPU above threshold\","
-                + "\"confidence\":\"high\"}],"
-                + "\"evidence\":[],\"recommendations\":[\"inspect metrics\"],"
-                + "\"limitations\":[\"advisory only\"]"
-                + extraField + "}";
+        String content = openAiContent();
+        if (!extraField.isEmpty()) {
+            content = content.substring(0, content.length() - 1) + extraField + "}";
+        }
         String escapedContent = content.replace("\"", "\\\"");
         return "{\"choices\":[{\"message\":{\"content\":\"" + escapedContent + "\"}}],"
                 + "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}";
+    }
+
+    /** 合法结构化诊断内容 JSON（围栏用例会额外包裹此内容）。 */
+    private String openAiContent() {
+        return "{\"summary\":\"CPU elevated\",\"severity\":\"warning\","
+                + "\"findings\":[{\"title\":\"High CPU\",\"description\":\"CPU above threshold\","
+                + "\"confidence\":\"high\"}],"
+                + "\"evidence\":[],\"recommendations\":[\"inspect metrics\"],"
+                + "\"limitations\":[\"advisory only\"]}";
     }
 }

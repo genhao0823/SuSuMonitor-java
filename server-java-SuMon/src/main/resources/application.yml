@@ -111,6 +111,15 @@ susumonitor:
     audit-cleanup-enabled: ${AI_AUDIT_CLEANUP_ENABLED:true}
     audit-cleanup-batch-size: ${AI_AUDIT_CLEANUP_BATCH_SIZE:1000}
     audit-cleanup-max-batches-per-run: ${AI_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    # 按管理员固定窗口限流与按天 token 预算（0=不限预算）。
+    rate-limit-max-requests: ${AI_RATE_LIMIT_MAX_REQUESTS:10}
+    rate-limit-window-seconds: ${AI_RATE_LIMIT_WINDOW_SECONDS:3600}
+    daily-token-budget: ${AI_DAILY_TOKEN_BUDGET:0}
+    # provider 进程内有界重试：仅 429 与瞬时网络错误，指数短退避。
+    retry-max-attempts: ${AI_RETRY_MAX_ATTEMPTS:2}
+    retry-backoff-base-ms: ${AI_RETRY_BACKOFF_BASE_MS:500}
+    # 显式放宽 HTTP 明文 provider 端点（默认 false，仅内网/联调；明文会暴露 API key）。
+    allow-insecure-http: ${AI_ALLOW_INSECURE_HTTP:false}
   ssh-test-history:
     retention-days: ${SSH_TEST_HISTORY_RETENTION_DAYS:90}
     cleanup-cron: ${SSH_TEST_HISTORY_CLEANUP_CRON:0 0 3 * * ?}

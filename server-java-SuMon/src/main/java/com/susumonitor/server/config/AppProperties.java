@@ -2244,6 +2244,48 @@ public class AppProperties {
         public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
         public boolean isAuditCleanupEnabled() { return auditCleanupEnabled; }
         public void setAuditCleanupEnabled(boolean value) { auditCleanupEnabled = value; }
+
+        // 按管理员固定窗口限流：窗口内每 actorId 最大诊断请求数，超限抛 42906。
+        @Min(value = 1, message = "AI rate limit max requests must be at least one")
+        @Max(value = 10000, message = "AI rate limit max requests must not exceed 10000")
+        private int rateLimitMaxRequests = 10;
+
+        // 按管理员固定窗口限流：窗口时长（秒）。
+        @Min(value = 5, message = "AI rate limit window must be at least 5 seconds")
+        @Max(value = 86400, message = "AI rate limit window must not exceed 86400 seconds")
+        private int rateLimitWindowSeconds = 3600;
+
+        // 按天（UTC）token 预算：当日 completed 调用的 total_tokens 总和达到上限后拒绝新请求；0 表示不限。
+        @Min(value = 0, message = "AI daily token budget must not be negative")
+        @Max(value = 100000000, message = "AI daily token budget must not exceed 100000000")
+        private int dailyTokenBudget = 0;
+
+        // provider 进程内有界重试次数（仅 429 与瞬时网络错误）；0 表示禁用重试。
+        @Min(value = 0, message = "AI retry max attempts must not be negative")
+        @Max(value = 5, message = "AI retry max attempts must not exceed 5")
+        private int retryMaxAttempts = 2;
+
+        // provider 重试指数退避基数（毫秒），实际间隔为 base * 2^attempt。
+        @Min(value = 0, message = "AI retry backoff base must not be negative")
+        @Max(value = 5000, message = "AI retry backoff base must not exceed 5000 ms")
+        private int retryBackoffBaseMs = 500;
+
+        // 显式放宽 HTTP 明文 provider 端点（默认 false）：仅在受控内网/联调环境开启；
+        // 开启后允许 http:// 但其他 scheme 始终拒绝。明文传输会暴露 API key。
+        private boolean allowInsecureHttp = false;
+
+        public int getRateLimitMaxRequests() { return rateLimitMaxRequests; }
+        public void setRateLimitMaxRequests(int value) { rateLimitMaxRequests = value; }
+        public int getRateLimitWindowSeconds() { return rateLimitWindowSeconds; }
+        public void setRateLimitWindowSeconds(int value) { rateLimitWindowSeconds = value; }
+        public int getDailyTokenBudget() { return dailyTokenBudget; }
+        public void setDailyTokenBudget(int value) { dailyTokenBudget = value; }
+        public int getRetryMaxAttempts() { return retryMaxAttempts; }
+        public void setRetryMaxAttempts(int value) { retryMaxAttempts = value; }
+        public int getRetryBackoffBaseMs() { return retryBackoffBaseMs; }
+        public void setRetryBackoffBaseMs(int value) { retryBackoffBaseMs = value; }
+        public boolean isAllowInsecureHttp() { return allowInsecureHttp; }
+        public void setAllowInsecureHttp(boolean value) { allowInsecureHttp = value; }
     }
 
     /**
