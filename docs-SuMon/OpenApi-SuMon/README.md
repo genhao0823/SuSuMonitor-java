@@ -19,9 +19,9 @@
 | `openapi-admin.json` | 管理员用户分页/搜索与单个、批量审核（ROLE_ADMIN） | 5 |
 | `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹与观察 / SSH 测试与历史 / Agent Token / Monitor Ticket / 指标最新值 / 指标历史 | 13 路径 / 16 端点操作 |
 | `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读 / 通知投递历史（ROLE_ADMIN + 已认证） | 5 路径 / 7 端点操作 |
-| `openapi-ai.json` | 大模型只读诊断 MVP（planned；admin Bearer；仅白名单脱敏监控摘要，未计入 Java 已实现端点） | 1 路径 / 1 端点操作 |
+| `openapi-ai.json` | 大模型只读诊断 MVP（已实现·代码级；admin Bearer；仅白名单脱敏监控摘要；运行期由 `susumonitor.ai.enabled` 门控，默认关闭） | 1 路径 / 1 端点操作 |
 
-合计 32 条文档路径 / 37 个端点操作，其中 31 条路径 / 36 个操作与当前 Java Controller 声明 1:1 对齐；AI 的 1 个操作是与 RC1 并行的 planned 契约例外，待 Java 主线实现后移除例外并重新对齐。
+合计 32 条文档路径 / 37 个端点操作，全部与当前 Java Controller 声明 1:1 对齐（2026-09-02 起 `openapi:check` 对 AI 端点同样执行严格双向校验，planned 例外已随实现合入移除）。代码级实现不等于生产验收：真实 provider 联调、隔离库 MySQL IT 执行与 RC1 门槛仍待完成。
 
 ## 端点索引
 
@@ -106,16 +106,16 @@
 | PUT | `/api/alerts/records/{id}/read` | 已认证 | 标记告警记录已读（unread → read） | 40002, 40100, 40300, 40400, 40900 |
 | GET | `/api/alerts/records/{id}/notifications` | 已认证 | 告警通知投递历史（V21） | 40002, 40100, 40400 |
 
-### AI 只读诊断（planned，与 RC1 并行）
+### AI 只读诊断（已实现·代码级，默认关闭）
 
-| 方法 | 路径 | 权限 | 说明 | 候选错误码 |
+| 方法 | 路径 | 权限 | 说明 | 错误码 |
 |---|---|---|---|---|
-| POST | `/api/ai/diagnoses` | ADMIN Bearer | 读取白名单、脱敏后的监控摘要并返回结构化建议；不读取/发送终端或 SSH 数据，不执行任何写操作；当前仅为 Java 实现前契约 | 40002, 40100, 40300, 40400, 42906, 50003, 50303, 50304, 50401 |
+| POST | `/api/ai/diagnoses` | ADMIN Bearer | 读取白名单、脱敏后的监控摘要并返回结构化建议；不读取/发送终端或 SSH 数据，不执行任何写操作；`susumonitor.ai.enabled=false`（默认）时 Controller 不加载，请求在安全链后得到 404 | 40002, 40100, 40300, 40400, 42906, 50000, 50303, 50304, 50401 |
 
-AI 错误码仍是计划候选：`50303/50304/50401/42906/50003` 的最终枚举、HTTP 映射和 message 必须由 Java 主线确认；其中 `50003` 当前已有 SSH authentication failed 语义，不得未经对齐直接复用。AI 文档检查通过不等于接口实现或生产验收通过。
+AI 错误码已由 Java 主线定稿（`ErrorCode.java`）：`42906` AI 并发限流、`50303` provider 不可用、`50304` AI 关闭/脱敏失败、`50401` provider 超时；`50305`（provider 响应无效）仅内部使用。`50003` 保持 SSH authentication failed 语义，AI 不复用。当前 MVP 行为：`50303/50304/50401/50305` 在服务层被转换为 HTTP 200 的确定性降级（`model_used=false`），原始错误码记录于 `ai_diagnostic_runs.error_code`，不透传客户端；`42906` 在并发令牌耗尽时直接返回。代码级测试与契约检查通过不等于接口生产验收通过。
 
 
-既有已实现契约的错误码以 `ErrorCode.java:9-35` 与对应 OpenAPI `ErrorResponse.code` 定义为准；AI 诊断错误码仍是上文所述的临时候选，尚未纳入 Java 错误码对齐结论：
+既有已实现契约的错误码以 `ErrorCode.java`（含 2026-08-31 新增 AI 段）与对应 OpenAPI `ErrorResponse.code` 定义为准：
 
 | code | message | 用途 |
 |---|---|---|
@@ -141,13 +141,18 @@ AI 错误码仍是计划候选：`50303/50304/50401/42906/50003` 的最终枚举
 | 42903 | terminal session limit reached | 终端会话数量上限 |
 | 42904 | terminal message limit reached | 终端控制消息限流 |
 | 42905 | login rate limit reached | 登录/注册防滥用限流（独立计数），响应 HTTP 429 并带 Retry-After |
+| 42906 | AI rate limit reached | AI 诊断并发上限（429，MVP 不带 Retry-After） |
 | 50000 | internal server error | 兜底 |
 | 50001 | database error | 数据库异常 |
 | 50002 | ssh connection failed | SSH 连接失败 |
 | 50003 | ssh authentication failed | SSH 凭据认证失败 |
 | 50301 | rabbitmq unavailable | RabbitMQ 启用时 Broker 未就绪 |
 | 50302 | redis unavailable | Redis 启用时 Redis 未就绪 |
+| 50303 | AI provider unavailable | AI provider 调用失败/被拒（MVP 内部转降级） |
+| 50304 | AI diagnosis unavailable | AI 关闭、配置无效或脱敏失败（关闭时端点为 404） |
+| 50305 | AI provider response invalid | provider 响应非法（仅内部，转降级） |
 | 50400 | ssh connection timeout | SSH 连接超时 |
+| 50401 | AI provider timeout | AI provider 连接/读取超时（MVP 内部转降级） |
 
 ## 字段命名约定
 

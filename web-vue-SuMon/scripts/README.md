@@ -23,7 +23,7 @@ npm run openapi:check
 7. 所有本地 JSON Pointer `$ref` 均可解析
 8. OpenAPI 与 Java Controller 的 HTTP 方法和路径双向一致
 
-AI 只读诊断 MVP 的 `POST /api/ai/diagnoses` 当前是与 RC1 并行的 planned 契约：脚本仍校验其 JSON 结构、operationId、responses 和本地 refs，但通过脚本内登记的唯一 planned 例外跳过 Java Controller 双向映射。Java 实现合入后必须移除该例外，并恢复严格 1:1 对齐。
+AI 只读诊断 MVP 的 `POST /api/ai/diagnoses` 已于 2026-08-31 在 Java 主线实现（commit 389bd9e，module/ai）。脚本现对其执行与其他端点相同的严格双向校验；此前的 planned 例外已随实现合入移除。注意 Controller 受 `susumonitor.ai.enabled` 门控（默认关闭，运行期为 404），脚本按源码静态声明对齐，不校验运行期开关。
 
 ### 设计原则
 

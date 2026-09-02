@@ -1,8 +1,8 @@
 # AI 数据流与威胁模型
 
-**版本**：AI 只读诊断 MVP v0.1  
-**日期**：2026-08-30  
-**状态**：设计中；与 RC1 并行，不构成生产验收证据
+**版本**：AI 只读诊断 MVP v0.2  
+**日期**：2026-08-30（2026-09-02 增补实现状态标注）  
+**状态**：代码级已实现（main @ 389bd9e），默认关闭；真实 provider 与生产验收证据缺失，不构成生产验收。与 RC1 并行。
 
 ## 一、范围与安全目标
 
@@ -160,3 +160,41 @@ AI MVP 永不直接使用 `terminal.open`、`terminal.input`、`terminal.resize`
 - 日志/审计秘密扫描结果，以及保留期清理任务的验证记录。
 - 端到端调用中无 WebSocket `terminal.*`、无 SSH 连接、无写事务的证据。
 - Java 主线确认的最终字段、HTTP 状态、错误码和配置项；本文当前错误码候选不等同于最终实现。
+
+> 上文"错误码候选"说明已过时：错误码已于 2026-08-31 定稿，见 `ErrorCode.java` 与 §十一。
+
+## 十一、实现状态标注（2026-09-02，按代码事实核对）
+
+本节把前文各控制项映射到当前代码与测试证据，区分"已实现/简化实现/未实现"。前文为目标定义，冲突时以本节为准。
+
+### 已实现且有测试证据
+
+| 控制项 | 实现 | 测试证据 |
+|---|---|---|
+| admin-only 与用户状态复查 | `SecurityConfig` 显式 `POST /api/ai/diagnoses hasRole ADMIN`；JWT 过滤器每请求回查审核状态 | `AiDiagnosisControllerTests` 8 例：401/403/200/参数错误/42906 |
+| 服务器授权与软删除拒绝 | Service 先 `existsActive` 再建上下文；40400 | `AiDiagnosisServiceTests.missingOrSoftDeletedServerShouldFailClosed` |
+| kill switch 默认关闭、零触达 | `susumonitor.ai.enabled=false`（默认）时 Controller/Service/Provider/Mapper 均 `@ConditionalOnProperty` 不装配，端点 404；enabled 检查位于 `diagnose()` 最前 | `AiDiagnosisServiceTests.disabledAiShouldFailClosedWithoutQueries`（验证不查库） |
+| 数据白名单 | `AiDiagnosisContext`：状态 + 指标证据 + 告警摘要（无 message/通知渠道/SSH 字段）；序列化断言不含 ssh/password/host | `AiDiagnosisServiceTests.successfulDiagnosis…` / `alertMessageAndChannelsShouldNotEnterContext` |
+| provider 固定目标与 TLS | HTTPS-only + 固定 endpoint + 服务端 key/model；非 https 或缺配置 → `50304` 不出站 | `OpenAiCompatibleProviderTests`（9 例含 429/5xx/4xx/非法 JSON/未知字段） |
+| 超时与响应体上限 | `SimpleClientHttpRequestFactory` connect/read 超时；响应 > `max-response-bytes` → `50305`→降级 | Provider 测试 + 配置边界 |
+| 并发上限 | 全局 `Semaphore(max-concurrent-requests)`，耗尽 → `42906` | `AiDiagnosisServiceTests.exhaustedConcurrency…` |
+| 审计与保留期 | V28 `ai_diagnostic_runs`：不存原始问题/prompt/密文/provider 原始响应；30 天默认保留 + 调度清理 | `AiDiagnosticRunMySqlValidationIT`（5 例，**未在本机执行**，需隔离库守卫） |
+| 降级可用性 | provider 超时/不可用/响应非法 → HTTP 200 确定性摘要 + `model_used=false`，错误码入审计 | `providerTimeoutShouldReturnDeterministicFallbackAndFailAudit` |
+| 终端/SSH/写操作隔离 | AI 模块不依赖 terminal/ssh 包；无写事务；`websocket-protocol.md` 已收口 terminal.* 仅 admin 且 AI 永不使用终端帧 | 代码结构事实 + 契约检查 |
+
+### 简化实现（与目标条款有差距，启用前应评估）
+
+- **注入/秘密扫描为关键词启发式**：输入拒绝 terminal/ssh/password/private key/token/execute command/run command/sudo/curl/http(s)://；输出建议拒绝 execute/sudo/URL/curl/wget 等。不是完整的秘密扫描或注入 fixture 套件，存在误杀（如问题合法提及"ssh 指标"）与漏检（编码/变形绕过）两类风险。
+- **限流仅全局并发**：无按管理员/服务器/IP 维度的速率限制；请求体与窗口上限靠 DTO 校验。
+- **无预算/成本执行**：`estimated_cost` 恒 0（provider 未回传），无预算耗尽拒绝、无成本告警；仅 token 计数入审计。
+- **无重试**：计划要求的"有界重试"未实现，失败直接降级（避免重试风暴，但瞬时故障不恢复）。
+- **审计未存响应 HTTP 状态单列**：可由 status + error_code 推导。
+
+### 未实现 / 未验证（启用前必须补齐）
+
+- 真实第三方 provider 联调：出站域名确认、条款/数据地域/训练留存确认（§五最后一条——未确认前应保持关闭）。
+- `AiDiagnosticRunMySqlValidationIT` 在隔离 MySQL 的实际执行（`RUN_MYSQL_VALIDATION_TESTS=true`）。
+- 独立 prompt injection / 重放 / 越权 fixture 安全测试套件。
+- 日志与审计链路的秘密扫描验证记录。
+- 成本观测与预算策略；按维度的精细化限流。
+- provider 条款与密钥轮换流程（当前仅环境变量注入，无轮换机制）。

@@ -2,13 +2,13 @@
   "openapi": "3.0.3",
   "info": {
     "title": "SuSuMonitor AI Read-only Diagnosis API",
-    "description": "Planned, admin-only read-only diagnosis contract. This document is a parallel MVP design artifact, not evidence that the Java endpoint is implemented or that RC1 production acceptance has passed. The service may send only allowlisted, validated, fail-closed redacted monitoring summaries to a configured provider. It never sends credentials, SSH data, terminal frames, raw terminal input/output, or write-operation instructions, and it never grants tools or execution access to a model.",
-    "version": "0.1.0"
+    "description": "Read-only diagnosis contract implemented at code level (main @ 389bd9e, Java module ai). The endpoint is gated by susumonitor.ai.enabled (default false): while disabled the Controller bean is not loaded and requests receive 404 after the security chain. When enabled, the service sends only allowlisted, validated, fail-closed monitoring summaries to a configured HTTPS provider. It never sends credentials, SSH data, terminal frames, raw terminal input/output, or write-operation instructions, and it never grants tools or execution access to a model. Provider failures (timeout/5xx/429/invalid response) currently return HTTP 200 with a deterministic fallback and model_used=false; the provider error code is recorded in ai_diagnostic_runs.error_code. Code-level tests pass; real-provider and production validation remain pending.",
+    "version": "0.2.0"
   },
   "servers": [
     {
       "url": "http://localhost:18080",
-      "description": "Local development server; planned endpoint"
+      "description": "Local development server; endpoint only exists when susumonitor.ai.enabled=true"
     }
   ],
   "tags": [
@@ -29,9 +29,9 @@
           "ai-diagnosis"
         ],
         "summary": "Generate a read-only AI diagnosis",
-        "description": "Planned MVP endpoint. Requires an active admin Bearer JWT. The service validates server access, reads only an allowlisted monitoring summary, applies fail-closed redaction, and calls a provider selected from a server-side whitelist. The request cannot select a provider URL, API key, tool, callback, or prompt. AI output is advisory only: it cannot open or consume terminal frames, use SSH, execute commands, or perform any write operation. This planned contract does not count as a Java Controller implementation or RC1 production acceptance.",
+        "description": "Admin-only read-only MVP endpoint implemented in Java module ai (controller AiDiagnosisController, conditional on susumonitor.ai.enabled=true). Requires an active admin Bearer JWT. The service validates server access, reads only an allowlisted monitoring summary, applies fail-closed checks, and calls a provider selected from a server-side fixed configuration. The request cannot select a provider URL, API key, tool, callback, or prompt. AI output is advisory only: it cannot open or consume terminal frames, use SSH, execute commands, or perform any write operation.",
         "operationId": "createAiDiagnosis",
-        "x-contract-status": "planned",
+        "x-contract-status": "implemented-code-level-pending-acceptance",
         "x-required-role": "admin",
         "parameters": [
           {
@@ -161,20 +161,20 @@
         "name": "X-Request-ID",
         "in": "header",
         "required": false,
-        "description": "Optional client correlation ID; the server returns or generates a request ID. Do not include credentials or prompt content.",
+        "description": "Documentation-only header. The server ignores any client-supplied X-Request-ID (RequestIdFilter) and always generates a fresh UUID, which is returned in the response and written to the AI audit row.",
         "schema": {
-          "type": "string",
-          "maxLength": 128
+          "type": "string"
         }
       },
       "XCorrelationId": {
         "name": "X-Correlation-ID",
         "in": "header",
         "required": false,
-        "description": "Optional trace correlation ID. Do not include credentials or prompt content.",
+        "description": "Optional client trace correlation ID. Only [A-Za-z0-9_-]{1,64} is accepted; invalid values are silently dropped. Do not include credentials or prompt content.",
         "schema": {
           "type": "string",
-          "maxLength": 128
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
         }
       }
     },
@@ -254,7 +254,7 @@
         }
       },
       "AiRateLimited": {
-        "description": "AI request, concurrency, or budget rate limit reached (candidate 42906).",
+        "description": "Global AI concurrency limit reached (42906). Surfaced when max-concurrent-requests permits are exhausted; no provider request is made and no audit row is created.",
         "headers": {
           "Retry-After": {
             "description": "Seconds before retrying, when available.",
@@ -278,22 +278,22 @@
         }
       },
       "AiInternalError": {
-        "description": "Unexpected internal AI orchestration failure (candidate 50003; Java may map this differently).",
+        "description": "Unexpected internal orchestration failure (50000 internal server error). Note: 50003 is reserved for SSH authentication failure and is not used by this endpoint.",
         "content": {
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ErrorResponse"
             },
             "example": {
-              "code": 50003,
-              "message": "AI diagnosis failed",
+              "code": 50000,
+              "message": "internal server error",
               "data": null
             }
           }
         }
       },
       "AiProviderUnavailable": {
-        "description": "Provider is unavailable, rejected by policy, or the provider response is unusable (candidate 50303).",
+        "description": "Provider is unavailable or rejected (50303). Current MVP behavior: converted to HTTP 200 deterministic fallback (model_used=false); 50303 is recorded in ai_diagnostic_runs.error_code. This response definition is retained for a future strict mode with fallback disabled.",
         "content": {
           "application/json": {
             "schema": {
@@ -308,7 +308,7 @@
         }
       },
       "AiDisabledOrRedactionFailed": {
-        "description": "AI kill switch is off, provider configuration is not allowed, or fail-closed redaction/policy validation failed (candidate 50304). No provider request is made.",
+        "description": "Provider configuration invalid or fail-closed policy validation failed (50304). When the kill switch is off (susumonitor.ai.enabled=false) the endpoint does not exist and returns 404 instead; 50304 only occurs while enabled with an invalid provider configuration. Current MVP behavior: converted to HTTP 200 deterministic fallback (model_used=false) and recorded in ai_diagnostic_runs.error_code.",
         "content": {
           "application/json": {
             "schema": {
@@ -323,7 +323,7 @@
         }
       },
       "AiProviderTimeout": {
-        "description": "Provider connection or response timeout (candidate 50401).",
+        "description": "Provider connection or response timeout (50401). Current MVP behavior: converted to HTTP 200 deterministic fallback (model_used=false) and recorded in ai_diagnostic_runs.error_code.",
         "content": {
           "application/json": {
             "schema": {
