@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -56,7 +57,18 @@ func main() {
 		os.Exit(1)
 	}
 	metricsReporter := reporter.NewReporter(cfg.ServerID, logger, client, metricsBuffer, newReporterOptions(cfg))
-	client.SetMessageHandler(terminalAgent.handle)
+	commandAgent := newCommandAgent(cfg, client, logger)
+	// 集中消息路由：terminal.* 与 command.* 各自独立子协议，未知类型仅记调试日志。
+	client.SetMessageHandler(func(ctx context.Context, message wsclient.AgentMessage) {
+		switch {
+		case strings.HasPrefix(message.Type, "terminal."):
+			terminalAgent.handle(ctx, message)
+		case strings.HasPrefix(message.Type, "command."):
+			commandAgent.handle(ctx, message)
+		default:
+			logger.Debug("unsupported agent message", "type", message.Type)
+		}
+	})
 	client.SetMetricsAckHandler(metricsReporter.HandleMetricsAck)
 	client.SetMetricsNackHandler(metricsReporter.HandleMetricsNack)
 	client.SetHeartbeatStatsProvider(func() wsclient.HeartbeatPayload {

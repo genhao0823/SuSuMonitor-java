@@ -72,6 +72,14 @@ type Config struct {
 	TerminalIdleTimeoutSeconds int
 	// TerminalMaxLifetimeSeconds 是单会话最大生命周期。
 	TerminalMaxLifetimeSeconds int
+	// CommandEnabled 控制是否接受远程命令执行协议消息，默认关闭。
+	CommandEnabled bool
+	// CommandMaxTimeoutSeconds 是单命令执行超时上限；服务端请求取 min(请求, 本值)。
+	CommandMaxTimeoutSeconds int
+	// CommandMaxOutputBytes 是 stdout/stderr 各自的截断上限。
+	CommandMaxOutputBytes int
+	// CommandRatePerMinute 是本机命令执行频次上限（固定窗口，默认 10/分钟）。
+	CommandRatePerMinute int
 }
 
 // Load 从环境变量加载配置并校验。
@@ -162,6 +170,18 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.TerminalMaxLifetimeSeconds, err = getenvIntDefault("SUSUMONITOR_TERMINAL_MAX_LIFETIME_SECONDS", 8*60*60); err != nil {
+		return nil, err
+	}
+	if cfg.CommandEnabled, err = getenvBoolDefault("SUSUMONITOR_COMMAND_ENABLED", false); err != nil {
+		return nil, err
+	}
+	if cfg.CommandMaxTimeoutSeconds, err = getenvIntDefault("SUSUMONITOR_COMMAND_MAX_TIMEOUT_SECONDS", 120); err != nil {
+		return nil, err
+	}
+	if cfg.CommandMaxOutputBytes, err = getenvIntDefault("SUSUMONITOR_COMMAND_MAX_OUTPUT_BYTES", 64*1024); err != nil {
+		return nil, err
+	}
+	if cfg.CommandRatePerMinute, err = getenvIntDefault("SUSUMONITOR_COMMAND_RATE_PER_MINUTE", 10); err != nil {
 		return nil, err
 	}
 
@@ -259,6 +279,15 @@ func (c *Config) validate() error {
 	}
 	if c.TerminalEnabled && (!filepath.IsAbs(c.TerminalShell) || filepath.Clean(c.TerminalShell) != c.TerminalShell) {
 		return fmt.Errorf("SUSUMONITOR_TERMINAL_SHELL must be a clean absolute path")
+	}
+	if c.CommandMaxTimeoutSeconds < 1 || c.CommandMaxTimeoutSeconds > 600 {
+		return fmt.Errorf("command max timeout must be between 1 and 600 seconds")
+	}
+	if c.CommandMaxOutputBytes < 1024 || c.CommandMaxOutputBytes > 1024*1024 {
+		return fmt.Errorf("command max output bytes must be between 1024 and 1048576")
+	}
+	if c.CommandRatePerMinute < 1 || c.CommandRatePerMinute > 600 {
+		return fmt.Errorf("command rate per minute must be between 1 and 600")
 	}
 	return nil
 }

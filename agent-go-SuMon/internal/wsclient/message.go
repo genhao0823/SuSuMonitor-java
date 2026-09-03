@@ -176,6 +176,35 @@ type TerminalErrorPayload struct {
 	Message   string `json:"message"`
 }
 
+// CommandExecutePayload 是服务端下发的 command.execute 载荷（command-protocol-v1.md）。
+//
+// template 必须是 Agent 内建白名单模板 ID；params 为具名参数字典；
+// Agent 取 min(timeout_seconds, 本机上限) 作为执行超时。
+type CommandExecutePayload struct {
+	ServerID       int64             `json:"server_id"`
+	ExecutionID    string            `json:"execution_id"`
+	Template       string            `json:"template"`
+	Params         map[string]string `json:"params,omitempty"`
+	TimeoutSeconds int               `json:"timeout_seconds"`
+}
+
+// CommandResultPayload 是 Agent 回传的 command.result 载荷。
+//
+// stdout/stderr 已经过脱敏与截断（truncated=true 表示触发上限）；
+// error 为稳定原因枚举：template_unknown / param_invalid / rate_limited /
+// timeout / execution_error / unsupported_platform。
+type CommandResultPayload struct {
+	ServerID    int64  `json:"server_id"`
+	ExecutionID string `json:"execution_id"`
+	Success     bool   `json:"success"`
+	ExitCode    int    `json:"exit_code"`
+	Stdout      string `json:"stdout"`
+	Stderr      string `json:"stderr"`
+	Truncated   bool   `json:"truncated"`
+	DurationMs  int64  `json:"duration_ms"`
+	Error       string `json:"error,omitempty"`
+}
+
 // newMessage 构造通用 WebSocket 消息，自动生成 message_id 和 timestamp。
 //
 // timestamp 使用 UTC ISO-8601（RFC3339Nano），与后端 OffsetDateTime.toString() 兼容。
