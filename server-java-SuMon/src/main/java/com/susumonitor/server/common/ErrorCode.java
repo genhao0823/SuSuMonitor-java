@@ -30,6 +30,7 @@ public enum ErrorCode {
     TERMINAL_MESSAGE_LIMIT_REACHED(42904, "terminal message limit reached", HttpStatus.TOO_MANY_REQUESTS),
     LOGIN_RATE_LIMIT_REACHED(42905, "login rate limit reached", HttpStatus.TOO_MANY_REQUESTS),
     AI_RATE_LIMIT_REACHED(42906, "AI rate limit reached", HttpStatus.TOO_MANY_REQUESTS),
+    COMMAND_RATE_LIMIT_REACHED(42907, "command rate limit reached", HttpStatus.TOO_MANY_REQUESTS),
     INTERNAL_SERVER_ERROR(50000, "internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
     DATABASE_ERROR(50001, "database error", HttpStatus.INTERNAL_SERVER_ERROR),
     SSH_CONNECTION_FAILED(50002, "ssh connection failed", HttpStatus.BAD_GATEWAY),
@@ -40,7 +41,12 @@ public enum ErrorCode {
     AI_PROVIDER_UNAVAILABLE(50303, "AI provider unavailable", HttpStatus.BAD_GATEWAY),
     AI_DISABLED_OR_REDACTION_FAILED(50304, "AI diagnosis unavailable", HttpStatus.SERVICE_UNAVAILABLE),
     AI_RESPONSE_INVALID(50305, "AI provider response invalid", HttpStatus.BAD_GATEWAY),
-    AI_PROVIDER_TIMEOUT(50401, "AI provider timeout", HttpStatus.GATEWAY_TIMEOUT);
+    AI_PROVIDER_TIMEOUT(50401, "AI provider timeout", HttpStatus.GATEWAY_TIMEOUT),
+    COMMAND_PARAM_INVALID(40004, "command param invalid", HttpStatus.BAD_REQUEST),
+    COMMAND_RUN_NOT_FOUND(40404, "command run not found", HttpStatus.NOT_FOUND),
+    COMMAND_RUN_STATE_CONFLICT(40905, "command run state conflict", HttpStatus.CONFLICT),
+    COMMAND_AGENT_OFFLINE(40906, "command agent offline", HttpStatus.CONFLICT),
+    COMMAND_EXECUTION_TIMEOUT(50402, "command execution timeout", HttpStatus.GATEWAY_TIMEOUT);
 
     private final int code;
 

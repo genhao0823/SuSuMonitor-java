@@ -1,0 +1,31 @@
+-- AI 命令域 M1 审批制审计表（command-protocol-v1.md）：一条待审批/已执行命令一行。
+-- 不复用 V4 孤儿 commands 表（语义过时）；输出仅保存脱敏截断后的 result_json。
+CREATE TABLE ai_command_runs (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    execution_id VARCHAR(36) NOT NULL,
+    request_id VARCHAR(36) NULL,
+    proposer_id BIGINT NOT NULL,
+    approver_id BIGINT NULL,
+    server_id BIGINT NOT NULL,
+    template_id VARCHAR(64) NOT NULL,
+    params_json TEXT NOT NULL,
+    params_hash CHAR(64) NOT NULL,
+    rendered_command VARCHAR(1024) NOT NULL,
+    status VARCHAR(24) NOT NULL,
+    source VARCHAR(8) NOT NULL,
+    proposal_json TEXT NULL,
+    result_json MEDIUMTEXT NULL,
+    exit_code INT NULL,
+    truncated TINYINT(1) NULL,
+    duration_ms BIGINT NULL,
+    error_code INT NULL,
+    expires_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    completed_at DATETIME NULL,
+    UNIQUE KEY uk_ai_command_runs_execution_id (execution_id),
+    INDEX idx_ai_command_runs_created_at (created_at),
+    INDEX idx_ai_command_runs_status_expires (status, expires_at),
+    INDEX idx_ai_command_runs_proposer_created (proposer_id, created_at),
+    INDEX idx_ai_command_runs_server_created (server_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI 命令域 M1 审批制审计记录';

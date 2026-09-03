@@ -2286,6 +2286,101 @@ public class AppProperties {
         public void setRetryBackoffBaseMs(int value) { retryBackoffBaseMs = value; }
         public boolean isAllowInsecureHttp() { return allowInsecureHttp; }
         public void setAllowInsecureHttp(boolean value) { allowInsecureHttp = value; }
+
+        // 命令域 M1（审批制）子配置：独立于只读诊断的 kill switch 与治理参数。
+        @Valid
+        private final Command command = new Command();
+
+        /** 获取命令域子配置。 */
+        public Command getCommand() {
+            return command;
+        }
+
+        /**
+         * 命令域 M1 配置：enabled 独立于只读诊断开关；审批过期与执行超时驱动状态机扫描。
+         */
+        public static class Command {
+
+            // 命令域总开关（默认关闭）：关闭时命令端点/WS 下发全部不装配或拒绝。
+            private boolean enabled = false;
+
+            // 待审批运行过期时间（分钟），过期后审批被拒绝并可被扫描置 expired。
+            @Min(value = 1, message = "Command approval expire minutes must be at least one")
+            @Max(value = 1440, message = "Command approval expire minutes must not exceed 1440")
+            private int approvalExpireMinutes = 15;
+
+            // 命令执行超时（秒）：超过该值仍未收到 command.result 则标记 timeout。
+            @Min(value = 5, message = "Command execution timeout must be at least 5 seconds")
+            @Max(value = 300, message = "Command execution timeout must not exceed 300 seconds")
+            private int executionTimeoutSeconds = 60;
+
+            // 单条命令结果输出的最大字节（截断后落库）。
+            @Min(value = 1024, message = "Command result max bytes must be at least 1024")
+            @Max(value = 1024 * 1024, message = "Command result max bytes must not exceed 1048576")
+            private int resultMaxBytes = 64 * 1024;
+
+            // 按管理员固定窗口限流：窗口内最大建议/创建请求数。
+            @Min(value = 1, message = "Command rate limit max requests must be at least one")
+            @Max(value = 10000, message = "Command rate limit max requests must not exceed 10000")
+            private int rateLimitMaxRequests = 10;
+
+            // 按管理员固定窗口限流：窗口秒数。
+            @Min(value = 5, message = "Command rate limit window must be at least 5 seconds")
+            @Max(value = 86400, message = "Command rate limit window must not exceed 86400 seconds")
+            private int rateLimitWindowSeconds = 3600;
+
+            // 审计记录保留天数。
+            @Min(value = 1, message = "Command audit retention days must be at least one")
+            @Max(value = 3650, message = "Command audit retention days must not exceed 3650")
+            private int auditRetentionDays = 30;
+
+            // 审计清理 cron。
+            @NotBlank(message = "Command audit cleanup cron must not be blank")
+            private String auditCleanupCron = "0 45 3 * * ?";
+
+            // 是否启用审计保留期清理。
+            private boolean auditCleanupEnabled = true;
+
+            // 审计清理单批上限。
+            @Min(value = 1, message = "Command audit cleanup batch size must be at least one")
+            @Max(value = 10000, message = "Command audit cleanup batch size must not exceed 10000")
+            private int auditCleanupBatchSize = 1000;
+
+            // 单轮审计清理最多批次数。
+            @Min(value = 1, message = "Command audit cleanup max batches must be at least one")
+            @Max(value = 1000, message = "Command audit cleanup max batches must not exceed 1000")
+            private int auditCleanupMaxBatchesPerRun = 100;
+
+            // 过期/超时状态扫描间隔秒（调度 fixedDelay）。
+            @Min(value = 5, message = "Command sweep interval seconds must be at least 5")
+            @Max(value = 3600, message = "Command sweep interval seconds must not exceed 3600")
+            private int sweepIntervalSeconds = 30;
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean value) { enabled = value; }
+            public int getApprovalExpireMinutes() { return approvalExpireMinutes; }
+            public void setApprovalExpireMinutes(int value) { approvalExpireMinutes = value; }
+            public int getExecutionTimeoutSeconds() { return executionTimeoutSeconds; }
+            public void setExecutionTimeoutSeconds(int value) { executionTimeoutSeconds = value; }
+            public int getResultMaxBytes() { return resultMaxBytes; }
+            public void setResultMaxBytes(int value) { resultMaxBytes = value; }
+            public int getRateLimitMaxRequests() { return rateLimitMaxRequests; }
+            public void setRateLimitMaxRequests(int value) { rateLimitMaxRequests = value; }
+            public int getRateLimitWindowSeconds() { return rateLimitWindowSeconds; }
+            public void setRateLimitWindowSeconds(int value) { rateLimitWindowSeconds = value; }
+            public int getAuditRetentionDays() { return auditRetentionDays; }
+            public void setAuditRetentionDays(int value) { auditRetentionDays = value; }
+            public String getAuditCleanupCron() { return auditCleanupCron; }
+            public void setAuditCleanupCron(String value) { auditCleanupCron = value; }
+            public boolean isAuditCleanupEnabled() { return auditCleanupEnabled; }
+            public void setAuditCleanupEnabled(boolean value) { auditCleanupEnabled = value; }
+            public int getAuditCleanupBatchSize() { return auditCleanupBatchSize; }
+            public void setAuditCleanupBatchSize(int value) { auditCleanupBatchSize = value; }
+            public int getAuditCleanupMaxBatchesPerRun() { return auditCleanupMaxBatchesPerRun; }
+            public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
+            public int getSweepIntervalSeconds() { return sweepIntervalSeconds; }
+            public void setSweepIntervalSeconds(int value) { sweepIntervalSeconds = value; }
+        }
     }
 
     /**

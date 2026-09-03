@@ -120,6 +120,20 @@ susumonitor:
     retry-backoff-base-ms: ${AI_RETRY_BACKOFF_BASE_MS:500}
     # 显式放宽 HTTP 明文 provider 端点（默认 false，仅内网/联调；明文会暴露 API key）。
     allow-insecure-http: ${AI_ALLOW_INSECURE_HTTP:false}
+    # 命令域 M1（审批制）：独立 kill switch，默认关闭；模板白名单见 command-protocol-v1.md。
+    command:
+      enabled: ${AI_COMMAND_ENABLED:false}
+      approval-expire-minutes: ${AI_COMMAND_APPROVAL_EXPIRE_MINUTES:15}
+      execution-timeout-seconds: ${AI_COMMAND_EXECUTION_TIMEOUT_SECONDS:60}
+      result-max-bytes: ${AI_COMMAND_RESULT_MAX_BYTES:65536}
+      rate-limit-max-requests: ${AI_COMMAND_RATE_LIMIT_MAX_REQUESTS:10}
+      rate-limit-window-seconds: ${AI_COMMAND_RATE_LIMIT_WINDOW_SECONDS:3600}
+      audit-retention-days: ${AI_COMMAND_AUDIT_RETENTION_DAYS:30}
+      audit-cleanup-cron: ${AI_COMMAND_AUDIT_CLEANUP_CRON:0 45 3 * * ?}
+      audit-cleanup-enabled: ${AI_COMMAND_AUDIT_CLEANUP_ENABLED:true}
+      audit-cleanup-batch-size: ${AI_COMMAND_AUDIT_CLEANUP_BATCH_SIZE:1000}
+      audit-cleanup-max-batches-per-run: ${AI_COMMAND_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+      sweep-interval-seconds: ${AI_COMMAND_SWEEP_INTERVAL_SECONDS:30}
   ssh-test-history:
     retention-days: ${SSH_TEST_HISTORY_RETENTION_DAYS:90}
     cleanup-cron: ${SSH_TEST_HISTORY_CLEANUP_CRON:0 0 3 * * ?}

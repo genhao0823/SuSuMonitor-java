@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.command.mapper.CommandRunMapper">
+
+    <resultMap id="CommandRunResultMap" type="com.susumonitor.server.module.command.entity.CommandRunEntity">
+        <id column="id" property="id"/>
+        <result column="execution_id" property="executionId"/>
+        <result column="request_id" property="requestId"/>
+        <result column="proposer_id" property="proposerId"/>
+        <result column="approver_id" property="approverId"/>
+        <result column="server_id" property="serverId"/>
+        <result column="template_id" property="templateId"/>
+        <result column="params_json" property="paramsJson"/>
+        <result column="params_hash" property="paramsHash"/>
+        <result column="rendered_command" property="renderedCommand"/>
+        <result column="status" property="status"/>
+        <result column="source" property="source"/>
+        <result column="proposal_json" property="proposalJson"/>
+        <result column="result_json" property="resultJson"/>
+        <result column="exit_code" property="exitCode"/>
+        <result column="truncated" property="truncated"/>
+        <result column="duration_ms" property="durationMs"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="expires_at" property="expiresAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="completed_at" property="completedAt"/>
+    </resultMap>
+
+    <sql id="AllColumns">
+        id, execution_id, request_id, proposer_id, approver_id, server_id, template_id,
+        params_json, params_hash, rendered_command, status, source, proposal_json,
+        result_json, exit_code, truncated, duration_ms, error_code, expires_at,
+        created_at, updated_at, completed_at
+    </sql>
+
+    <insert id="insertRun" useGeneratedKeys="true" keyProperty="run.id" keyColumn="id">
+        INSERT INTO ai_command_runs
+        (execution_id, request_id, proposer_id, server_id, template_id, params_json,
+         params_hash, rendered_command, status, source, proposal_json, expires_at, created_at)
+        VALUES
+        (#{run.executionId}, #{run.requestId}, #{run.proposerId}, #{run.serverId}, #{run.templateId},
+         #{run.paramsJson}, #{run.paramsHash}, #{run.renderedCommand}, #{run.status}, #{run.source},
+         #{run.proposalJson}, #{run.expiresAt}, #{run.createdAt})
+    </insert>
+
+    <select id="selectRunById" resultMap="CommandRunResultMap">
+        SELECT <include refid="AllColumns"/>
+        FROM ai_command_runs
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectRunByExecutionId" resultMap="CommandRunResultMap">
+        SELECT <include refid="AllColumns"/>
+        FROM ai_command_runs
+        WHERE execution_id = #{executionId}
+    </select>
+
+    <select id="selectRuns" resultMap="CommandRunResultMap">
+        SELECT <include refid="AllColumns"/>
+        FROM ai_command_runs
+        WHERE 1 = 1
+        <if test="serverId != null">
+            AND server_id = #{serverId}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countRuns" resultType="java.lang.Long">
+        SELECT COUNT(id)
+        FROM ai_command_runs
+        WHERE 1 = 1
+        <if test="serverId != null">
+            AND server_id = #{serverId}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <update id="approveRun">
+        UPDATE ai_command_runs
+        SET status = 'approved', approver_id = #{approverId}
+        WHERE id = #{id}
+          AND status = 'pending_approval'
+          AND (expires_at IS NULL OR expires_at &gt; #{now})
+    </update>
+
+    <update id="rejectRun">
+        UPDATE ai_command_runs
+        SET status = 'rejected', approver_id = #{approverId}, completed_at = #{now}
+        WHERE id = #{id}
+          AND status = 'pending_approval'
+    </update>
+
+    <update id="markExecuting">
+        UPDATE ai_command_runs
+        SET status = 'executing'
+        WHERE id = #{id}
+          AND status = 'approved'
+    </update>
+
+    <update id="markFailed">
+        UPDATE ai_command_runs
+        SET status = 'failed', error_code = #{errorCode}, completed_at = #{now}
+        WHERE id = #{id}
+          AND status = 'pending_approval'
+    </update>
+
+    <update id="completeRun">
+        UPDATE ai_command_runs
+        SET status = #{finalStatus}, result_json = #{resultJson}, exit_code = #{exitCode},
+            truncated = #{truncated}, duration_ms = #{durationMs}, error_code = #{errorCode},
+            completed_at = #{now}
+        WHERE execution_id = #{executionId}
+          AND status IN ('approved', 'executing')
+    </update>
+
+    <select id="selectExpiredIds" resultType="java.lang.Long">
+        SELECT id
+        FROM ai_command_runs
+        WHERE status = 'pending_approval'
+          AND expires_at IS NOT NULL
+          AND expires_at &lt;= #{now}
+        ORDER BY id
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="selectTimeoutIds" resultType="java.lang.Long">
+        SELECT id
+        FROM ai_command_runs
+        WHERE status = 'executing'
+          AND updated_at &lt; #{threshold}
+        ORDER BY id
+        LIMIT #{batchSize}
+    </select>
+
+    <update id="updateStatusByIds">
+        UPDATE ai_command_runs
+        SET status = #{finalStatus}, error_code = #{errorCode}, completed_at = #{now}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <delete id="deleteExpiredBatch">
+        DELETE FROM ai_command_runs
+        WHERE created_at &lt; #{cutoffTime}
+        ORDER BY id
+        LIMIT #{batchSize}
+    </delete>
+</mapper>

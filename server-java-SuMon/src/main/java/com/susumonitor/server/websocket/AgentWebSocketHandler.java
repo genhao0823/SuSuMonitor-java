@@ -8,6 +8,7 @@ import com.susumonitor.server.module.server.entity.ServerEntity;
 import com.susumonitor.server.module.metrics.dto.MetricsReportPayload;
 import com.susumonitor.server.module.metrics.service.MetricsRejectedException;
 import com.susumonitor.server.module.metrics.service.MetricsService;
+import com.susumonitor.server.module.command.CommandResultHandler;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
@@ -48,6 +49,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
     private final TaskScheduler taskScheduler;
     private final TerminalAgentRelayService terminalRelayService;
     private final TerminalRelayLifecycleService terminalRelayLifecycleService;
+    private final CommandResultHandler commandResultHandler;
     private final Map<String, AgentWebSocketSession> pendingSessions = new ConcurrentHashMap<>();
 
     /** 注入生产运行所需 JSON、鉴权、心跳、连接和资源限制依赖。 */
@@ -62,7 +64,26 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             AgentConnectionLimiter connectionLimiter,
             AgentMessageRateLimiter messageRateLimiter,
             TaskScheduler taskScheduler, TerminalAgentRelayService terminalRelayService,
-            TerminalRelayLifecycleService terminalRelayLifecycleService) {
+            TerminalRelayLifecycleService terminalRelayLifecycleService,
+            org.springframework.beans.factory.ObjectProvider<CommandResultHandler> commandResultHandler) {
+        this(objectMapper, authenticationService, heartbeatService, connectionRegistry, metricsService, clock,
+                connectionLimiter, messageRateLimiter, taskScheduler, terminalRelayService,
+                terminalRelayLifecycleService, commandResultHandler.getIfAvailable());
+    }
+
+    /** 生产构造器：命令域结果处理器为可缺省依赖（命令开关关闭时不装配）。 */
+    public AgentWebSocketHandler(
+            ObjectMapper objectMapper,
+            AgentAuthenticationService authenticationService,
+            AgentHeartbeatService heartbeatService,
+            AgentConnectionRegistry connectionRegistry,
+            MetricsService metricsService,
+            Clock clock,
+            AgentConnectionLimiter connectionLimiter,
+            AgentMessageRateLimiter messageRateLimiter,
+            TaskScheduler taskScheduler, TerminalAgentRelayService terminalRelayService,
+            TerminalRelayLifecycleService terminalRelayLifecycleService,
+            CommandResultHandler commandResultHandler) {
         this.objectMapper = objectMapper;
         this.authenticationService = authenticationService;
         this.heartbeatService = heartbeatService;
@@ -74,6 +95,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         this.taskScheduler = taskScheduler;
         this.terminalRelayService = terminalRelayService;
         this.terminalRelayLifecycleService = terminalRelayLifecycleService;
+        this.commandResultHandler = commandResultHandler;
     }
 
     /** 保留单元测试构造入口；生产 Spring 注入使用包含资源限制器的唯一构造器。 */
@@ -81,7 +103,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             AgentHeartbeatService heartbeatService, AgentConnectionRegistry connectionRegistry,
             MetricsService metricsService, Clock clock) {
         this(objectMapper, authenticationService, heartbeatService, connectionRegistry, metricsService, clock,
-                null, null, null, null, null);
+                null, null, null, null, null, (CommandResultHandler) null);
     }
 
     /** 为现有限流测试保留的构造入口，终端响应中继由完整生产构造器注入。 */
@@ -90,7 +112,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             MetricsService metricsService, Clock clock, AgentConnectionLimiter connectionLimiter,
             AgentMessageRateLimiter messageRateLimiter, TaskScheduler taskScheduler) {
         this(objectMapper, authenticationService, heartbeatService, connectionRegistry, metricsService, clock,
-                connectionLimiter, messageRateLimiter, taskScheduler, null, null);
+                connectionLimiter, messageRateLimiter, taskScheduler, null, null, (CommandResultHandler) null);
     }
 
     /** 保存新连接，等待其发送首帧认证。 */
@@ -174,6 +196,25 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
                 }
                 terminalRelayService.relay(session, objectMapper.treeToValue(
                         objectMapper.valueToTree(agentMessage), TerminalMessage.class));
+            } else if ("command.result".equals(agentMessage.type()) && session.authenticated()) {
+                // 命令结果回填：归属校验后交给命令域状态机（execution_id 幂等）。
+                if (commandResultHandler == null) {
+                    sendError(session.socketSession(), agentMessage.messageId(),
+                            ErrorCode.INVALID_REQUEST_PARAMETER);
+                    return;
+                }
+                JsonNode commandPayload = agentMessage.payload();
+                if (commandPayload == null || !commandPayload.isObject()
+                        || commandPayload.path("server_id").asLong(-1) != session.serverId()) {
+                    sendError(session.socketSession(), agentMessage.messageId(),
+                            ErrorCode.INVALID_REQUEST_PARAMETER);
+                    return;
+                }
+                commandResultHandler.complete(commandPayload);
+            } else if ("command.execute".equals(agentMessage.type())) {
+                // Agent 永远不允许下发执行指令（方向颠倒的非法帧）。
+                sendError(session.socketSession(), agentMessage.messageId(),
+                        ErrorCode.INVALID_REQUEST_PARAMETER);
             } else {
                 sendError(session.socketSession(), agentMessage.messageId(), ErrorCode.INVALID_REQUEST_PARAMETER);
             }
