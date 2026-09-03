@@ -184,6 +184,14 @@ When the originating Monitor connection disconnects, Java removes its relay bind
 
 Terminal-specific error codes are `40003` invalid payload, `40302` access denied, `40403` session not found, `40903` session state conflict, `40904` Agent offline, `42903` session limit reached, and `42904` terminal message limit reached.
 
+## Command Messages
+
+命令域（command domain）使用独立的 `command.*` 帧族，复用 `/ws/agent` 既有连接与统一信封：Java→Agent 为 `command.execute`，Agent→Java 为 `command.result`，外层 `message_id` 原样继承。完整信封、payload 字段表、L1 模板白名单（单一来源）与安全语义以 `docs-SuMon/Protocol-SuMon/command-protocol-v1.md`（v1，2026-09-03 冻结）为准，本节仅声明通道边界。
+
+- 命令域为 admin-only：只有 admin 身份可发起并审批命令执行；普通 approved user 不可触达命令能力。
+- 既有边界不变：`terminal.*` 仍为 admin-only 交互终端帧，AI 永不使用任何 `terminal.*` 帧（见 Terminal Messages 节）；命令执行一律走 `command.*` 独立通道，禁止借 `terminal.*` 下发命令。
+- 命令域设独立 kill switch `AI_COMMAND_ENABLED`，默认 `false`；关闭时 Java 不组装、不下发任何 `command.execute`。Agent 离线时 Java 侧拒绝下发（不发帧、不排队）。
+
 ## Runtime Validation
 
 （2026-08-16 注：本节为 2026-07-21 历史快照。）The following paths were validated against the isolated MySQL database `susumonitor_agent_ws_validation_20260721` and an application instance on port 18081:
@@ -213,3 +221,5 @@ The first version does not provide cross-JVM connection state, Ticket sharing, s
 6. ~~**快照时间校验不足**~~ **已修复**：Go metricbuffer 快照打开与入队时解析并校验 `timestamp`/`collected_at` 为 UTC ISO-8601（`isValidUTCTime`，拒绝无偏移或非 UTC 偏移时间，含 `TestIsValidUTCTime` / `TestOpenRejectsNonUTCTimes`）。
 
 **2026-08-29 安全审计新增授权边界**：终端通道（`terminal.*` 帧）与 REST 面 SSH 一致，仅 admin 可打开交互式会话；普通用户发送终端帧回 `40302` error 帧并保留连接（`MonitorWebSocketHandler`，含 `nonAdminTerminalOpenShouldReturnForbiddenWithoutRelaying`）。
+
+**2026-09-03 命令域契约冻结（实现待 Develop-log 证据）**：`command.execute`/`command.result` 帧契约已冻结于 `command-protocol-v1.md`（M1 审批制、L1 只读模板白名单、`AI_COMMAND_ENABLED` 默认 `false`）；截至该日 Java 侧尚未实现，落地后以 `docs-SuMon/Develop-log/` 对应日志为验证证据并在契约文档补记实现确认。AI 永不使用 `terminal.*` 帧的既有边界不变，命令执行只走 `command.*` 独立通道（详见上文 Command Messages 节与 `ai-command-domain-threat-model.md`）。

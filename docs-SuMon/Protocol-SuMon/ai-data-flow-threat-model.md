@@ -150,6 +150,8 @@ AI MVP 永不直接使用 `terminal.open`、`terminal.input`、`terminal.resize`
 
 任何未来需要执行动作的产品需求都必须另行设计独立权限、审批、审计和协议，不得通过修改 prompt、放宽白名单或复用本只读端点实现。
 
+2026-09-03 起命令执行能力经独立命令域（`command-protocol-v1.md` + `ai-command-domain-threat-model.md`）受控解禁，只读诊断端点仍保持只读；AI 仍永不接触 `terminal.*` PTY。
+
 ## 十、验收证据
 
 上线前至少提供：
