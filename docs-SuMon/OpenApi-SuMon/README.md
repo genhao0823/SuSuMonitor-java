@@ -20,8 +20,9 @@
 | `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹与观察 / SSH 测试与历史 / Agent Token / Monitor Ticket / 指标最新值 / 指标历史 | 13 路径 / 16 端点操作 |
 | `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读 / 通知投递历史（ROLE_ADMIN + 已认证） | 5 路径 / 7 端点操作 |
 | `openapi-ai.json` | 大模型只读诊断 MVP（已实现·代码级；admin Bearer；仅白名单脱敏监控摘要；运行期由 `susumonitor.ai.enabled` 门控，默认关闭） | 1 路径 / 1 端点操作 |
+| `openapi-command.json` | AI 命令域 M1 审批制（admin Bearer；白名单模板 + 审批状态机 + 审计；运行期由 `susumonitor.ai.command.enabled` 门控，默认关闭） | 5 路径 / 7 端点操作 |
 
-合计 32 条文档路径 / 37 个端点操作，全部与当前 Java Controller 声明 1:1 对齐（2026-09-02 起 `openapi:check` 对 AI 端点同样执行严格双向校验，planned 例外已随实现合入移除）。代码级实现不等于生产验收：真实 provider 联调、隔离库 MySQL IT 执行与 RC1 门槛仍待完成。
+合计 37 条文档路径 / 44 个端点操作，全部与当前 Java Controller 声明 1:1 对齐（`openapi:check` 严格双向校验）。代码级实现不等于生产验收：真实 Agent 联调、隔离库 MySQL IT 执行与 RC1 门槛仍待完成。
 
 ## 端点索引
 
