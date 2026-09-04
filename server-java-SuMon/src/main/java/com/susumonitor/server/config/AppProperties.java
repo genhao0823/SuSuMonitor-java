@@ -2296,6 +2296,15 @@ public class AppProperties {
             return command;
         }
 
+        // 告警智能解释（F1）子配置：事件驱动链路的独立 kill switch 与治理参数。
+        @Valid
+        private final Explanation explanation = new Explanation();
+
+        /** 获取告警解释子配置。 */
+        public Explanation getExplanation() {
+            return explanation;
+        }
+
         /**
          * 命令域 M1 配置：enabled 独立于只读诊断开关；审批过期与执行超时驱动状态机扫描。
          */
@@ -2380,6 +2389,58 @@ public class AppProperties {
             public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
             public int getSweepIntervalSeconds() { return sweepIntervalSeconds; }
             public void setSweepIntervalSeconds(int value) { sweepIntervalSeconds = value; }
+        }
+
+        /**
+         * 告警智能解释（F1）配置：enabled 独立控制解释事件的生产与消费装配；
+         * token 预算与保留期清理防止事件驱动成本与存储无限增长。
+         */
+        public static class Explanation {
+
+            // 告警解释总开关（默认关闭）：关闭时不登记解释请求事件、不装配消费/端点。
+            private boolean enabled = false;
+
+            // 按天（UTC）token 预算：当日已落库解释的 total_tokens 总和达到上限后跳过新解释；0 表示不限。
+            @Min(value = 0, message = "Explanation daily token budget must not be negative")
+            @Max(value = 100000000, message = "Explanation daily token budget must not exceed 100000000")
+            private int dailyTokenBudget = 0;
+
+            // 解释存储保留天数。
+            @Min(value = 1, message = "Explanation retention days must be at least one")
+            @Max(value = 3650, message = "Explanation retention days must not exceed 3650")
+            private int auditRetentionDays = 30;
+
+            // 清理 cron。
+            @NotBlank(message = "Explanation cleanup cron must not be blank")
+            private String auditCleanupCron = "0 0 4 * * ?";
+
+            // 是否启用保留期清理。
+            private boolean auditCleanupEnabled = true;
+
+            // 清理单批上限。
+            @Min(value = 1, message = "Explanation cleanup batch size must be at least one")
+            @Max(value = 10000, message = "Explanation cleanup batch size must not exceed 10000")
+            private int auditCleanupBatchSize = 1000;
+
+            // 单轮清理最多批次数。
+            @Min(value = 1, message = "Explanation cleanup max batches must be at least one")
+            @Max(value = 1000, message = "Explanation cleanup max batches must not exceed 1000")
+            private int auditCleanupMaxBatchesPerRun = 100;
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean value) { enabled = value; }
+            public int getDailyTokenBudget() { return dailyTokenBudget; }
+            public void setDailyTokenBudget(int value) { dailyTokenBudget = value; }
+            public int getAuditRetentionDays() { return auditRetentionDays; }
+            public void setAuditRetentionDays(int value) { auditRetentionDays = value; }
+            public String getAuditCleanupCron() { return auditCleanupCron; }
+            public void setAuditCleanupCron(String value) { auditCleanupCron = value; }
+            public boolean isAuditCleanupEnabled() { return auditCleanupEnabled; }
+            public void setAuditCleanupEnabled(boolean value) { auditCleanupEnabled = value; }
+            public int getAuditCleanupBatchSize() { return auditCleanupBatchSize; }
+            public void setAuditCleanupBatchSize(int value) { auditCleanupBatchSize = value; }
+            public int getAuditCleanupMaxBatchesPerRun() { return auditCleanupMaxBatchesPerRun; }
+            public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
         }
     }
 

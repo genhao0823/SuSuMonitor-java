@@ -134,6 +134,15 @@ susumonitor:
       audit-cleanup-batch-size: ${AI_COMMAND_AUDIT_CLEANUP_BATCH_SIZE:1000}
       audit-cleanup-max-batches-per-run: ${AI_COMMAND_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
       sweep-interval-seconds: ${AI_COMMAND_SWEEP_INTERVAL_SECONDS:30}
+    # 告警智能解释（F1）：事件驱动，独立 kill switch，默认关闭。
+    explanation:
+      enabled: ${AI_EXPLANATION_ENABLED:false}
+      daily-token-budget: ${AI_EXPLANATION_DAILY_TOKEN_BUDGET:0}
+      audit-retention-days: ${AI_EXPLANATION_AUDIT_RETENTION_DAYS:30}
+      audit-cleanup-cron: ${AI_EXPLANATION_AUDIT_CLEANUP_CRON:0 0 4 * * ?}
+      audit-cleanup-enabled: ${AI_EXPLANATION_AUDIT_CLEANUP_ENABLED:true}
+      audit-cleanup-batch-size: ${AI_EXPLANATION_AUDIT_CLEANUP_BATCH_SIZE:1000}
+      audit-cleanup-max-batches-per-run: ${AI_EXPLANATION_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
   ssh-test-history:
     retention-days: ${SSH_TEST_HISTORY_RETENTION_DAYS:90}
     cleanup-cron: ${SSH_TEST_HISTORY_CLEANUP_CRON:0 0 3 * * ?}
