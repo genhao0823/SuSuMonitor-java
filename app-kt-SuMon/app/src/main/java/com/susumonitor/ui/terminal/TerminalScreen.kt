@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,6 +68,20 @@ internal val SpecialKeys = listOf(
 )
 
 /**
+ * 将手指竖向位移转换为终端历史回退偏移：手指向下时查看更早内容，向上时回到底部。
+ */
+internal fun nextTerminalScrollOffset(
+    currentOffset: Int,
+    panY: Float,
+    lineHeightPx: Float,
+    maxOffset: Int,
+): Int {
+    if (lineHeightPx <= 0f) return currentOffset.coerceIn(0, maxOffset.coerceAtLeast(0))
+    val lineDelta = (panY / lineHeightPx).roundToInt()
+    return (currentOffset + lineDelta).coerceIn(0, maxOffset.coerceAtLeast(0))
+}
+
+/**
  * SSH 终端页（自研 ANSI 终端模拟器）：TerminalEmulator 解析渲染 + WS 双向传输。
  *
  * 输出：TerminalClient.onOutput → TerminalBuffer.feed（增量 ANSI 解析，版本号驱动重组）。
@@ -104,13 +119,19 @@ fun TerminalScreen(
     ) { innerPadding ->
         // imePadding：软键盘弹出时收缩终端区高度。edge-to-edge 下 windowSoftInputMode
         // adjustResize 失效，必须显式消费 IME insets，否则光标与最新输出被键盘遮挡。
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).imePadding()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .imePadding()
+                .navigationBarsPadding(),
+        ) {
             // 功能键行：发送控制字节（软键盘没有 Ctrl/方向键），窄屏横向滚动避免溢出
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF2D2D2D))
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .padding(horizontal = 2.dp, vertical = 2.dp)
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -124,7 +145,7 @@ fun TerminalScreen(
                             text = label,
                             color = Color.White,
                             fontSize = 11.sp,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp),
                         )
                     }
                 }
@@ -134,10 +155,14 @@ fun TerminalScreen(
             // opened 用 rememberSaveable：旋转/配置变更后恢复 true，避免重复 clear+open 清屏
             var opened by rememberSaveable { mutableStateOf(false) }
             // 字号（sp）：捏合缩放调整，范围 10–24
-            var fontSizeSp by remember { mutableFloatStateOf(14f) }
+            var fontSizeSp by remember { mutableFloatStateOf(11f) }
             // 滚动回退偏移（行）：0 = 视口贴底显示最新输出，>0 = 回看历史
             var scrollOffsetLines by remember { mutableStateOf(0) }
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
                 val fontSize = fontSizeSp.sp
                 // 实测等宽字符宽高：与绘制层共用同一来源，消除估算/实测双标准的右缝或裁切
                 val textMeasurer = rememberTextMeasurer()
@@ -151,7 +176,7 @@ fun TerminalScreen(
                 val charWidth = with(density) { cellSize.width.toDp() }
                 val lineHeight = with(density) { cellSize.height.toDp() }
                 val lineHeightPx = cellSize.height.toFloat()
-                val cols = ((maxWidth - 16.dp) / charWidth).toInt().coerceIn(2, 300)
+                val cols = (maxWidth / charWidth).toInt().coerceIn(2, 300)
                 val rows = (maxHeight / lineHeight).toInt().coerceIn(1, 100)
 
                 // 缓冲网格跟随尺寸；首次 open 前清空旧缓冲，之后尺寸变化重建网格并发 resize。
@@ -204,17 +229,18 @@ fun TerminalScreen(
                                         fontSizeSp = next
                                     }
                                 } else if (abs(pan.y) > abs(pan.x)) {
-                                    // pan 为相对手势起点的累计位移：直接折算行数。
-                                    // 向上滑（pan.y < 0）= 查看更早历史，偏移增大。
-                                    val lineDelta = (pan.y / lineHeightPx).roundToInt()
-                                    if (lineDelta != 0) {
-                                        // buffer 为稳定引用，实时读取 scrollback 行数，避免闭包捕获过期值
-                                        val maxOffset =
-                                            if (buffer.isUsingAlternateScreen) 0 else buffer.scrollbackSize()
-                                        val next =
-                                            (scrollOffsetLines - lineDelta).coerceIn(0, maxOffset)
-                                        if (next != scrollOffsetLines) scrollOffsetLines = next
-                                    }
+                                    // 手指向下滑（pan.y > 0）= 页面向上查看更早历史，偏移增大。
+                                    // 手指向上滑（pan.y < 0）= 页面向下回到最新输出，偏移减小。
+                                    // buffer 为稳定引用，实时读取 scrollback 行数，避免闭包捕获过期值
+                                    val maxOffset =
+                                        if (buffer.isUsingAlternateScreen) 0 else buffer.scrollbackSize()
+                                    val next = nextTerminalScrollOffset(
+                                        currentOffset = scrollOffsetLines,
+                                        panY = pan.y,
+                                        lineHeightPx = lineHeightPx,
+                                        maxOffset = maxOffset,
+                                    )
+                                    if (next != scrollOffsetLines) scrollOffsetLines = next
                                 }
                             }
                         },
