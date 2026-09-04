@@ -1,8 +1,8 @@
 # RabbitMQ Topology v1
 
 **版本**：v1
-**状态**：已实施并完成真实验收；MVP-9 的命名冻结由 MVP-10/MVP-11 落地
-**适用范围**：当前 Metrics → Alert 异步边界
+**状态**：已实施并完成真实验收；MVP-9 的命名冻结由 MVP-10/MVP-11 落地；`ai.alert.explanation.requested.v1` 队列对已冻结（2026-09-04，实现随 F1 落地）
+**适用范围**：Metrics → Alert → AI 异步边界
 
 ## 一、拓扑目标
 
@@ -20,9 +20,12 @@ RabbitMQ 用于解耦 Metrics 与 Alert，不替代 Agent/Monitor WebSocket、My
 | Dead-letter Queue | `susumonitor.alert.triggered.dlq` | Alert 出站触发事件死信队列，不自动回投业务队列。 |
 | Queue | `susumonitor.alert.resolved` | Alert 出站恢复事件业务队列；消费者 `alert-resolved-notifier` 已接入（2026-08-15），驱动"恢复通知"排程。 |
 | Dead-letter Queue | `susumonitor.alert.resolved.dlq` | Alert 出站恢复事件死信队列，不自动回投业务队列。 |
+| Queue | `susumonitor.ai.alert.explanation` | AI 告警解释请求业务队列（契约冻结 2026-09-04，实现随 F1 落地）；消费者 `ai-explainer`，调用大模型生成告警解释并落库。 |
+| Dead-letter Queue | `susumonitor.ai.alert.explanation.dlq` | AI 告警解释请求死信队列，不自动回投业务队列。 |
 | Routing Key | `metrics.reported.v1` | Metrics 已落库指标事件。 |
 | Routing Key | `alert.triggered.v1` | **已实现发布 + 消费（2026-08-12）**：Alert 触发新告警记录后经 Outbox 发布的出站事件，由 `alert-notifier` 幂等消费并驱动外部通知。 |
 | Routing Key | `alert.resolved.v1` | **已实现发布 + 消费（2026-08-15）**：Alert 记录恢复后经 Outbox 发布的出站恢复事件，由 `alert-resolved-notifier` 幂等消费并驱动"恢复通知"。 |
+| Routing Key | `ai.alert.explanation.requested.v1` | **契约冻结（2026-09-04，实现随 F1 落地）**：告警触发消费链路登记的 AI 解释请求事件，由 `ai-explainer` 幂等消费并驱动解释生成与补充通知。 |
 
 Exchange、业务队列和 DLQ 均要求 durable、non-auto-delete；队列名称不包含实例 ID，不创建临时消费者队列。
 
@@ -44,6 +47,11 @@ alert-service
        routing key: alert.resolved.v1
        message: alert.resolved.v1（经 Outbox 同事务登记后发布）
 
+ai-service
+    -> susumonitor.events
+       routing key: ai.alert.explanation.requested.v1
+       message: ai.alert.explanation.requested.v1（alert.triggered.v1 消费事务内同事务登记后发布）
+
 susumonitor.events
     -> susumonitor.alert.metrics
        binding key: metrics.reported.v1
@@ -59,6 +67,11 @@ susumonitor.events
        binding key: alert.resolved.v1
        consumer: alert-resolved-notifier（恢复通知排程驱动）
 
+susumonitor.events
+    -> susumonitor.ai.alert.explanation
+       binding key: ai.alert.explanation.requested.v1
+       consumer: ai-explainer（AI 解释生成驱动）
+
 susumonitor.alert.metrics
     -> retry exhausted / non-retryable error
        dead-letter-exchange: susumonitor.dlx
@@ -68,6 +81,10 @@ susumonitor.alert.triggered
        dead-letter-exchange: susumonitor.dlx
 
 susumonitor.alert.resolved
+    -> retry exhausted / non-retryable error
+       dead-letter-exchange: susumonitor.dlx
+
+susumonitor.ai.alert.explanation
     -> retry exhausted / non-retryable error
        dead-letter-exchange: susumonitor.dlx
 
@@ -82,6 +99,10 @@ susumonitor.dlx
 susumonitor.dlx
     -> susumonitor.alert.resolved.dlq
        dead-letter routing key: alert.resolved.v1
+
+susumonitor.dlx
+    -> susumonitor.ai.alert.explanation.dlq
+       dead-letter routing key: ai.alert.explanation.requested.v1
 ```
 
 `alert.triggered.v1` 与 `alert.resolved.v1` 由 Outbox 发布器按行 `routing_key`（V25）
@@ -89,6 +110,10 @@ susumonitor.dlx
 事务内排程外部通知（邮件/钉钉/Webhook）并异步发送——通知触发源已从本地
 AFTER_COMMIT 直呼切换为 Broker 消息驱动（Broker 中断恢复后 outbox 补发也能重新
 触发通知）。不能把现有 `AlertPushPublisher`（Monitor WebSocket 推送）误称为消息发布器。
+`ai.alert.explanation.requested.v1`（契约冻结 2026-09-04，实现随 F1 落地）沿用同一
+按行路由模式：`alert-notifier` 消费事务内登记 AI 解释请求事件，由 `ai-explainer`
+消费生成解释；该链路受 `susumonitor.ai.explanation.enabled` 独立开关控制，
+与原告警通知链路互不阻塞。
 
 ## 四、至少一次投递
 

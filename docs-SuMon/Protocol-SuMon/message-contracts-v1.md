@@ -1,12 +1,12 @@
 # Message Contracts v1
 
 **版本**：v1
-**状态**：已实施；`metrics.reported.v1` 已由 MVP-10/MVP-11 的 Outbox 与 Alert 消费侧使用
+**状态**：已实施；`metrics.reported.v1` 已由 MVP-10/MVP-11 的 Outbox 与 Alert 消费侧使用；`ai.alert.explanation.requested.v1` 契约已冻结（2026-09-04，实现随 AI 阶段 A F1 告警智能解释落地）
 **时间标准**：UTC ISO-8601，例如 `2026-07-28T12:00:00Z`
 
 ## 一、适用范围
 
-本文定义 Metrics 与 Alert 异步边界使用的版本化事件契约。它不修改现有 REST、Agent WebSocket、Monitor WebSocket 契约。当前 Java 单体已通过 Metrics Transactional Outbox 可靠发布 `metrics.reported.v1`，并由 Alert 消费者执行幂等消费、有限重试与 DLQ 分类。
+本文定义 Metrics、Alert 与 AI 异步边界使用的版本化事件契约。它不修改现有 REST、Agent WebSocket、Monitor WebSocket 契约。当前 Java 单体已通过 Metrics Transactional Outbox 可靠发布 `metrics.reported.v1`，并由 Alert 消费者执行幂等消费、有限重试与 DLQ 分类；AI 域复用同一 Outbox 与消费幂等基建（`ai.alert.explanation.requested.v1`，§六）。
 
 ## 二、统一事件信封
 
@@ -26,10 +26,10 @@
 | 字段 | 必填 | 规则 |
 |---|---:|---|
 | `event_id` | 是 | UUID；同一事件重试、补发必须保持不变；消费幂等主键。 |
-| `event_type` | 是 | 逻辑事件名，不因路由实现变化；当前已实现 `metrics.reported`、`alert.triggered` 与 `alert.resolved`。 |
+| `event_type` | 是 | 逻辑事件名，不因路由实现变化；当前已实现 `metrics.reported`、`alert.triggered` 与 `alert.resolved`，另有 `ai.alert.explanation.requested`（契约冻结，实现随 F1 落地）。 |
 | `schema_version` | 是 | 当前为整数 `1`；不支持的版本不可按旧版本猜测解析。 |
 | `occurred_at` | 是 | UTC ISO-8601；表示事件产生时间，不使用本地时区。 |
-| `producer` | 是 | 生产模块标识；当前已实现 `metrics-service` 与 `alert-service`。 |
+| `producer` | 是 | 生产模块标识；当前已实现 `metrics-service` 与 `alert-service`，另有 `ai-service`（契约冻结）。 |
 | `trace_id` | 否 | 链路关联标识，不得携带凭据。 |
 | `correlation_id` | 否 | 业务关联标识，不得携带凭据。 |
 | `payload` | 是 | 独立消息对象；不直接复用 HTTP VO、Entity 或数据库行。 |
@@ -156,7 +156,50 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 载荷不携带触发值（`current_value`/`threshold_value`）：记录中的触发值不是
   恢复时刻的值，不得作为恢复载荷。
 
-## 六、兼容性与失败处理
+## 六、`ai.alert.explanation.requested.v1`（契约冻结 2026-09-04，实现随 F1 落地）
+
+该事件表示 AI 域收到的一条"告警智能解释请求"（F1 告警智能解释）：`alert.triggered.v1`
+消费链路（`alert-notifier`）在消费事务内同事务登记 Outbox，发布器按行 `routing_key`
+路由到 `susumonitor.ai.alert.explanation` 业务队列，由消费者 `ai-explainer` 幂等消费，
+调用大模型生成解释并落库（关联告警记录），随后经规则已配置渠道推送"AI 解释"补充通知。
+事件仅承载触发事实的白名单载荷，不承载解释结果——解释结果经 `ai_alert_explanations`
+存储与补充通知表达，不得复用本事件回传。解释失败不阻塞告警主链路（原告警通知已先行
+发出，降级为无解释原文）。受 `susumonitor.ai.explanation.enabled` 独立开关控制
+（默认关闭，关闭时生产侧不登记本事件、消费侧不装配）；持续越界不重复生成告警，
+因此每条告警记录至多对应一条解释请求。
+
+```json
+{
+  "event_id": "d1a7c3e0-4f8b-4c2a-9b6d-2e5f8a1c7b3d",
+  "event_type": "ai.alert.explanation.requested",
+  "schema_version": 1,
+  "occurred_at": "2026-08-15T12:00:05Z",
+  "producer": "ai-service",
+  "payload": {
+    "server_id": 123,
+    "rule_id": 456,
+    "record_id": 789,
+    "metric": "cpu",
+    "current_value": 92.5,
+    "threshold_value": 80.0,
+    "level": "warning",
+    "triggered_at": "2026-08-15T12:00:05Z"
+  }
+}
+```
+
+### 字段规则
+
+- `server_id`、`rule_id`、`record_id` 为正整数。
+- `metric` 使用已冻结指标名（与 `alert.triggered.v1` 一致）。
+- `level` 使用现有告警级别枚举。
+- `current_value`、`threshold_value` 的单位由 `metric` 决定，与 `alert.triggered.v1`
+  同义；载荷冻结触发时刻的事实，解释消费侧不得以回查后的最新值替代。
+- `triggered_at` 为原告警触发时刻（UTC ISO-8601）。
+- 载荷不携带告警展示文本（message）、通知渠道内容或任何凭据；`occurred_at` 为
+  解释请求登记时刻（UTC ISO-8601）。
+
+## 七、兼容性与失败处理
 
 - 新增字段必须为可选，旧消费者应忽略未知字段。
 - 删除字段、改变字段类型、改变枚举含义或改变空值语义必须递增 `schema_version`，不得复用 `v1`。
@@ -164,13 +207,13 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - JSON 无法解析时不得用默认值猜测业务含义。
 - 同一 `event_id` 的重试和补发必须保持 payload 语义不变。
 
-## 七、当前实现边界
+## 八、当前实现边界
 
-已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布与消费者均已实现（2026-08-12），`alert.resolved.v1` 的发布与消费者均已实现（2026-08-15）——本契约已可实际订阅。
+已实现 RabbitMQ 发布、消费、Outbox 与 `message_consume_records`；消费侧使用字段级运行校验，尚未引入完整 JSON Schema 引擎。`alert.triggered.v1` 的 Broker 发布与消费者均已实现（2026-08-12），`alert.resolved.v1` 的发布与消费者均已实现（2026-08-15）——本契约已可实际订阅。`ai.alert.explanation.requested.v1` 契约已冻结（2026-09-04），生产与消费实现随 AI 阶段 A F1 落地（见 §十四）。
 
 ---
 
-## 八、实现确认（2026-07-31，MVP-10 落地）
+## 九、实现确认（2026-07-31，MVP-10 落地）
 
 本文档 §二/§三 信封契约已由 MVP-10 的 `OutboxEnvelopeFactory` 实现（见 `Develop-log/20260731-MVP10-Metrics-Outbox.md`）：
 
@@ -180,9 +223,9 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 可选字段 `trace_id`/`correlation_id` 本阶段（MVP-10）不携带，消费侧不得要求必填。
 - 真实 Broker 验收已核对出队消息与本文契约一致（verify-outbox.mjs）。
 
-> 2026-08-16 注：本段末"仍属 MVP-11：完整 JSON Schema 引擎…"的消费幂等与 DLQ 分类已于 2026-08-01 落地（见 §九）；完整 JSON Schema 引擎仍未引入（字段级运行校验）。
+> 2026-08-16 注：本段末"仍属 MVP-11：完整 JSON Schema 引擎…"的消费幂等与 DLQ 分类已于 2026-08-01 落地（见 §十）；完整 JSON Schema 引擎仍未引入（字段级运行校验）。
 
-## 九、实现确认（2026-07-31，MVP-11 消费侧落地）
+## 十、实现确认（2026-07-31，MVP-11 消费侧落地）
 
 消费侧已按本文契约解析并验收（见 `Develop-log/20260731-MVP11-Alert-消费侧.md`）：
 
@@ -197,7 +240,7 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 时间口径：`occurred_at`/`collected_at` 解析沿用 UTC 秒级格式，消费记录 `consumed_at` 写入 UTC（应用时钟）。
 - JSON Schema 运行校验仍未引入；已实现无外部依赖的字段级运行校验，确保畸形载荷在进入幂等查询和告警评估前直接拒绝进 DLQ。
 
-## 十、实现确认（2026-08-12，alert.triggered.v1 发布侧落地）
+## 十一、实现确认（2026-08-12，alert.triggered.v1 发布侧落地）
 
 本文档 §四 的 `alert.triggered.v1` 信封已由 `AlertTriggeredEnvelopeFactory` 实现
 （见 `Develop-log/20260812-告警事件RabbitMQ发布.md`）：
@@ -211,9 +254,9 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
 - 发布时机：评估事务内与告警记录同事务登记 outbox 行（`message_outbox.routing_key=alert.triggered.v1`，V25）。
 - 验证：`AlertTriggeredEnvelopeFactoryTests` 与契约示例逐字段断言，Maven 全量 486 tests 全绿。
 
-消费者侧（`alert-notifier` 幂等消费 + 通知排程 + DLQ 分类）已于同日接入，见 §十一。
+消费者侧（`alert-notifier` 幂等消费 + 通知排程 + DLQ 分类）已于同日接入，见 §十二。
 
-## 十一、实现确认（2026-08-12，alert.triggered.v1 消费者接入）
+## 十二、实现确认（2026-08-12，alert.triggered.v1 消费者接入）
 
 本文档 §四 的消费者侧已实现（见 `Develop-log/20260812-alert.triggered消费者接入.md`）：
 
@@ -232,16 +275,16 @@ Monitor WebSocket 帧仍为本地事件实时推送，二者并存；持续越�
   外部通知完全由本消费者驱动——同一 record 只触发一次通知，避免双发。
 - 验证：Maven 全量 506 tests 全绿（新增消费者/消息/校验器 3+8+9 用例与 recovered 映射断言）。
 
-## 十二、实现确认（2026-08-15，alert.resolved.v1 发布 + 消费侧落地）
+## 十三、实现确认（2026-08-15，alert.resolved.v1 发布 + 消费侧落地）
 
 本文档 §五 的 `alert.resolved.v1` 已由 `AlertResolvedEnvelopeFactory` 发布、`AlertResolvedConsumer`（consumer=`alert-resolved-notifier`）消费（见 `Develop-log/20260815-alert.resolved恢复事件链路.md`）：
 
 - 发布时机：评估器 `handleResolve` 在恢复事务内——`updateStatusToResolved`（V26 落库 `resolved_at`）成功后同事务登记 outbox 行（`routing_key=alert.resolved.v1`）+ 发布本地事件（AFTER_COMMIT 推 `alert.push`，`payload.alert.status=resolved`）；记录未实际转为 resolved 不发事件。
 - 信封字段与 §五 示例一致（snake_case、`event_type=alert.resolved`、`schema_version=1`、`producer=alert-service`；payload 8 字段不含触发值）。
-- 消费侧：幂等（V15）→ 规则有效且有渠道且记录已 resolved → `scheduleNotifications` 排程"恢复通知"（文案按 status 分支为 `[恢复]` 语义）→ 提交后 `sendScheduled`；错误分类与失败留痕与 §十一 同模式（`FailedConsumeRecordRecoverer` 队列映射含 `susumonitor.alert.resolved`→alert-resolved-notifier）。
+- 消费侧：幂等（V15）→ 规则有效且有渠道且记录已 resolved → `scheduleNotifications` 排程"恢复通知"（文案按 status 分支为 `[恢复]` 语义）→ 提交后 `sendScheduled`；错误分类与失败留痕与 §十二 同模式（`FailedConsumeRecordRecoverer` 队列映射含 `susumonitor.alert.resolved`→alert-resolved-notifier）。
 - 验证：真实 broker 验收 `verify-alert-resolved-chain.mjs` 11/11 PASS（2026-08-15）；Maven 全量 541→550 tests 全绿。
 
-## 十三、当前实现差异（2026-08-28，对照 `main @ 4e4cd86`）
+## 十四、当前实现差异（2026-08-28，对照 `main @ 4e4cd86`）
 
 以下条目为本契约与代码不一致的已知缺口；**第 1-3 项已于 2026-08-28 修复**，仅保留历史记录供追溯（此前修复曾被回滚提交 `870aec6` 撤销，现重新修复）：
 
