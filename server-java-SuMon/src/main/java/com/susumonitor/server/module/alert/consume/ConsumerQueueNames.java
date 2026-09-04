@@ -1,5 +1,6 @@
 package com.susumonitor.server.module.alert.consume;
 
+import com.susumonitor.server.module.ai.consume.AiAlertExplanationConsumer;
 import java.util.Map;
 
 /**
@@ -15,7 +16,8 @@ public final class ConsumerQueueNames {
     public static final Map<String, String> QUEUE_TO_CONSUMER = Map.of(
             AlertMessageConsumer.QUEUE, AlertMessageConsumer.CONSUMER_NAME,
             AlertTriggeredConsumer.QUEUE, AlertTriggeredConsumer.CONSUMER_NAME,
-            AlertResolvedConsumer.QUEUE, AlertResolvedConsumer.CONSUMER_NAME);
+            AlertResolvedConsumer.QUEUE, AlertResolvedConsumer.CONSUMER_NAME,
+            AiAlertExplanationConsumer.QUEUE, AiAlertExplanationConsumer.CONSUMER_NAME);
 
     /** 缺省消费者名：队列信息缺失时回退 metrics 评估消费（兼容旧行为）。 */
     public static final String DEFAULT_CONSUMER = AlertMessageConsumer.CONSUMER_NAME;

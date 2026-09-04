@@ -75,10 +75,17 @@ class AlertTriggeredConsumerTests {
             org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
         }).when(transactionTemplate).execute(any());
+        // F1 挂钩依赖：真实 AppProperties 默认 explanation.enabled=false，
+        // 本测试类聚焦通知排程语义，不触发解释请求登记。
+        com.susumonitor.server.config.AppProperties appProperties = new com.susumonitor.server.config.AppProperties();
+        com.susumonitor.server.module.metrics.outbox.OutboxService outboxService =
+                mock(com.susumonitor.server.module.metrics.outbox.OutboxService.class);
+        org.springframework.beans.factory.ObjectProvider<com.susumonitor.server.module.ai.outbox.AiAlertExplanationEnvelopeFactory>
+                explanationEnvelopeFactory = mock(org.springframework.beans.factory.ObjectProvider.class);
         consumer = new AlertTriggeredConsumer(objectMapper, notificationService, ruleMapper, recordMapper,
                 consumeRecordMapper, transactionTemplate,
                 Clock.fixed(Instant.parse("2026-07-28T12:00:06Z"), ZoneOffset.UTC),
-                new AlertTriggeredMessageValidator());
+                new AlertTriggeredMessageValidator(), appProperties, outboxService, explanationEnvelopeFactory);
     }
 
     /** 幂等命中：不排程、不插记录、不发送。 */

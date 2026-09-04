@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "SuSuMonitor Alert API",
-    "description": "Authoritative SuSuMonitor alert API contract covering alert rule CRUD, alert record queries, and mark-as-read. Rule creation, update, and deletion require ROLE_ADMIN. Rule listing, record queries, and mark-as-read require authenticated users. Alert evaluation is event-driven via MetricsReportedEvent AFTER_COMMIT, not exposed as REST endpoints.",
-    "version": "0.1.0"
+    "description": "Authoritative SuSuMonitor alert API contract covering alert rule CRUD, alert record queries, mark-as-read, notification history, and the AI alert explanation review endpoint. Rule creation, update, and deletion require ROLE_ADMIN. Rule listing, record queries, mark-as-read, and notification history require authenticated users. The AI explanation endpoint requires ROLE_ADMIN and is only mounted when susumonitor.ai.explanation.enabled=true (404 otherwise). Alert evaluation is event-driven via MetricsReportedEvent AFTER_COMMIT, not exposed as REST endpoints.",
+    "version": "0.2.0"
   },
   "servers": [
     {
@@ -525,6 +525,61 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/alerts/records/{id}/explanation": {
+      "get": {
+        "tags": [
+          "alert"
+        ],
+        "summary": "Get the AI explanation of an alert record",
+        "description": "Returns the stored AI-generated explanation (summary/possible causes/impact/suggestions/limitations) for an alert record. Admin-only. Only available when susumonitor.ai.explanation.enabled=true; the endpoint returns 404 when disabled or when the record has no AI explanation. Suggestions are human-review guidance, never executable steps.",
+        "operationId": "getAlertExplanation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Alert record ID, must be positive.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Explanation returned",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAlertExplanationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -1177,6 +1232,115 @@
             "items": {
               "$ref": "#/components/schemas/AlertNotification"
             }
+          }
+        }
+      },
+      "AiAlertExplanation": {
+        "type": "object",
+        "required": [
+          "record_id",
+          "summary",
+          "provider",
+          "model",
+          "prompt_version"
+        ],
+        "properties": {
+          "record_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Alert record ID the explanation belongs to."
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "One-paragraph human-readable analysis of the alert."
+          },
+          "possible_causes": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string"
+            },
+            "description": "Possible root causes (analysis only, never executable steps)."
+          },
+          "impact": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string"
+            },
+            "description": "Expected impact assessment."
+          },
+          "suggestions": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string"
+            },
+            "description": "Procedural human-review guidance; never executable steps or commands."
+          },
+          "limitations": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit boundaries of this explanation (anti-fabrication statement)."
+          },
+          "usage": {
+            "type": "object",
+            "nullable": true,
+            "description": "Token usage of the underlying model call (input_tokens/output_tokens/total_tokens).",
+            "properties": {
+              "input_tokens": {
+                "type": "integer"
+              },
+              "output_tokens": {
+                "type": "integer"
+              },
+              "total_tokens": {
+                "type": "integer"
+              }
+            }
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider identifier, e.g. openai-compatible."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model name used for the explanation."
+          },
+          "prompt_version": {
+            "type": "string",
+            "description": "Server-side explanation prompt version, e.g. ai-alert-explanation-v1."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Explanation generation timestamp (UTC ISO-8601)."
+          }
+        }
+      },
+      "AiAlertExplanationResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AiAlertExplanation"
           }
         }
       }

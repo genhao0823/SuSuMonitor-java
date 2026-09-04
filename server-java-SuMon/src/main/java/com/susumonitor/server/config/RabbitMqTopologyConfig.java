@@ -32,6 +32,9 @@ public class RabbitMqTopologyConfig {
     public static final String ALERT_RESOLVED_QUEUE = "susumonitor.alert.resolved";
     public static final String ALERT_RESOLVED_DLQ = "susumonitor.alert.resolved.dlq";
     public static final String ALERT_RESOLVED_KEY = "alert.resolved.v1";
+    public static final String AI_EXPLANATION_QUEUE = "susumonitor.ai.alert.explanation";
+    public static final String AI_EXPLANATION_DLQ = "susumonitor.ai.alert.explanation.dlq";
+    public static final String AI_EXPLANATION_KEY = "ai.alert.explanation.requested.v1";
 
     /** 业务事件交换器。 */
     @Bean
@@ -98,6 +101,24 @@ public class RabbitMqTopologyConfig {
         return QueueBuilder.durable(ALERT_RESOLVED_DLQ).build();
     }
 
+    /**
+     * ai.alert.explanation.requested.v1 业务队列（F1 告警智能解释请求，
+     * 消费者 ai-explainer 已随开关接入，驱动解释生成与补充通知）。
+     */
+    @Bean
+    Queue susumonitorAiExplanationQueue() {
+        return QueueBuilder.durable(AI_EXPLANATION_QUEUE)
+                .deadLetterExchange(DLX_EXCHANGE)
+                .deadLetterRoutingKey(AI_EXPLANATION_KEY)
+                .build();
+    }
+
+    /** ai.alert.explanation.requested.v1 死信队列，不自动回投业务队列。 */
+    @Bean
+    Queue susumonitorAiExplanationDlq() {
+        return QueueBuilder.durable(AI_EXPLANATION_DLQ).build();
+    }
+
     /** 业务队列绑定：susumonitor.events -- metrics.reported.v1 --> susumonitor.alert.metrics。 */
     @Bean
     Binding alertMetricsBinding() {
@@ -138,5 +159,19 @@ public class RabbitMqTopologyConfig {
     Binding alertResolvedDlqBinding() {
         return BindingBuilder.bind(susumonitorAlertResolvedDlq())
                 .to(susumonitorDlxExchange()).with(ALERT_RESOLVED_KEY);
+    }
+
+    /** 业务队列绑定：susumonitor.events -- ai.alert.explanation.requested.v1 --> susumonitor.ai.alert.explanation。 */
+    @Bean
+    Binding aiExplanationBinding() {
+        return BindingBuilder.bind(susumonitorAiExplanationQueue())
+                .to(susumonitorEventsExchange()).with(AI_EXPLANATION_KEY);
+    }
+
+    /** 死信队列绑定：susumonitor.dlx -- ai.alert.explanation.requested.v1 --> susumonitor.ai.alert.explanation.dlq。 */
+    @Bean
+    Binding aiExplanationDlqBinding() {
+        return BindingBuilder.bind(susumonitorAiExplanationDlq())
+                .to(susumonitorDlxExchange()).with(AI_EXPLANATION_KEY);
     }
 }

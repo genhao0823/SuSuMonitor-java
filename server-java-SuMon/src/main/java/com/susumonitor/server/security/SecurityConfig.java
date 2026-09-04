@@ -104,6 +104,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/alerts/rules").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/alerts/rules/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/alerts/rules/*").hasRole("ADMIN")
+                        // AI 告警解释回看仅管理员（AI 域端点口径与诊断/命令域一致）；
+                        // 必须先于下方 records/** 的 authenticated 匹配注册。开关关闭时 Controller 不装配返回 404。
+                        .requestMatchers(HttpMethod.GET, "/api/alerts/records/*/explanation").hasRole("ADMIN")
                         // 告警规则查询和告警记录查询、标记已读需要已认证。
                         .requestMatchers(HttpMethod.GET, "/api/alerts/rules", "/api/alerts/rules/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/alerts/records", "/api/alerts/records/**").authenticated()

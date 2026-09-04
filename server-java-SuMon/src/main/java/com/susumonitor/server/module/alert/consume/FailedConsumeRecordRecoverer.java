@@ -97,6 +97,12 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
                         new String(message.getBody(), StandardCharsets.UTF_8), AlertResolvedMessage.class);
                 return envelope.eventId();
             }
+            if (isAiExplanationQueue(message)) {
+                com.susumonitor.server.module.ai.consume.AiAlertExplanationMessage envelope = objectMapper.readValue(
+                        new String(message.getBody(), StandardCharsets.UTF_8),
+                        com.susumonitor.server.module.ai.consume.AiAlertExplanationMessage.class);
+                return envelope.eventId();
+            }
             MetricsReportedMessage envelope = objectMapper.readValue(
                     new String(message.getBody(), StandardCharsets.UTF_8), MetricsReportedMessage.class);
             return envelope.eventId();
@@ -122,6 +128,12 @@ public class FailedConsumeRecordRecoverer implements MessageRecoverer {
     private boolean isAlertResolvedQueue(Message message) {
         String queue = message.getMessageProperties() == null ? null : message.getMessageProperties().getConsumerQueue();
         return AlertResolvedConsumer.QUEUE.equals(queue);
+    }
+
+    /** 判断消息是否来自 ai.alert.explanation 队列（决定反序列化信封类型）。 */
+    private boolean isAiExplanationQueue(Message message) {
+        String queue = message.getMessageProperties() == null ? null : message.getMessageProperties().getConsumerQueue();
+        return com.susumonitor.server.module.ai.consume.AiAlertExplanationConsumer.QUEUE.equals(queue);
     }
 
     /** 与 AlertRabbitConfig 错误分类一致：cause 链含 AmqpRejectAndDontRequeueException 视为不可重试。 */

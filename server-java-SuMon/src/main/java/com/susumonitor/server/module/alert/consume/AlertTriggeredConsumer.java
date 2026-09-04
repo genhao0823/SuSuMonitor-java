@@ -2,6 +2,7 @@ package com.susumonitor.server.module.alert.consume;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.alert.entity.AlertNotificationEntity;
 import com.susumonitor.server.module.alert.entity.AlertRecordEntity;
 import com.susumonitor.server.module.alert.entity.AlertRuleEntity;
@@ -9,15 +10,19 @@ import com.susumonitor.server.module.alert.mapper.AlertRecordMapper;
 import com.susumonitor.server.module.alert.mapper.AlertRuleMapper;
 import com.susumonitor.server.module.alert.notification.AlertNotificationService;
 import com.susumonitor.server.module.alert.outbox.AlertTriggeredEnvelopeFactory;
+import com.susumonitor.server.module.ai.outbox.AiAlertExplanationEnvelopeFactory;
 import com.susumonitor.server.module.alert.vo.AlertRecordVo;
+import com.susumonitor.server.module.metrics.outbox.OutboxService;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -32,6 +37,12 @@ import org.springframework.util.StringUtils;
  * 事务提交后异步发送（{@link AlertNotificationService#sendScheduled}）。
  * 旧版 AFTER_COMMIT 直呼通知的 {@code AlertNotificationPublisher} 已删除，
  * 保证同一 record 只触发一次通知。</p>
+ *
+ * <p>F1 告警智能解释挂钩（2026-09-04 起）：消费事务内同事务登记一条
+ * {@code ai.alert.explanation.requested.v1} 解释请求事件（经 Outbox，
+ * {@link AiAlertExplanationEnvelopeFactory} 构建白名单载荷），由 ai-explainer
+ * 消费者异步生成解释。登记受 {@code susumonitor.ai.explanation.enabled} 独立
+ * 开关门控（关闭时零事件）；登记失败随消费事务回滚，不影响通知排程语义。</p>
  *
  * <p>ACK 语义与错误分类与 {@link AlertMessageConsumer} 一致：AUTO 确认（事务提交
  * 后返回即 ACK）；解析/字段契约不符抛 {@link AmqpRejectAndDontRequeueException}
@@ -62,10 +73,19 @@ public class AlertTriggeredConsumer {
 
     private final AlertTriggeredMessageValidator messageValidator;
 
+    private final AppProperties appProperties;
+
+    private final OutboxService outboxService;
+
+    /** 解释请求信封工厂随 explanation.enabled 条件装配，缺席时挂钩静默降级。 */
+    private final ObjectProvider<AiAlertExplanationEnvelopeFactory> explanationEnvelopeFactory;
+
     /** 注入反序列化器、通知服务、规则/记录数据访问与事务模板。 */
     public AlertTriggeredConsumer(ObjectMapper objectMapper, AlertNotificationService notificationService,
             AlertRuleMapper ruleMapper, AlertRecordMapper recordMapper, ConsumeRecordMapper consumeRecordMapper,
-            TransactionTemplate transactionTemplate, Clock clock, AlertTriggeredMessageValidator messageValidator) {
+            TransactionTemplate transactionTemplate, Clock clock, AlertTriggeredMessageValidator messageValidator,
+            AppProperties appProperties, OutboxService outboxService,
+            ObjectProvider<AiAlertExplanationEnvelopeFactory> explanationEnvelopeFactory) {
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
         this.ruleMapper = ruleMapper;
@@ -74,6 +94,9 @@ public class AlertTriggeredConsumer {
         this.transactionTemplate = transactionTemplate;
         this.clock = clock;
         this.messageValidator = messageValidator;
+        this.appProperties = appProperties;
+        this.outboxService = outboxService;
+        this.explanationEnvelopeFactory = explanationEnvelopeFactory;
     }
 
     /**
@@ -89,9 +112,12 @@ public class AlertTriggeredConsumer {
             log.debug("consume idempotent hit, eventId={}", envelope.eventId());
             return;
         }
-        // 业务事务：通知排程与消费幂等记录同事务提交；返回后容器 ACK。
+        // 业务事务：通知排程、解释请求登记与消费幂等记录同事务提交；返回后容器 ACK。
         DispatchResult scheduled = transactionTemplate.execute(status -> {
             DispatchResult result = dispatchNotifications(envelope);
+            if (result != null) {
+                enqueueExplanationRequest(result.record());
+            }
             insertConsumeRecord(envelope);
             return result;
         });
@@ -103,16 +129,16 @@ public class AlertTriggeredConsumer {
     }
 
     /**
-     * 在消费事务内排程通知：规则有效且配置了至少一个渠道、对应记录存在时
-     * 为每个渠道登记 pending 行；其余情况仅继续消费幂等记录（不产生通知）。
+     * 在消费事务内排程通知：规则有效且对应记录存在时加载上下文；规则配置了
+     * 至少一个渠道才插 pending 行，否则仅返回上下文（供解释请求登记使用）。
      *
-     * @return 排程结果（规则/记录/待发通知行），供事务提交后异步发送
+     * @return 排程结果（规则/记录/待发通知行），供事务提交后异步发送使用
      */
     private DispatchResult dispatchNotifications(AlertTriggeredMessage envelope) {
         AlertTriggeredMessage.Payload payload = envelope.payload();
         AlertRuleEntity rule = ruleMapper.selectActiveRuleById(payload.ruleId());
-        if (rule == null || !Boolean.TRUE.equals(rule.getEnabled()) || !hasAnyChannel(rule)) {
-            log.debug("alert notification skipped: rule unavailable or has no channel, ruleId={}, recordId={}",
+        if (rule == null || !Boolean.TRUE.equals(rule.getEnabled())) {
+            log.debug("alert notification skipped: rule unavailable, ruleId={}, recordId={}",
                     payload.ruleId(), payload.recordId());
             return null;
         }
@@ -122,9 +148,31 @@ public class AlertTriggeredConsumer {
             return null;
         }
         AlertRecordVo recordVo = toVo(record);
-        List<AlertNotificationEntity> notifications =
-                notificationService.scheduleNotifications(rule, recordVo);
+        List<AlertNotificationEntity> notifications = hasAnyChannel(rule)
+                ? notificationService.scheduleNotifications(rule, recordVo)
+                : List.of();
         return new DispatchResult(payload.recordId(), rule, recordVo, notifications);
+    }
+
+    /**
+     * 在消费事务内登记 AI 解释请求事件（F1）：开关关闭或信封工厂缺席（同为开关
+     * 装配条件）时不做任何事；登记失败抛出使消费事务回滚，与通知排程同生共死。
+     *
+     * @param record 已加载的告警记录 VO（载荷数据来源）
+     */
+    private void enqueueExplanationRequest(AlertRecordVo record) {
+        if (!appProperties.getAi().getExplanation().isEnabled()) {
+            return;
+        }
+        AiAlertExplanationEnvelopeFactory factory = explanationEnvelopeFactory.getIfAvailable();
+        if (factory == null) {
+            // 开关与装配条件不同步属配置错误：fail-closed 拒绝登记，事件不半途产生。
+            log.warn("explanation enabled but envelope factory missing, skip enqueue, recordId={}", record.getId());
+            return;
+        }
+        String eventId = UUID.randomUUID().toString();
+        outboxService.enqueue(factory.EVENT_TYPE, factory.ROUTING_KEY, factory.build(record, eventId), eventId);
+        log.debug("explanation request enqueued, recordId={}, eventId={}", record.getId(), eventId);
     }
 
     /**
