@@ -17,7 +17,9 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.config.AppProperties;
+import com.susumonitor.server.module.ai.model.AiAlertFacts;
 import com.susumonitor.server.module.ai.model.AiDiagnosisContext;
+import com.susumonitor.server.module.ai.vo.AiAlertExplanationVo;
 import com.susumonitor.server.module.ai.vo.AiDiagnosisVo;
 import com.susumonitor.server.module.ai.vo.AiEvidenceVo;
 import java.nio.charset.StandardCharsets;
@@ -315,6 +317,50 @@ class OpenAiCompatibleProviderTests {
         mockServer.verify();
     }
 
+    /** 告警解释：合法响应解析为结构化解释并提取 usage。 */
+    @Test
+    void shouldParseExplanationContent() {
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withSuccess(explanationSuccessBody(""), MediaType.APPLICATION_JSON));
+
+        AiAlertExplanationVo result = provider.explainAlert(facts(), context());
+
+        assertEquals("CPU elevated due to sustained load.", result.getSummary());
+        assertEquals(1, result.getPossibleCauses().size());
+        assertEquals(15, result.getUsage().getTotalTokens());
+        mockServer.verify();
+    }
+
+    /** 告警解释：缺失 possible_causes 列表按响应无效处理，不放宽 schema 校验。 */
+    @Test
+    void shouldRejectExplanationWithMissingList() {
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withSuccess(explanationBody(
+                        "{\"summary\":\"CPU elevated due to sustained load.\","
+                        + "\"impact\":[\"Risk of resource exhaustion.\"],"
+                        + "\"suggestions\":[\"Review CPU trend and recent deployments.\"],"
+                        + "\"limitations\":[\"Advisory only.\"]}"),
+                        MediaType.APPLICATION_JSON));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> provider.explainAlert(facts(), context()));
+
+        assertEquals(ErrorCode.AI_RESPONSE_INVALID, exception.getErrorCode());
+    }
+
+    /** 告警解释：未知输出字段在严格解析下被拒绝（与诊断同 fail-closed 姿态）。 */
+    @Test
+    void shouldRejectExplanationWithUnknownField() {
+        mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
+                .andRespond(withSuccess(explanationSuccessBody(",\"unexpected\":true"),
+                        MediaType.APPLICATION_JSON));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> provider.explainAlert(facts(), context()));
+
+        assertEquals(ErrorCode.AI_RESPONSE_INVALID, exception.getErrorCode());
+    }
+
     private AiDiagnosisContext context() {
         AiEvidenceVo evidence = new AiEvidenceVo();
         evidence.setMetric("cpu_percent");
@@ -346,5 +392,30 @@ class OpenAiCompatibleProviderTests {
                 + "\"confidence\":\"high\"}],"
                 + "\"evidence\":[],\"recommendations\":[\"inspect metrics\"],"
                 + "\"limitations\":[\"advisory only\"]}";
+    }
+
+    /** 组装告警解释的 OpenAI-compatible 200 响应；extraField 以逗号开头插入 content 收尾前。 */
+    private String explanationSuccessBody(String extraField) {
+        String content = "{\"summary\":\"CPU elevated due to sustained load.\","
+                + "\"possible_causes\":[\"Application workload increase.\"],"
+                + "\"impact\":[\"Risk of resource exhaustion.\"],"
+                + "\"suggestions\":[\"Review CPU trend and recent deployments.\"],"
+                + "\"limitations\":[\"Advisory only.\"]";
+        if (!extraField.isEmpty()) {
+            content = content + extraField;
+        }
+        return explanationBody(content + "}");
+    }
+
+    /** 将解释 content 转义后包进 OpenAI-compatible 200 响应，并附带 usage。 */
+    private String explanationBody(String content) {
+        String escapedContent = content.replace("\"", "\\\"");
+        return "{\"choices\":[{\"message\":{\"content\":\"" + escapedContent + "\"}}],"
+                + "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}";
+    }
+
+    private AiAlertFacts facts() {
+        return new AiAlertFacts(789L, 456L, 7L, "cpu", new java.math.BigDecimal("92.5"),
+                new java.math.BigDecimal("80.0"), "warning", "2026-09-04T11:55:00Z");
     }
 }
