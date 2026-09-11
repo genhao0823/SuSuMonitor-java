@@ -138,7 +138,7 @@ function percentage(value: number | null): string {
   gap: 10px;
   font-size: 15px;
   font-weight: 700;
-  color: #2a1626;
+  color: var(--susu-ink);
   letter-spacing: 0;
 }
 
@@ -172,7 +172,7 @@ function percentage(value: number | null): string {
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--susu-border-glass);
   backdrop-filter: blur(6px);
 }
 
@@ -255,7 +255,7 @@ function percentage(value: number | null): string {
 }
 
 .dashboard-servers-card__latest-values span strong {
-  color: #2a1626;
+  color: var(--susu-ink);
   font-weight: 700;
 }
 

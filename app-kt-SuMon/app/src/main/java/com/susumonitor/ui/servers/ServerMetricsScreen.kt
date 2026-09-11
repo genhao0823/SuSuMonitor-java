@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -73,13 +74,18 @@ fun ServerMetricsScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-            // 时间范围选择器
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 时间范围选择器（小屏一行放不下时横向滚动，避免 chip 文字折行）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 TimeRange.entries.forEach { range ->
                     FilterChip(
                         selected = uiState.timeRange == range,
                         onClick = { viewModel.selectRange(range) },
-                        label = { Text(range.label) },
+                        label = { Text(range.label, maxLines = 1) },
                     )
                 }
             }

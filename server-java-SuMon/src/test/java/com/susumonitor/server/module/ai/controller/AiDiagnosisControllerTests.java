@@ -79,6 +79,18 @@ class AiDiagnosisControllerTests {
     @MockitoBean
     private com.susumonitor.server.module.ai.mapper.AiDiagnosticRunMapper aiDiagnosticRunMapper;
 
+    // ai.enabled=true 时个人 AI 配置控制器随切片装配，需替代其服务依赖。
+    @MockitoBean
+    private com.susumonitor.server.module.ai.service.AiUserProviderConfigService aiUserProviderConfigService;
+
+    // 个人 AI 配置 Mapper 同为 MapperScan 注册，测试切片无 MyBatis 会话工厂，需一并替代。
+    @MockitoBean
+    private com.susumonitor.server.module.ai.mapper.AiUserProviderConfigMapper aiUserProviderConfigMapper;
+
+    // F2 运维问答回归补充：AiQaRunMapper 与诊断同为 ai.enabled 条件装配，切片上下文需一并替代。
+    @MockitoBean
+    private com.susumonitor.server.module.ai.mapper.AiQaRunMapper aiQaRunMapper;
+
     // 提供可控 JWT 解析结果，覆盖认证场景。
     @MockitoBean
     private JwtTokenService jwtTokenService;

@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.susumonitor.server.common.GlobalExceptionHandler;
 import com.susumonitor.server.common.RequestIdFilter;
 import com.susumonitor.server.module.ai.mapper.AiDiagnosticRunMapper;
+import com.susumonitor.server.module.ai.service.AiUserProviderConfigService;
 import com.susumonitor.server.module.ai.provider.AiProvider;
 import com.susumonitor.server.module.alert.consume.ConsumeRecordCleanupMapper;
 import com.susumonitor.server.module.alert.consume.ConsumeRecordMapper;
@@ -29,9 +30,12 @@ import com.susumonitor.server.module.auth.entity.UserEntity;
 import com.susumonitor.server.module.auth.mapper.AuthBootstrapStateMapper;
 import com.susumonitor.server.module.auth.mapper.UserMapper;
 import com.susumonitor.server.module.command.AiCommandSuggestionService;
+import com.susumonitor.server.module.command.CommandAutoApprovalPolicyService;
+import com.susumonitor.server.module.command.CommandRiskLevel;
 import com.susumonitor.server.module.command.CommandRunService;
 import com.susumonitor.server.module.command.CommandTemplateRegistry;
 import com.susumonitor.server.module.command.entity.CommandRunEntity;
+import com.susumonitor.server.module.command.mapper.CommandAutoApprovalPolicyMapper;
 import com.susumonitor.server.module.command.mapper.CommandRunMapper;
 import com.susumonitor.server.module.metrics.mapper.IngestionCleanupMapper;
 import com.susumonitor.server.module.metrics.mapper.MetricsCleanupMapper;
@@ -82,10 +86,25 @@ class CommandRunControllerTests {
     private AiCommandSuggestionService aiCommandSuggestionService;
 
     @MockitoBean
+    private CommandAutoApprovalPolicyService autoApprovalPolicyService;
+
+    // 策略 Mapper 同为 MapperScan 注册，测试切片无 MyBatis 会话工厂，需一并替代。
+    @MockitoBean
+    private CommandAutoApprovalPolicyMapper autoApprovalPolicyMapper;
+
+    @MockitoBean
     private AiProvider aiProvider;
 
     @MockitoBean
     private AiDiagnosticRunMapper aiDiagnosticRunMapper;
+
+    // ai.enabled=true 时个人 AI 配置控制器随切片装配，需替代其服务依赖。
+    @MockitoBean
+    private AiUserProviderConfigService aiUserProviderConfigService;
+
+    // 个人 AI 配置 Mapper 同为 MapperScan 注册，测试切片无 MyBatis 会话工厂，需一并替代。
+    @MockitoBean
+    private com.susumonitor.server.module.ai.mapper.AiUserProviderConfigMapper aiUserProviderConfigMapper;
 
     @MockitoBean
     private CommandRunMapper commandRunMapper;
@@ -146,6 +165,10 @@ class CommandRunControllerTests {
 
     @MockitoBean
     private ConsumeRecordMapper consumeRecordMapper;
+
+    // F2 运维问答回归补充：AiQaRunMapper 与命令域切片同为 ai.enabled=true 上下文，需一并替代。
+    @MockitoBean
+    private com.susumonitor.server.module.ai.mapper.AiQaRunMapper aiQaRunMapper;
 
     /** admin 可创建手动待审批运行，返回渲染预览命令。 */
     @Test
@@ -210,7 +233,7 @@ class CommandRunControllerTests {
                 .andExpect(jsonPath("$.code").value(40002));
     }
 
-    /** 模板列表端点返回白名单契约内容。 */
+    /** 模板列表端点返回白名单契约内容（含风险等级）。 */
     @Test
     void adminShouldListTemplates() throws Exception {
         authenticateAdmin();
@@ -220,7 +243,63 @@ class CommandRunControllerTests {
         mockMvc.perform(get("/api/ai/commands/templates").header(AUTHORIZATION, ADMIN_BEARER))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(8))
-                .andExpect(jsonPath("$.data[0].id").value("disk_free"));
+                .andExpect(jsonPath("$.data[0].id").value("disk_free"))
+                .andExpect(jsonPath("$.data[0].risk_level").value("low"));
+    }
+
+    /** admin 可读取自动审批策略。 */
+    @Test
+    void adminShouldGetAutoApprovalPolicy() throws Exception {
+        authenticateAdmin();
+        when(autoApprovalPolicyService.get()).thenReturn(new CommandAutoApprovalPolicyService.Snapshot(
+                true, true, CommandRiskLevel.MEDIUM, null, 2L));
+
+        mockMvc.perform(get("/api/ai/commands/auto-approval-policy").header(AUTHORIZATION, ADMIN_BEARER))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.max_risk_level").value("medium"))
+                .andExpect(jsonPath("$.data.updated_by").value(2));
+    }
+
+    /** admin 更新自动审批策略返回最新快照。 */
+    @Test
+    void adminShouldUpdateAutoApprovalPolicy() throws Exception {
+        authenticateAdmin();
+        when(autoApprovalPolicyService.update(true, "low", 2L)).thenReturn(
+                new CommandAutoApprovalPolicyService.Snapshot(true, true, CommandRiskLevel.LOW, null, 2L));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/ai/commands/auto-approval-policy").header(AUTHORIZATION, ADMIN_BEARER)
+                        .contentType("application/json")
+                        .content("{\"enabled\":true,\"max_risk_level\":\"low\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.max_risk_level").value("low"));
+    }
+
+    /** 阈值 high 不可作为自动审批档位，服务层拒绝后返回 40002。 */
+    @Test
+    void highThresholdShouldReturnInvalidParameter() throws Exception {
+        authenticateAdmin();
+        when(autoApprovalPolicyService.update(true, "high", 2L))
+                .thenThrow(new com.susumonitor.server.common.BusinessException(
+                        com.susumonitor.server.common.ErrorCode.INVALID_REQUEST_PARAMETER));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/ai/commands/auto-approval-policy").header(AUTHORIZATION, ADMIN_BEARER)
+                        .contentType("application/json")
+                        .content("{\"enabled\":true,\"max_risk_level\":\"high\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40002));
+    }
+
+    /** 非 admin 不能读取策略。 */
+    @Test
+    void nonAdminShouldBeForbiddenOnPolicy() throws Exception {
+        authenticateUser();
+        mockMvc.perform(get("/api/ai/commands/auto-approval-policy").header(AUTHORIZATION, USER_BEARER))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(40300));
     }
 
     private void authenticateAdmin() {

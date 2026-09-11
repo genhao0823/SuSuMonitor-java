@@ -48,12 +48,15 @@ import com.susumonitor.util.TimeFormatter
 import com.susumonitor.util.ValueFormatter
 
 /**
- * 告警列表页：状态筛选 Tabs + 分页列表 + 标记已读 + WS 推送横幅 + 规则入口。
+ * 告警列表页：状态筛选 Tabs + 分页列表 + 标记已读 + WS 推送横幅 + 规则入口 + AI 解释/通知入口。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlertListScreen(
     onViewRules: () -> Unit = {},
+    isAdmin: Boolean = false,
+    onOpenExplanation: (Long) -> Unit = {},
+    onOpenNotifications: (Long) -> Unit = {},
     viewModel: AlertListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -126,7 +129,10 @@ fun AlertListScreen(
                         items(uiState.records, key = { it.id }) { record ->
                             AlertRecordCard(
                                 record = record,
+                                isAdmin = isAdmin,
                                 onClick = { viewModel.markRead(record.id) },
+                                onOpenExplanation = { onOpenExplanation(record.id) },
+                                onOpenNotifications = { onOpenNotifications(record.id) },
                             )
                         }
                     }
@@ -136,11 +142,14 @@ fun AlertListScreen(
     }
 }
 
-/** 单条告警记录卡片；点击未读记录标记已读。 */
+/** 单条告警记录卡片；点击未读记录标记已读，admin 可进入 AI 解释与通知投递。 */
 @Composable
 private fun AlertRecordCard(
     record: AlertRecord,
+    isAdmin: Boolean,
     onClick: () -> Unit,
+    onOpenExplanation: () -> Unit,
+    onOpenNotifications: () -> Unit,
 ) {
     Card(
         onClick = onClick,
@@ -188,6 +197,18 @@ private fun AlertRecordCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                if (isAdmin) {
+                    Row {
+                        androidx.compose.material3.TextButton(
+                            onClick = onOpenExplanation,
+                            modifier = Modifier.padding(top = 2.dp),
+                        ) { Text("AI 解释", style = MaterialTheme.typography.labelMedium) }
+                        androidx.compose.material3.TextButton(
+                            onClick = onOpenNotifications,
+                            modifier = Modifier.padding(top = 2.dp),
+                        ) { Text("通知记录", style = MaterialTheme.typography.labelMedium) }
+                    }
                 }
             }
         }

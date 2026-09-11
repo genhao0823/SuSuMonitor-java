@@ -53,7 +53,7 @@ import com.susumonitor.util.TimeFormatter
 import com.susumonitor.util.ValueFormatter
 
 /**
- * 服务器详情页：信息卡 + 投递遥测 + 实时指标 + 管理操作（admin）+ 终端入口（approved）。
+ * 服务器详情页：信息卡 + 投递遥测 + 实时指标 + 管理操作（admin）+ 终端入口（approved）+ AI 入口。
  * @param isAdmin 当前用户是否 admin（控制管理按钮）
  * @param isApproved 当前用户是否已审核通过（控制终端入口）
  */
@@ -67,12 +67,15 @@ fun ServerDetailScreen(
     onEdit: () -> Unit,
     onMetrics: () -> Unit,
     onTerminal: () -> Unit,
+    onAiDiagnosis: () -> Unit = {},
+    onCreateCommand: () -> Unit = {},
     viewModel: ServerDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showHostKeyDialog by remember { mutableStateOf(false) }
     var showTokenDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showHistoryDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -134,9 +137,22 @@ fun ServerDetailScreen(
                     ActionBtn("实时监控") { onMetrics() }
                     if (isApproved) ActionBtn("终端") { onTerminal() }
                     if (isAdmin) {
+                        ActionBtn("AI诊断") { onAiDiagnosis() }
+                        ActionBtn("发命令") { onCreateCommand() }
                         ActionBtn("编辑") { onEdit() }
+                    }
+                }
+                if (isAdmin) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         ActionBtn("主机指纹") { showHostKeyDialog = true }
-                        ActionBtn("Agent令牌") { showTokenDialog = true }
+                        ActionBtn("观察指纹") {
+                            viewModel.observeHostKey()
+                        }
+                        ActionBtn("测试历史") {
+                            viewModel.loadSshTestHistory()
+                            showHistoryDialog = true
+                        }
+                        ActionBtn("令牌") { showTokenDialog = true }
                         ActionBtn("删除", fg = MaterialTheme.colorScheme.error) { showDeleteDialog = true }
                     }
                 }
@@ -158,6 +174,23 @@ fun ServerDetailScreen(
                         InfoRow("算法", result.hostKeyAlgorithm)
                         InfoRow("指纹", result.hostKeyFingerprint)
                         InfoRow("操作", result.operation)
+                    }
+                }
+                uiState.hostKeyObservation?.let { observation ->
+                    InfoCard("远端指纹观察") {
+                        InfoRow("算法", observation.hostKeyAlgorithm)
+                        InfoRow("当前指纹", observation.hostKeyFingerprint)
+                        InfoRow("已登记", observation.registeredFingerprint ?: "未登记")
+                        if (observation.registeredFingerprint != null &&
+                            observation.registeredFingerprint != observation.hostKeyFingerprint
+                        ) {
+                            Text(
+                                text = "⚠ 远端指纹与已登记指纹不一致，主机密钥可能已轮换",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        TextButton(onClick = viewModel::clearResults) { Text("关闭") }
                     }
                 }
                 uiState.agentToken?.let { token ->
@@ -205,6 +238,55 @@ fun ServerDetailScreen(
             onRotate = { viewModel.rotateAgentToken(); showTokenDialog = false },
             onRevoke = { viewModel.revokeAgentToken(); showTokenDialog = false },
             onDismiss = { showTokenDialog = false },
+        )
+    }
+
+    // SSH 测试历史
+    if (showHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showHistoryDialog = false },
+            title = { Text("SSH 测试历史") },
+            text = {
+                val history = uiState.sshTestHistory
+                if (history == null) {
+                    Text("加载中…")
+                } else if (history.isEmpty()) {
+                    Text("暂无测试记录")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        history.take(10).forEach { item ->
+                            Column {
+                                Row {
+                                    Text(
+                                        text = if (item.connected) "✓ 成功" else "✗ 失败",
+                                        color = if (item.connected) {
+                                            com.susumonitor.ui.theme.StatusOnline
+                                        } else {
+                                            MaterialTheme.colorScheme.error
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                    Text(
+                                        text = "  ${TimeFormatter.formatLocal(item.testedAt)} · ${item.durationMs}ms",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (!item.connected && item.errorCode != null) {
+                                    Text(
+                                        text = "错误码 ${item.errorCode}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHistoryDialog = false }) { Text("关闭") }
+            },
         )
     }
 

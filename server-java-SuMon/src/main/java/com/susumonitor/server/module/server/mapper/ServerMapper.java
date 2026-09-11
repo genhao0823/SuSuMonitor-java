@@ -1,6 +1,7 @@
 package com.susumonitor.server.module.server.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.susumonitor.server.module.server.entity.ServerEntity;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,32 +45,22 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
             @Param("sshPrivateKeyPassphraseEncrypted") String sshPrivateKeyPassphraseEncrypted);
 
     /**
-     * 按可选关键词统计有效服务器数量。
-     *
-     * @param keyword 匹配名称、地址或描述的关键词
-     * @return 有效服务器数量
-     */
-    long countActiveServers(
-            // 将搜索关键词绑定到 XML 的 keyword 参数。
-            @Param("keyword") String keyword);
-
-    /**
      * 分页查询有效服务器公开字段，不读取凭据和 Agent Token 哈希。
      *
+     * <p>分页由 MyBatis-Plus 分页拦截器承担：携带 IPage 参数自动执行 COUNT
+     * 并追加 LIMIT，total 回写到传入的 Page 对象。</p>
+     *
+     * @param page 分页参数（页码与每页数量，承载回写的 total）
      * @param keyword 匹配名称、地址或描述的关键词
-     * @param offset 分页偏移量
-     * @param pageSize 每页数量
      * @param sortBy 排序字段白名单值
      * @param sortOrder 排序方向白名单值
-     * @return 有效服务器列表
+     * @return 当前页有效服务器列表
      */
     List<ServerEntity> selectActiveServers(
+            // 承载分页参数与回写的 total，由分页拦截器消费。
+            IPage<ServerEntity> page,
             // 将搜索关键词绑定到 XML 的 keyword 参数。
             @Param("keyword") String keyword,
-            // 将分页偏移量绑定到 XML 的 offset 参数。
-            @Param("offset") long offset,
-            // 将每页数量绑定到 XML 的 pageSize 参数。
-            @Param("pageSize") int pageSize,
             // 将排序字段标识绑定到 XML 的 sortBy 参数，XML 仅通过固定分支使用该值。
             @Param("sortBy") String sortBy,
             // 将排序方向标识绑定到 XML 的 sortOrder 参数，XML 仅通过固定分支使用该值。

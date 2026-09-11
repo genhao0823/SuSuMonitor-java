@@ -8,7 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.alert.mapper.AlertRecordCleanupMapper;
-import com.susumonitor.server.module.metrics.service.MetricsCleanupService.CleanupResult;
+import com.susumonitor.server.common.cleanup.BatchCleanupExecutor;
+import com.susumonitor.server.common.cleanup.CleanupResult;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -94,6 +95,6 @@ class AlertRecordCleanupServiceTests {
             TransactionCallback<Integer> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
         }).when(transactionTemplate).execute(any());
-        return new AlertRecordCleanupServiceImpl(alertRecordCleanupMapper, appProperties, transactionTemplate);
+        return new AlertRecordCleanupServiceImpl(alertRecordCleanupMapper, appProperties, new BatchCleanupExecutor(transactionTemplate));
     }
 }

@@ -1,20 +1,18 @@
 package com.susumonitor.server.module.alert.service;
 
+import com.susumonitor.server.common.cleanup.BatchCleanupExecutor;
+import com.susumonitor.server.common.cleanup.CleanupResult;
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.alert.mapper.AlertNotificationCleanupMapper;
-import com.susumonitor.server.module.metrics.service.MetricsCleanupService.CleanupResult;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 分批清理超过保留期的通知投递记录（alert_notifications），并保证同一 JVM 内定时任务不重叠。
+ * 分批清理超过保留期的通知投递记录（alert_notifications）；防重入与批量循环由共享执行器承担。
  *
  * <p>补齐 V21 通知表"只增不删"的增长风险：清理按 created_at 分批删除，
  * 保留期、批大小与轮次上限均可配置，语义与其他清理服务（记录/Outbox/消费记录）一致。</p>
@@ -26,21 +24,20 @@ public class AlertNotificationCleanupServiceImpl implements AlertNotificationCle
 
     private final AlertNotificationCleanupMapper notificationCleanupMapper;
     private final AppProperties appProperties;
-    private final TransactionTemplate transactionTemplate;
-    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final BatchCleanupExecutor batchCleanupExecutor;
 
     /**
      * 构造通知投递清理服务。
      *
      * @param notificationCleanupMapper 通知投递清理 Mapper
      * @param appProperties 应用配置
-     * @param transactionTemplate 每批独立事务模板
+     * @param batchCleanupExecutor 共享批量清理执行器
      */
     public AlertNotificationCleanupServiceImpl(AlertNotificationCleanupMapper notificationCleanupMapper,
-            AppProperties appProperties, TransactionTemplate transactionTemplate) {
+            AppProperties appProperties, BatchCleanupExecutor batchCleanupExecutor) {
         this.notificationCleanupMapper = notificationCleanupMapper;
         this.appProperties = appProperties;
-        this.transactionTemplate = transactionTemplate;
+        this.batchCleanupExecutor = batchCleanupExecutor;
     }
 
     /**
@@ -63,30 +60,10 @@ public class AlertNotificationCleanupServiceImpl implements AlertNotificationCle
      */
     @Override
     public Optional<CleanupResult> cleanupExpiredNotifications(LocalDateTime cutoffTime) {
-        if (!running.compareAndSet(false, true)) {
-            return Optional.empty();
-        }
-
-        long startedAt = System.nanoTime();
-        int batchCount = 0;
-        int deletedRows = 0;
-        try {
-            int maxBatches = appProperties.getAlert().getNotificationCleanupMaxBatchesPerRun();
-            int batchSize = appProperties.getAlert().getNotificationCleanupBatchSize();
-            while (batchCount < maxBatches) {
-                Integer deleted = transactionTemplate.execute(status ->
-                        notificationCleanupMapper.deleteExpiredBatch(cutoffTime, batchSize));
-                int currentDeleted = deleted == null ? 0 : deleted;
-                if (currentDeleted == 0) {
-                    break;
-                }
-                batchCount++;
-                deletedRows += currentDeleted;
-            }
-            long durationMs = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
-            return Optional.of(new CleanupResult(cutoffTime, batchCount, deletedRows, durationMs));
-        } finally {
-            running.set(false);
-        }
+        return batchCleanupExecutor.run("alert-notifications", cutoffTime,
+                notificationCleanupMapper::deleteExpiredBatch,
+                appProperties.getAlert().getNotificationCleanupBatchSize(),
+                appProperties.getAlert().getNotificationCleanupMaxBatchesPerRun());
     }
+
 }

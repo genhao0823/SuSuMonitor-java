@@ -281,6 +281,62 @@
         }
       }
     },
+    "/api/ai/commands/auto-approval-policy": {
+      "get": {
+        "tags": ["ai-command"],
+        "summary": "Get the auto-approval policy",
+        "description": "Instance-level single-row policy. A missing row is reported as disabled (fail-closed); when enabled, AI-sourced suggestions at or below max_risk_level are auto-approved and dispatched without a human click. Manual runs and high-risk templates always require human approval.",
+        "operationId": "getAutoApprovalPolicy",
+        "x-required-role": "admin",
+        "responses": {
+          "200": {
+            "description": "Current policy snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoApprovalPolicyResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "put": {
+        "tags": ["ai-command"],
+        "summary": "Update the auto-approval policy",
+        "description": "Upserts the single policy row. max_risk_level must be low or medium; high is rejected with 40002.",
+        "operationId": "updateAutoApprovalPolicy",
+        "x-required-role": "admin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoApprovalPolicyRequest"
+              },
+              "example": { "enabled": true, "max_risk_level": "medium" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated policy snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoApprovalPolicyResponse"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidParameter" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
     "/api/ai/commands/templates": {
       "get": {
         "tags": ["ai-command"],
@@ -460,6 +516,16 @@
             ]
           },
           "source": { "type": "string", "enum": ["ai", "manual"] },
+          "risk_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "Risk tier snapshot taken from the template at creation time."
+          },
+          "approval_mode": {
+            "type": "string",
+            "enum": ["manual", "auto"],
+            "description": "manual = human approval; auto = policy-driven auto approval (approver_id stays null)."
+          },
           "proposal": {
             "type": "object",
             "additionalProperties": false,
@@ -544,6 +610,11 @@
               "properties": {
                 "id": { "type": "string" },
                 "argv": { "type": "array", "items": { "type": "string" } },
+                "risk_level": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"],
+                  "description": "Frozen risk tier of the template; high is never auto-approvable."
+                },
                 "params": {
                   "type": "array",
                   "items": {
@@ -558,6 +629,42 @@
               }
             }
           }
+        }
+      },
+      "AutoApprovalPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["enabled", "max_risk_level"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "When false (default), every command still requires human approval."
+          },
+          "max_risk_level": {
+            "type": "string",
+            "enum": ["low", "medium"],
+            "description": "Auto-approve templates at or below this tier (low only, or low+medium). high is never a valid threshold."
+          },
+          "updated_at": { "type": "string", "format": "date-time", "nullable": true },
+          "updated_by": { "type": "integer", "format": "int64", "nullable": true }
+        }
+      },
+      "AutoApprovalPolicyResponse": {
+        "type": "object",
+        "required": ["code", "message", "data"],
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "success" },
+          "data": { "$ref": "#/components/schemas/AutoApprovalPolicy" }
+        }
+      },
+      "AutoApprovalPolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["enabled", "max_risk_level"],
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "max_risk_level": { "type": "string", "enum": ["low", "medium"] }
         }
       }
     }

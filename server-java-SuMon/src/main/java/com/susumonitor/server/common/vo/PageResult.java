@@ -6,8 +6,8 @@ import java.util.List;
 import lombok.Data;
 
 /**
- * 通用分页查询结果，由各 Service 手写 offset + COUNT/LIMIT 分页查询填充
- * （未使用 MyBatis Plus 分页插件）。
+ * 通用分页查询结果：各 Service 以 MyBatis-Plus 分页插件（IPage 参数）执行
+ * COUNT/LIMIT 查询后填充，响应结构保持 items/total/page/page_size 不变。
  *
  * @param <T> 列表数据类型
  */

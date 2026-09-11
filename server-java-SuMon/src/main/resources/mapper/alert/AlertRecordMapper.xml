@@ -53,13 +53,6 @@
             <if test="serverId != null">AND server_id = #{serverId}</if>
             <if test="status != null and status != ''">AND status = #{status}</if>
         </where>
-        ORDER BY triggered_at DESC, id DESC LIMIT #{offset}, #{pageSize}
-    </select>
-    <select id="countRecords" resultType="long">
-        SELECT COUNT(id) FROM alert_records
-        <where>
-            <if test="serverId != null">AND server_id = #{serverId}</if>
-            <if test="status != null and status != ''">AND status = #{status}</if>
-        </where>
+        ORDER BY triggered_at DESC, id DESC
     </select>
 </mapper>

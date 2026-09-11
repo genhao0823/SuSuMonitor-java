@@ -25,6 +25,7 @@
             v-model="form.username"
             autocomplete="username"
             placeholder="请输入用户名"
+            :prefix-icon="User"
             clearable
           />
         </el-form-item>
@@ -38,6 +39,7 @@
             autocomplete="current-password"
             show-password
             placeholder="请输入密码"
+            :prefix-icon="Lock"
           />
         </el-form-item>
         <div class="login-view__options">
@@ -59,7 +61,7 @@
           @click.prevent="onLoginClick"
         >
           <span v-if="submitting">登录中...</span>
-          <span v-else>登 录</span>
+          <span v-else>登录</span>
         </button>
         <div class="login-view__footer">
           <span>还没有账户?</span>
@@ -76,6 +78,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { Lock, User } from '@element-plus/icons-vue'
 import AuthLayout from '@/views/AuthLayout.vue'
 import { ApiBusinessError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -201,65 +204,87 @@ function handleForgot(): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 4px 0 8px;
+  margin: 2px 0 6px;
   font-size: 13px;
 }
 
 .login-view__options :deep(.el-checkbox__label) {
-  color: #6d3b54;
+  color: var(--auth-ink-soft);
   font-weight: 500;
 }
 
+.login-view__options :deep(.el-checkbox__inner) {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.login-view__options :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background-color: var(--auth-primary);
+  border-color: var(--auth-primary-bright);
+}
+
+.login-view__options :deep(.el-checkbox__input.is-checked + .el-checkbox__label) {
+  color: var(--auth-ink-soft);
+}
+
 .login-view__forgot {
-  color: #b7325c;
+  color: var(--auth-link);
   text-decoration: none;
   font-weight: 600;
   transition: color 0.15s;
 }
 
 .login-view__forgot:hover {
-  color: #ff5b8a;
+  color: var(--auth-primary-bright);
 }
 
 .login-view__submit {
   width: 100%;
-  height: 46px;
+  height: 44px;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 8px;
-  margin-top: 12px;
-  background: linear-gradient(135deg, #ff5b8a 0%, #b7325c 100%);
+  margin-top: 10px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #ff6b9d 0%, #f43f7e 55%, #e0356f 100%);
   border: none;
-  border-radius: 10px;
-  box-shadow: 0 6px 16px rgba(255, 91, 138, 0.3);
-  transition: transform 0.15s, box-shadow 0.15s;
+  border-radius: 12px;
+  box-shadow: 0 10px 26px rgba(244, 63, 126, 0.35);
+  transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .login-view__submit:hover {
-  background: linear-gradient(135deg, #ff7aa3 0%, #c8426f 100%);
+  filter: brightness(1.08);
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(255, 91, 138, 0.4);
+  box-shadow: 0 12px 30px rgba(244, 63, 126, 0.45);
 }
 
 .login-view__submit:active {
+  filter: brightness(0.95);
   transform: translateY(0);
 }
 
+.login-view__submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .login-view__footer {
-  margin-top: 22px;
+  margin-top: 16px;
   text-align: center;
   font-size: 13px;
-  color: #6d3b54;
+  color: var(--auth-ink-muted);
 }
 
 .login-view__footer a {
   margin-left: 4px;
-  color: #b7325c;
+  color: var(--auth-link);
   text-decoration: none;
   font-weight: 700;
 }
 
 .login-view__footer a:hover {
-  color: #ff5b8a;
+  color: var(--auth-primary-bright);
 }
 </style>

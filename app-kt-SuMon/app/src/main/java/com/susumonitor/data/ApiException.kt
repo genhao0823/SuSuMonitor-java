@@ -45,7 +45,11 @@ sealed class ApiException(message: String) : Exception(message) {
                     }
                 }
             }
-            return Business(0, "HTTP ${response.code()}")
+            // 错误体非信封（多为网关层直返）：按 HTTP 状态给出可读文案
+            return when (response.code()) {
+                502, 503, 504 -> Business(0, "服务器暂时不可用（HTTP ${response.code()}），请稍后重试")
+                else -> Business(0, "HTTP ${response.code()}")
+            }
         }
     }
 }

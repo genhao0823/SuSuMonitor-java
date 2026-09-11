@@ -7,7 +7,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 import com.susumonitor.server.config.AppProperties;
-import com.susumonitor.server.module.metrics.service.MetricsCleanupService.CleanupResult;
+import com.susumonitor.server.common.cleanup.BatchCleanupExecutor;
+import com.susumonitor.server.common.cleanup.CleanupResult;
 import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -94,6 +95,6 @@ class SshTestHistoryCleanupServiceTests {
             TransactionCallback<Integer> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
         }).when(transactionTemplate).execute(any());
-        return new SshTestHistoryCleanupServiceImpl(sshTestHistoryMapper, appProperties, transactionTemplate);
+        return new SshTestHistoryCleanupServiceImpl(sshTestHistoryMapper, appProperties, new BatchCleanupExecutor(transactionTemplate));
     }
 }

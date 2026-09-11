@@ -99,22 +99,28 @@
 
 **本表是 L1 模板的唯一权威来源（single source of truth）。** Java 与 Go 双侧模板表必须与本文逐字一致（模板 id、argv 序列、参数正则）；任何增删改必须先修订本文，再同步双侧实现，不允许任何一侧单独扩展。
 
-| id | argv | 参数 |
-|---|---|---|
-| `disk_free` | `df -h` | 无 |
-| `mem_free` | `free -m` | 无 |
-| `uptime` | `uptime` | 无 |
-| `listening_ports` | `ss -tlnp` | 无 |
-| `process_list` | `ps aux` | 无 |
-| `top_snapshot` | `top -b -n1` | 无 |
-| `service_status` | `systemctl status {unit}` | `unit`: `^[a-zA-Z0-9_.@:-]{1,128}$` |
-| `service_logs` | `journalctl -u {unit} -n {lines} --no-pager` | `unit`: 同 `service_status`；`lines`: `^[0-9]{1,4}$` |
+| id | argv | 风险等级 | 参数 |
+|---|---|---|---|
+| `disk_free` | `df -h` | low | 无 |
+| `mem_free` | `free -m` | low | 无 |
+| `uptime` | `uptime` | low | 无 |
+| `listening_ports` | `ss -tlnp` | low | 无 |
+| `process_list` | `ps aux` | low | 无 |
+| `top_snapshot` | `top -b -n1` | low | 无 |
+| `service_status` | `systemctl status {unit}` | low | `unit`: `^[a-zA-Z0-9_.@:-]{1,128}$` |
+| `service_logs` | `journalctl -u {unit} -n {lines} --no-pager` | low | `unit`: 同 `service_status`；`lines`: `^[0-9]{1,4}$` |
 
 渲染规则：
 
 - `{unit}`、`{lines}` 为参数占位符；渲染后按空白切分为独立 argv 元素，参数值整体作为单个 argv 元素传入，不做二次拆分、不做 shell 解析。
 - 参数必须同时满足：键名与模板声明一致、无多余键、值匹配对应正则；任一不满足即 `param_invalid`。
 - M1 仅限本表 L1 只读模板；写操作或交互式模板属 M2/M3 设想，不在本文范围。
+
+风险等级（2026-09-10 修订，V33 自动审批配套）：
+
+- `low` = 只读诊断（本表全部模板）；`medium` = 低影响变更（M2 预留）；`high` = 高影响变更（永不参与自动审批）。
+- Java 侧 `CommandTemplateRegistry` 与 `GET /api/ai/commands/templates` 输出与本表等级一致；`ai_command_runs.risk_level` 在创建时按本表快照落审计。
+- 自动审批策略阈值仅允许 `low` / `medium`；`high` 不可作为阈值，且任何阈值下 high 模板都不会被自动审批。
 
 ## 六、安全语义
 

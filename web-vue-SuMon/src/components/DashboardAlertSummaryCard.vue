@@ -89,7 +89,7 @@ const emit = defineEmits<{
 
 .alert-summary-card__title {
   margin: 4px 0 0;
-  color: #2a1626;
+  color: var(--susu-ink);
   font-size: 17px;
   font-weight: 700;
 }

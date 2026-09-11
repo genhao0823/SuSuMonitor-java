@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.susumonitor.server.module.server.entity.ServerEntity;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -57,12 +58,15 @@ class ServerMapperMySqlValidationIT {
     @Test
     void selectActiveServersShouldSortBeforeApplyingPagination() {
         withTestRows(() -> {
-            List<String> firstPage = names(serverMapper.selectActiveServers(TEST_PREFIX, 0L, 2, "name", "asc"));
-            List<String> secondPage = names(serverMapper.selectActiveServers(TEST_PREFIX, 2L, 2, "name", "asc"));
+            List<String> firstPage = names(serverMapper.selectActiveServers(
+                    new Page<>(1, 2), TEST_PREFIX, "name", "asc"));
+            Page<ServerEntity> secondPager = new Page<>(2, 2);
+            List<String> secondPage = names(serverMapper.selectActiveServers(
+                    secondPager, TEST_PREFIX, "name", "asc"));
 
             assertEquals(List.of("alpha", "bravo"), firstPage);
             assertEquals(List.of("charlie"), secondPage);
-            assertEquals(3L, serverMapper.countActiveServers(TEST_PREFIX));
+            assertEquals(3L, secondPager.getTotal());
         });
     }
 
@@ -70,9 +74,10 @@ class ServerMapperMySqlValidationIT {
     @Test
     void keywordSortingShouldExcludeSoftDeletedRows() {
         withTestRows(() -> {
-            List<ServerEntity> result = serverMapper.selectActiveServers("j2-sort", 0L, 20, "name", "asc");
+            Page<ServerEntity> pager = new Page<>(1, 20);
+            List<ServerEntity> result = serverMapper.selectActiveServers(pager, "j2-sort", "name", "asc");
 
-            assertEquals(3L, serverMapper.countActiveServers("j2-sort"));
+            assertEquals(3L, pager.getTotal());
             assertEquals(3, result.size());
             assertTrue(result.stream().noneMatch(row -> Boolean.TRUE.equals(row.getDeleted())));
             assertFalse(result.stream().anyMatch(row -> row.getName().contains("deleted")));
@@ -150,8 +155,9 @@ class ServerMapperMySqlValidationIT {
 
     /** 按真实 Mapper 返回的主键顺序断言排序结果。 */
     private void assertOrder(String sortBy, String sortOrder, List<String> expected) {
-        assertEquals(expected, names(serverMapper.selectActiveServers(TEST_PREFIX, 0L, 20, sortBy, sortOrder)));
+        assertEquals(expected, names(serverMapper.selectActiveServers(new Page<>(1, 20), TEST_PREFIX, sortBy, sortOrder)));
     }
+
 
     /** 将 Mapper 实体结果转换为测试记录名称顺序，避免依赖自增 ID。 */
     private List<String> names(List<ServerEntity> rows) {

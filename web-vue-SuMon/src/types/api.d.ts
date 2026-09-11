@@ -448,3 +448,333 @@ export interface AgentToken {
   agent_token: string
   created_at: string
 }
+
+/* ---------------------------------------------------------------------------
+ * AI 模块(/api/ai/** 与 /api/alerts/records/{id}/explanation)类型,
+ * 与 openapi-ai.json / openapi-command.json / openapi-alert.json 严格对齐。
+ * OpenAPI JSON 是唯一事实源;字段变更必须先改 JSON 再同步本文件。
+ * ------------------------------------------------------------------------- */
+
+/**
+ * AI 诊断严重程度枚举(与 OpenAPI AiDiagnosis.severity 枚举对齐)。
+ */
+export type AiSeverity = 'info' | 'warning' | 'critical' | 'unknown'
+
+/**
+ * AI 诊断发现置信度枚举(与 OpenAPI AiFinding.confidence 枚举对齐)。
+ */
+export type AiConfidence = 'low' | 'medium' | 'high' | 'unknown'
+
+/**
+ * AI Token 消耗统计(与 OpenAPI AiUsage schema 字段一致)。
+ * estimated_cost 为服务端估算值;currency 为三位货币代码。
+ */
+export interface AiUsage {
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  estimated_cost: number
+  currency: string
+}
+
+/**
+ * AI 只读诊断请求体(与 OpenAPI AiDiagnosisRequest 字段一致)。
+ * 后端 ignoreUnknown=false,禁止携带契约外字段。
+ */
+export interface AiDiagnosisRequest {
+  server_id: number
+  /** 管理员问题,后端视为不可信文本,最长 4000 字符。 */
+  question: string
+  /** UTC 监控历史窗口(分钟),0~1440。 */
+  history_minutes: number
+}
+
+/**
+ * AI 诊断单条发现(与 OpenAPI AiFinding schema 字段一致)。
+ */
+export interface AiFinding {
+  title: string
+  description: string
+  confidence: AiConfidence
+}
+
+/**
+ * AI 诊断单条证据(与 OpenAPI AiEvidence schema 字段一致)。
+ * value 为白名单指标的采样值(数字或字符串),可能为 null;
+ * 服务端会用真实采样强制覆盖模型输出,前端可直接展示。
+ */
+export interface AiEvidence {
+  metric: string
+  value: number | string | null
+  observed_at: string
+  source: 'monitoring_summary' | 'alert_summary'
+}
+
+/**
+ * AI 只读诊断结果(与 OpenAPI AiDiagnosis schema 字段一致)。
+ * model_used=false 表示后端走了确定性降级摘要(未实际调用大模型)。
+ */
+export interface AiDiagnosis {
+  summary: string
+  severity: AiSeverity
+  findings: AiFinding[]
+  evidence: AiEvidence[]
+  recommendations: string[]
+  limitations: string[]
+  model_used: boolean
+  provider: string
+  model: string
+  prompt_version: string
+  usage: AiUsage
+}
+
+/**
+ * AI 运维问答请求体(与 OpenAPI AiQaRequest 字段一致)。
+ * server_id 可省略或传 null,表示全局性问题。
+ */
+export interface AiQaRequest {
+  server_id?: number | null
+  /** 管理员问题,最长 4000 字符(后端可能按配置进一步收紧)。 */
+  question: string
+}
+
+/**
+ * 问答本轮实际调用的只读工具审计(与 OpenAPI AiToolCall schema 字段一致)。
+ * args 为脱敏后的参数摘要字符串(JSON 文本)。
+ */
+export interface AiToolCall {
+  tool: string
+  args: string
+}
+
+/**
+ * AI 运维问答结果(与 OpenAPI AiQa schema 字段一致)。
+ * degraded=true 表示工具化调用失败后回退(无工具单次调用或确定性摘要)。
+ */
+export interface AiQa {
+  answer: string
+  tool_calls: AiToolCall[]
+  model_used: boolean
+  degraded: boolean
+  provider: string
+  model: string
+  prompt_version: string
+  usage: AiUsage
+}
+
+/**
+ * 告警 AI 解释的 Token 消耗(与 openapi-alert.json AiAlertExplanation.usage 内联结构一致;
+ * 与 AI 模块的 AiUsage 不同,这里没有 estimated_cost/currency)。
+ */
+export interface AiExplanationUsage {
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+}
+
+/**
+ * 告警记录 AI 智能解释(与 openapi-alert.json AiAlertExplanation schema 字段一致)。
+ * 仅在 susumonitor.ai.explanation.enabled=true 时存在;未生成时接口返回 404。
+ */
+export interface AiAlertExplanation {
+  record_id: number
+  summary: string
+  possible_causes?: string[]
+  impact?: string[]
+  suggestions?: string[]
+  limitations?: string[]
+  usage?: AiExplanationUsage | null
+  provider: string
+  model: string
+  prompt_version: string
+  created_at?: string | null
+}
+
+/**
+ * AI 命令建议请求体(与 OpenAPI CommandSuggestionRequest 字段一致)。
+ * intent 为运维意图描述,最长 2000 字符。
+ */
+export interface CommandSuggestionRequest {
+  server_id: number
+  intent: string
+}
+
+/**
+ * 手动基于白名单模板创建待审批命令请求体(与 OpenAPI ManualCommandRequest 字段一致)。
+ * params 键值对最多 16 个,值必须满足模板参数正则,否则后端 40004。
+ */
+export interface ManualCommandRequest {
+  server_id: number
+  template_id: string
+  params?: Record<string, string>
+}
+
+/**
+ * 命令运行状态枚举(与 OpenAPI CommandRun.status 枚举对齐)。
+ * 终态:succeeded / failed / rejected / expired / timeout;其余状态会继续流转。
+ */
+export type CommandRunStatus =
+  | 'pending_approval'
+  | 'approved'
+  | 'executing'
+  | 'succeeded'
+  | 'failed'
+  | 'rejected'
+  | 'expired'
+  | 'timeout'
+
+/**
+ * 命令运行来源枚举(与 OpenAPI CommandRun.source 枚举对齐)。
+ */
+export type CommandRunSource = 'ai' | 'manual'
+
+/**
+ * 命令风险等级(与 OpenAPI CommandRun.risk_level 枚举对齐)。
+ * low=只读诊断;medium=低影响变更(预留);high=高影响变更(永不自动审批)。
+ */
+export type CommandRiskLevel = 'low' | 'medium' | 'high'
+
+/**
+ * 审批方式(与 OpenAPI CommandRun.approval_mode 枚举对齐)。
+ * manual=人工审批;auto=策略自动审批(approver_id 为空)。
+ */
+export type CommandApprovalMode = 'manual' | 'auto'
+
+/**
+ * AI 命令建议元信息(与 OpenAPI CommandRun.proposal 内联结构一致)。
+ * source=manual 时整个 proposal 为 null。
+ */
+export interface CommandProposal {
+  reason?: string
+  model?: string
+  prompt_version?: string
+}
+
+/**
+ * 命令执行输出(与 OpenAPI CommandRun.result 内联结构一致)。
+ * 为 Agent 回传的脱敏截断文本;未执行完成前为 null。
+ */
+export interface CommandRunResult {
+  stdout?: string
+  stderr?: string
+  truncated?: boolean
+  error?: string
+}
+
+/**
+ * 命令运行记录(与 OpenAPI CommandRun schema 字段一致)。
+ * rendered_command 是审批人确认执行内容的唯一依据。
+ */
+export interface CommandRun {
+  id: number
+  execution_id: string
+  server_id: number
+  template_id: string
+  params?: Record<string, string>
+  rendered_command: string
+  status: CommandRunStatus
+  source: CommandRunSource
+  risk_level?: CommandRiskLevel
+  approval_mode?: CommandApprovalMode
+  proposal?: CommandProposal | null
+  result?: CommandRunResult | null
+  exit_code?: number | null
+  proposer_id: number
+  approver_id?: number | null
+  expires_at?: string | null
+  created_at: string
+  completed_at?: string | null
+}
+
+/**
+ * 命令运行分页查询参数(与 OpenAPI listCommandRuns parameters 对齐)。
+ * server_id / status 不传表示不过滤;page_size 范围 1~100。
+ */
+export interface CommandRunQuery {
+  server_id?: number
+  status?: CommandRunStatus
+  page?: number
+  page_size?: number
+}
+
+/**
+ * 白名单命令模板参数规则(与 OpenAPI TemplateListResponse items.params 字段一致)。
+ * pattern 为服务端冻结的正则,前端用它做输入框预校验(后端仍会严格拦截)。
+ */
+export interface CommandTemplateParam {
+  name: string
+  pattern: string
+}
+
+/**
+ * 白名单命令模板(与 OpenAPI TemplateListResponse items 字段一致)。
+ * argv 为命令二进制与固定参数列表,不含用户输入。
+ */
+export interface CommandTemplate {
+  id: string
+  argv: string[]
+  risk_level?: CommandRiskLevel
+  params: CommandTemplateParam[]
+}
+
+/**
+ * 自动审批策略快照(与 OpenAPI AutoApprovalPolicyResponse 字段一致)。
+ * enabled=false 时所有命令仍走人工审批;max_risk_level 为阈值(low/medium)。
+ */
+export interface AutoApprovalPolicy {
+  enabled: boolean
+  max_risk_level: CommandRiskLevel
+  updated_at?: string | null
+  updated_by?: number | null
+}
+
+/**
+ * 更新自动审批策略请求体(与 OpenAPI AutoApprovalPolicyRequest 字段一致)。
+ */
+export interface AutoApprovalPolicyRequest {
+  enabled: boolean
+  max_risk_level: CommandRiskLevel
+}
+
+/**
+ * 管理员个人 AI 服务商配置视图(与 OpenAPI AiProviderConfigView 字段一致)。
+ * api_key 只返回掩码,明文永远不离开服务端。
+ */
+export interface AiProviderConfigVo {
+  configured: boolean
+  provider?: string | null
+  base_url?: string | null
+  model?: string | null
+  api_key_masked?: string | null
+  enabled?: boolean | null
+  updated_at?: string | null
+}
+
+/**
+ * 保存个人 AI 服务商配置请求体(与 OpenAPI UpsertAiProviderConfigRequest 一致)。
+ * api_key 省略或空白表示保留已存 Key;endpoint 默认强制 HTTPS。
+ */
+export interface UpsertAiProviderConfigRequest {
+  base_url: string
+  api_key?: string | null
+  model: string
+  enabled?: boolean
+}
+
+/**
+ * 个人 AI 服务商连通性测试请求体(与 OpenAPI TestAiProviderConfigRequest 一致)。
+ * api_key 空白时服务端复用已存 Key。
+ */
+export interface TestAiProviderConfigRequest {
+  base_url: string
+  api_key?: string | null
+  model: string
+}
+
+/** 连通性测试结果(与 OpenAPI AiProviderConfigTestResult 一致);ok=false 时给出稳定错误码。 */
+export interface AiProviderConfigTestVo {
+  ok: boolean
+  latency_ms: number
+  error_code?: number | null
+  message?: string | null
+}

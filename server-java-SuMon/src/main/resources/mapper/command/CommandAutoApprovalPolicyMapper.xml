@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.command.mapper.CommandAutoApprovalPolicyMapper">
+
+    <resultMap id="PolicyResultMap"
+            type="com.susumonitor.server.module.command.entity.CommandAutoApprovalPolicyEntity">
+        <id column="id" property="id"/>
+        <result column="enabled" property="enabled"/>
+        <result column="max_risk_level" property="maxRiskLevel"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectPolicy" resultMap="PolicyResultMap">
+        SELECT id, enabled, max_risk_level, updated_by, updated_at
+        FROM ai_command_auto_approval_policies
+        WHERE id = #{id}
+    </select>
+
+    <insert id="upsertPolicy">
+        INSERT INTO ai_command_auto_approval_policies (id, enabled, max_risk_level, updated_by, updated_at)
+        VALUES (1, #{enabled}, #{maxRiskLevel}, #{updatedBy}, #{now})
+        ON DUPLICATE KEY UPDATE
+            enabled = VALUES(enabled),
+            max_risk_level = VALUES(max_risk_level),
+            updated_by = VALUES(updated_by),
+            updated_at = VALUES(updated_at)
+    </insert>
+</mapper>

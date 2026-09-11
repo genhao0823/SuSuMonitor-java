@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.alert.mapper.AlertNotificationCleanupMapper;
-import com.susumonitor.server.module.metrics.service.MetricsCleanupService.CleanupResult;
+import com.susumonitor.server.common.cleanup.CleanupResult;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;

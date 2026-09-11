@@ -15,6 +15,16 @@ vi.mock('@/stores/auth', () => ({
   })
 }))
 
+vi.mock('@/stores/theme', () => ({
+  useThemeStore: () => ({
+    mode: 'light',
+    isDark: false,
+    apply: vi.fn(),
+    setMode: vi.fn(),
+    toggle: vi.fn()
+  })
+}))
+
 const global = {
   stubs: {
     'el-container': { template: '<div><slot /></div>' },

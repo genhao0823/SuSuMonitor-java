@@ -7,7 +7,9 @@ import com.susumonitor.data.model.CreateServerRequest
 import com.susumonitor.data.model.PageResult
 import com.susumonitor.data.model.Server
 import com.susumonitor.data.model.ServerStatus
+import com.susumonitor.data.model.SshHostKeyObservation
 import com.susumonitor.data.model.SshHostKeyVo
+import com.susumonitor.data.model.SshTestHistoryItem
 import com.susumonitor.data.model.SshTestResult
 import com.susumonitor.data.model.UpdateServerRequest
 import retrofit2.http.Body
@@ -60,6 +62,14 @@ interface ServerApi {
     /** SSH 连接测试（admin；无请求体）。 */
     @POST("servers/{id}/ssh/test")
     suspend fun testSsh(@Path("id") id: Long): ApiResponse<SshTestResult>
+
+    /** SSH 连接测试历史（admin）。 */
+    @GET("servers/{id}/ssh/test/history")
+    suspend fun sshTestHistory(@Path("id") id: Long): ApiResponse<List<SshTestHistoryItem>>
+
+    /** 观察远端当前主机公钥指纹（admin；不改变信任登记）。 */
+    @POST("servers/{id}/ssh/host-key/observe")
+    suspend fun observeHostKey(@Path("id") id: Long): ApiResponse<SshHostKeyObservation>
 
     /** 确认/轮换 SSH 主机公钥指纹（admin）。 */
     @PUT("servers/{id}/ssh/host-key")

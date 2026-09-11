@@ -10,7 +10,7 @@ import com.susumonitor.server.module.ai.entity.AiDiagnosticRunEntity;
 import com.susumonitor.server.module.ai.limit.AiDiagnosisRateLimiter;
 import com.susumonitor.server.module.ai.mapper.AiDiagnosticRunMapper;
 import com.susumonitor.server.module.ai.model.AiDiagnosisContext;
-import com.susumonitor.server.module.ai.provider.AiProvider;
+import com.susumonitor.server.module.ai.provider.AiProviderResolver;
 import com.susumonitor.server.module.ai.vo.AiDiagnosisVo;
 import com.susumonitor.server.module.ai.vo.AiEvidenceVo;
 import com.susumonitor.server.module.ai.vo.AiFindingVo;
@@ -46,7 +46,7 @@ public class AiDiagnosisService {
     private final ServerService serverService;
     private final MetricsService metricsService;
     private final AlertRecordService alertRecordService;
-    private final AiProvider aiProvider;
+    private final AiProviderResolver providerResolver;
     private final AiDiagnosisRateLimiter rateLimiter;
     private final AiDiagnosticRunMapper auditMapper;
     private final AppProperties appProperties;
@@ -54,16 +54,16 @@ public class AiDiagnosisService {
     private final Clock clock;
     private final Semaphore permits;
 
-    /** 注入只读业务契约、模型端口、限流器与审计组件；不接触任何凭据或终端服务。 */
+    /** 注入只读业务契约、按用户 provider 解析器、限流器与审计组件；不接触任何凭据或终端服务。 */
     public AiDiagnosisService(ServerService serverService, MetricsService metricsService,
-            AlertRecordService alertRecordService, AiProvider aiProvider,
+            AlertRecordService alertRecordService, AiProviderResolver providerResolver,
             AiDiagnosisRateLimiter rateLimiter,
             AiDiagnosticRunMapper auditMapper, AppProperties appProperties,
             ObjectMapper objectMapper, Clock clock) {
         this.serverService = serverService;
         this.metricsService = metricsService;
         this.alertRecordService = alertRecordService;
-        this.aiProvider = aiProvider;
+        this.providerResolver = providerResolver;
         this.rateLimiter = rateLimiter;
         this.auditMapper = auditMapper;
         this.appProperties = appProperties;
@@ -90,14 +90,16 @@ public class AiDiagnosisService {
         long started = System.nanoTime();
         AiDiagnosticRunEntity audit = null;
         try {
+            // 按调用者解析生效配置（个人优先，全局兜底）；无可用配置时 fail-closed 50304。
+            AiProviderResolver.Resolution resolution = providerResolver.resolveForActor(actorId);
             AiDiagnosisContext context = buildContext(serverId, historyMinutes);
             String contextHash = sha256(objectMapper.writeValueAsString(context));
-            audit = beginAudit(actorId, serverId, ai, contextHash);
+            audit = beginAudit(actorId, serverId, resolution, contextHash);
             try {
-                AiDiagnosisVo result = aiProvider.diagnose(question, context);
+                AiDiagnosisVo result = resolution.provider().diagnose(question, context);
                 validateResult(result);
-                result.setProvider(ai.getProvider());
-                result.setModel(ai.getModel());
+                result.setProvider(resolution.providerName());
+                result.setModel(resolution.model());
                 result.setPromptVersion(ai.getPromptVersion());
                 result.setModelUsed(true);
                 completeAudit(audit, result, elapsed(started));
@@ -108,7 +110,7 @@ public class AiDiagnosisService {
                         || exception.getErrorCode() == ErrorCode.AI_PROVIDER_TIMEOUT
                         || exception.getErrorCode() == ErrorCode.AI_RESPONSE_INVALID
                         || exception.getErrorCode() == ErrorCode.AI_RATE_LIMIT_REACHED) {
-                    return fallback(context, ai, exception.getErrorCode());
+                    return fallback(context, resolution, exception.getErrorCode());
                 }
                 throw exception;
             }
@@ -174,7 +176,8 @@ public class AiDiagnosisService {
         evidence.add(item);
     }
 
-    private AiDiagnosisVo fallback(AiDiagnosisContext context, AppProperties.Ai ai, ErrorCode reason) {
+    private AiDiagnosisVo fallback(AiDiagnosisContext context, AiProviderResolver.Resolution resolution,
+            ErrorCode reason) {
         AiDiagnosisVo result = new AiDiagnosisVo();
         result.setSummary("Deterministic monitoring summary returned because the AI provider was unavailable.");
         result.setSeverity(context.alertSummaries().stream().anyMatch(item -> "critical".equals(item.level()))
@@ -188,23 +191,24 @@ public class AiDiagnosisService {
         result.setRecommendations(List.of("Use the existing read-only metrics and alert views for further investigation."));
         result.setLimitations(List.of("No model output was used; no remediation or command was executed."));
         result.setModelUsed(false);
-        result.setProvider(ai.getProvider());
-        result.setModel(ai.getModel() == null ? "" : ai.getModel());
-        result.setPromptVersion(ai.getPromptVersion());
+        result.setProvider(resolution.providerName());
+        result.setModel(resolution.model() == null ? "" : resolution.model());
+        result.setPromptVersion(appProperties.getAi().getPromptVersion());
         result.setUsage(new AiUsageVo());
         log.info("AI diagnosis fell back to deterministic summary, reason={}", reason.getCode());
         return result;
     }
 
-    private AiDiagnosticRunEntity beginAudit(Long actorId, Long serverId, AppProperties.Ai ai, String hash) {
+    private AiDiagnosticRunEntity beginAudit(Long actorId, Long serverId,
+            AiProviderResolver.Resolution resolution, String hash) {
         AiDiagnosticRunEntity audit = new AiDiagnosticRunEntity();
         audit.setRequestId(MDC.get("request_id"));
         audit.setCorrelationId(MDC.get("correlation_id"));
         audit.setActorId(actorId);
         audit.setServerId(serverId);
-        audit.setPromptVersion(ai.getPromptVersion());
-        audit.setProvider(ai.getProvider());
-        audit.setModel(ai.getModel());
+        audit.setPromptVersion(appProperties.getAi().getPromptVersion());
+        audit.setProvider(resolution.providerName());
+        audit.setModel(resolution.model());
         audit.setStatus("running");
         audit.setContextHash(hash);
         audit.setCreatedAt(java.time.LocalDateTime.now(clock));

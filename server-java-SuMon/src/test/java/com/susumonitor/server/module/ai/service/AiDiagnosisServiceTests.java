@@ -27,6 +27,7 @@ import com.susumonitor.server.module.ai.mapper.AiDiagnosticRunMapper;
 import com.susumonitor.server.module.ai.model.AiDiagnosisContext;
 import com.susumonitor.server.module.ai.provider.AiProvider;
 import com.susumonitor.server.module.ai.provider.AiProviderException;
+import com.susumonitor.server.module.ai.provider.AiProviderResolver;
 import com.susumonitor.server.module.ai.vo.AiDiagnosisVo;
 import com.susumonitor.server.module.ai.vo.AiEvidenceVo;
 import com.susumonitor.server.module.ai.vo.AiFindingVo;
@@ -66,6 +67,7 @@ class AiDiagnosisServiceTests {
     @Mock private MetricsService metricsService;
     @Mock private AlertRecordService alertRecordService;
     @Mock private AiProvider aiProvider;
+    @Mock private AiProviderResolver providerResolver;
     @Mock private AiDiagnosisRateLimiter rateLimiter;
     @Mock private AiDiagnosticRunMapper auditMapper;
 
@@ -85,8 +87,15 @@ class AiDiagnosisServiceTests {
         ai.setModel("test-model");
         ai.setMaxQuestionLength(80);
         objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        service = new AiDiagnosisService(serverService, metricsService, alertRecordService, aiProvider,
+        service = new AiDiagnosisService(serverService, metricsService, alertRecordService, providerResolver,
                 rateLimiter, auditMapper, appProperties, objectMapper, CLOCK);
+    }
+
+    /** 让解析器返回全局兜底 provider（个人配置优先场景由 AiProviderResolverTests 覆盖）。 */
+    private void resolveToGlobalProvider() {
+        when(providerResolver.resolveForActor(ACTOR_ID)).thenReturn(
+                new AiProviderResolver.Resolution(aiProvider, "openai-compatible", "test-model",
+                        AiProviderResolver.Source.GLOBAL));
     }
 
     /** 成功诊断只向 provider 提供白名单字段，并写入完成审计而不保存原始问题。 */
@@ -96,6 +105,7 @@ class AiDiagnosisServiceTests {
         when(metricsService.latest(SERVER_ID)).thenReturn(metrics());
         when(alertRecordService.listRecords(SERVER_ID, null, 1, 20)).thenReturn(emptyAlerts());
         when(auditMapper.insertRun(any())).thenReturn(1);
+        resolveToGlobalProvider();
         when(aiProvider.diagnose(anyString(), any())).thenAnswer(invocation -> diagnosis());
 
         AiDiagnosisVo result = service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 0);
@@ -121,6 +131,26 @@ class AiDiagnosisServiceTests {
         verify(auditMapper, never()).failRun(any());
         assertTrue(result.isModelUsed());
         assertEquals("test-model", result.getModel());
+    }
+
+    /** 解析器返回个人配置时，结果与审计应记录个人 provider/model 而非全局值。 */
+    @Test
+    void personalProviderConfigShouldBeUsedInResultAndAudit() throws Exception {
+        allowActiveServer();
+        when(metricsService.latest(SERVER_ID)).thenReturn(metrics());
+        when(alertRecordService.listRecords(SERVER_ID, null, 1, 20)).thenReturn(emptyAlerts());
+        when(auditMapper.insertRun(any())).thenReturn(1);
+        when(providerResolver.resolveForActor(ACTOR_ID)).thenReturn(
+                new AiProviderResolver.Resolution(aiProvider, "openai-compatible", "personal-model",
+                        AiProviderResolver.Source.PERSONAL));
+        when(aiProvider.diagnose(any(), any())).thenAnswer(invocation -> diagnosis());
+
+        AiDiagnosisVo result = service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 0);
+
+        assertEquals("personal-model", result.getModel());
+        ArgumentCaptor<AiDiagnosticRunEntity> auditCaptor = ArgumentCaptor.forClass(AiDiagnosticRunEntity.class);
+        verify(auditMapper).insertRun(auditCaptor.capture());
+        assertEquals("personal-model", auditCaptor.getValue().getModel());
     }
 
     /** 问题包含终端、凭据或 URL 请求时在上下文和 provider 调用前被拒绝。 */
@@ -202,6 +232,7 @@ class AiDiagnosisServiceTests {
         when(metricsService.latest(SERVER_ID)).thenReturn(metrics());
         when(alertRecordService.listRecords(SERVER_ID, null, 1, 20)).thenReturn(emptyAlerts());
         when(auditMapper.insertRun(any())).thenReturn(1);
+        resolveToGlobalProvider();
         when(aiProvider.diagnose(any(), any())).thenAnswer(invocation -> diagnosis());
 
         service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 0);
@@ -217,6 +248,7 @@ class AiDiagnosisServiceTests {
         when(metricsService.latest(SERVER_ID)).thenReturn(metrics());
         when(alertRecordService.listRecords(SERVER_ID, null, 1, 20)).thenReturn(alerts("cpu", "warning"));
         when(auditMapper.insertRun(any())).thenReturn(1);
+        resolveToGlobalProvider();
         when(aiProvider.diagnose(any(), any())).thenThrow(new AiProviderException(ErrorCode.AI_PROVIDER_TIMEOUT));
 
         AiDiagnosisVo result = service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 0);
@@ -238,6 +270,7 @@ class AiDiagnosisServiceTests {
                 .thenReturn(history());
         when(alertRecordService.listRecords(SERVER_ID, null, 1, 20)).thenReturn(emptyAlerts());
         when(auditMapper.insertRun(any())).thenReturn(1);
+        resolveToGlobalProvider();
         when(aiProvider.diagnose(any(), any())).thenAnswer(invocation -> diagnosis());
 
         service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 30);
@@ -255,8 +288,9 @@ class AiDiagnosisServiceTests {
         when(metricsService.latest(SERVER_ID)).thenReturn(metrics());
         when(alertRecordService.listRecords(SERVER_ID, null, 1, 20)).thenReturn(emptyAlerts());
         when(auditMapper.insertRun(any())).thenReturn(1);
+        resolveToGlobalProvider();
         appProperties.getAi().setMaxConcurrentRequests(1);
-        service = new AiDiagnosisService(serverService, metricsService, alertRecordService, aiProvider,
+        service = new AiDiagnosisService(serverService, metricsService, alertRecordService, providerResolver,
                 rateLimiter, auditMapper, appProperties, objectMapper, CLOCK);
 
         CountDownLatch enteredProvider = new CountDownLatch(1);
@@ -299,6 +333,7 @@ class AiDiagnosisServiceTests {
         when(metricsService.latest(SERVER_ID)).thenReturn(metrics());
         when(alertRecordService.listRecords(SERVER_ID, null, 1, 20)).thenReturn(alerts("memory", "critical"));
         when(auditMapper.insertRun(any())).thenReturn(1);
+        resolveToGlobalProvider();
         when(aiProvider.diagnose(any(), any())).thenAnswer(invocation -> diagnosis());
 
         service.diagnose(ACTOR_ID, SERVER_ID, "why high?", 0);

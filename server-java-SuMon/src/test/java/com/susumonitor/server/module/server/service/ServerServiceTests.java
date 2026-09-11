@@ -14,6 +14,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
@@ -236,7 +237,7 @@ class ServerServiceTests {
         assertError(ErrorCode.INVALID_REQUEST_PARAMETER, () -> serverService.update(7L, request));
     }
 
-    /** 验证列表正确计算偏移量、透传白名单排序并映射分页 VO。 */
+    /** 验证列表透传白名单排序、分页参数进入 Page 并映射分页 VO（total 由拦截器回写）。 */
     @Test
     void listShouldReturnMappedPage() {
         ServerQueryRequest request = new ServerQueryRequest();
@@ -245,9 +246,12 @@ class ServerServiceTests {
         request.setKeyword("prod");
         request.setSortBy("created_at");
         request.setSortOrder("asc");
-        when(serverMapper.countActiveServers("prod")).thenReturn(21L);
-        when(serverMapper.selectActiveServers("prod", 10L, 10, "created_at", "asc"))
-                .thenReturn(List.of(publicServer()));
+        when(serverMapper.selectActiveServers(any(), eq("prod"), eq("created_at"), eq("asc")))
+                .thenAnswer(invocation -> {
+                    Page<ServerEntity> pager = invocation.getArgument(0);
+                    pager.setTotal(21L);
+                    return List.of(publicServer());
+                });
 
         PageResult<ServerVo> result = serverService.list(request);
 
@@ -255,6 +259,11 @@ class ServerServiceTests {
         assertEquals(2, result.getPage());
         assertEquals(10, result.getPageSize());
         assertEquals(1, result.getItems().size());
+        ArgumentCaptor<Page<ServerEntity>> captor = pageCaptor();
+        verify(serverMapper).selectActiveServers(captor.capture(),
+                eq("prod"), eq("created_at"), eq("asc"));
+        assertEquals(2, captor.getValue().getCurrent());
+        assertEquals(10, captor.getValue().getSize());
     }
 
     /** 验证可选分页和排序字段为空时使用服务端默认值。 */
@@ -265,15 +274,17 @@ class ServerServiceTests {
         request.setPageSize(null);
         request.setSortBy(null);
         request.setSortOrder(null);
-        when(serverMapper.countActiveServers(null)).thenReturn(0L);
-        when(serverMapper.selectActiveServers(null, 0L, 20, "id", "desc"))
+        when(serverMapper.selectActiveServers(any(), isNull(), eq("id"), eq("desc")))
                 .thenReturn(List.of());
 
         PageResult<ServerVo> result = serverService.list(request);
 
         assertEquals(1, result.getPage());
         assertEquals(20, result.getPageSize());
-        verify(serverMapper).selectActiveServers(null, 0L, 20, "id", "desc");
+        ArgumentCaptor<Page<ServerEntity>> captor = pageCaptor();
+        verify(serverMapper).selectActiveServers(captor.capture(), isNull(), eq("id"), eq("desc"));
+        assertEquals(1, captor.getValue().getCurrent());
+        assertEquals(20, captor.getValue().getSize());
     }
 
     /** 验证非法排序方向在访问任何 Mapper 查询前失败。 */
@@ -283,8 +294,7 @@ class ServerServiceTests {
         request.setSortOrder("ascending");
 
         assertError(ErrorCode.INVALID_REQUEST_PARAMETER, () -> serverService.list(request));
-        verify(serverMapper, never()).countActiveServers(any());
-        verify(serverMapper, never()).selectActiveServers(any(), anyLong(), any(Integer.class), anyString(), anyString());
+        verify(serverMapper, never()).selectActiveServers(any(), any(), anyString(), anyString());
     }
 
     /** 验证所有排序字段和方向均完整透传到真实 Mapper 方法签名。 */
@@ -294,12 +304,12 @@ class ServerServiceTests {
         ServerQueryRequest request = new ServerQueryRequest();
         request.setSortBy(sortBy);
         request.setSortOrder(sortOrder);
-        when(serverMapper.countActiveServers(null)).thenReturn(0L);
-        when(serverMapper.selectActiveServers(null, 0L, 20, sortBy, sortOrder)).thenReturn(List.of());
+        when(serverMapper.selectActiveServers(any(), isNull(), eq(sortBy), eq(sortOrder)))
+                .thenReturn(List.of());
 
         serverService.list(request);
 
-        verify(serverMapper).selectActiveServers(null, 0L, 20, sortBy, sortOrder);
+        verify(serverMapper).selectActiveServers(any(), isNull(), eq(sortBy), eq(sortOrder));
     }
 
     /** 提供服务层允许的排序字段和方向组合。 */
@@ -315,7 +325,13 @@ class ServerServiceTests {
         request.setSortBy("name desc");
 
         assertError(ErrorCode.INVALID_REQUEST_PARAMETER, () -> serverService.list(request));
-        verify(serverMapper, never()).countActiveServers(any());
+        verify(serverMapper, never()).selectActiveServers(any(), any(), anyString(), anyString());
+    }
+
+    /** 构造分页参数捕获器（泛型数组限制下的常规绕行写法）。 */
+    @SuppressWarnings("unchecked")
+    private ArgumentCaptor<Page<ServerEntity>> pageCaptor() {
+        return (ArgumentCaptor<Page<ServerEntity>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(Page.class);
     }
 
     /** 验证详情不存在时返回 40400。 */
@@ -416,7 +432,7 @@ class ServerServiceTests {
     /** 验证 Mapper 数据访问异常映射为 50001。 */
     @Test
     void listDatabaseFailureShouldReturnDatabaseError() {
-        when(serverMapper.countActiveServers(isNull()))
+        when(serverMapper.selectActiveServers(any(), isNull(), anyString(), anyString()))
                 .thenThrow(new DataAccessResourceFailureException("database unavailable"));
 
         assertError(ErrorCode.DATABASE_ERROR, () -> serverService.list(new ServerQueryRequest()));

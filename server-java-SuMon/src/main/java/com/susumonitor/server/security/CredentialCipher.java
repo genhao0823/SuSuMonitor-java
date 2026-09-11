@@ -24,6 +24,12 @@ public class CredentialCipher {
 
     private static final String AAD_TEMPLATE = "susumonitor:server:%d:credential:%s";
 
+    /** 用户维度 AAD 模板：与服务器维度隔离，密文只能在其归属用户的 AI 场景下解密。 */
+    private static final String USER_AAD_TEMPLATE = "susumonitor:user:%d:credential:%s";
+
+    /** 用户维度当前唯一支持的凭据类型：管理员个人 AI 服务商 API Key。 */
+    private static final String USER_CREDENTIAL_TYPE_AI_API_KEY = "ai_api_key";
+
     private static final int IV_BYTES = 12;
 
     private static final int TAG_BITS = 128;
@@ -115,7 +121,105 @@ public class CredentialCipher {
     }
 
     /**
+     * 使用随机 IV 和用户凭据上下文加密明文（当前仅用于 AI API Key），并生成 v1 信封。
+     *
+     * <p>AAD 与服务器维度严格隔离：同一密文换用户或换用途均无法解密。</p>
+     *
+     * @param userId 正数用户 ID
+     * @param plaintext 非空凭据明文
+     * @return v1 格式密文信封
+     */
+    public String encryptForUser(Long userId, String plaintext) {
+        validateUserContext(userId);
+        if (plaintext == null || plaintext.isBlank()) {
+            throw new IllegalArgumentException("Credential plaintext must not be blank");
+        }
+        return encryptWithAad(userAad(userId), plaintext);
+    }
+
+    /**
+     * 校验 v1 信封和用户凭据上下文后解密密文。
+     *
+     * @param userId 正数用户 ID
+     * @param envelope v1 格式密文信封
+     * @return 凭据明文
+     */
+    public String decryptForUser(Long userId, String envelope) {
+        validateUserContext(userId);
+        if (envelope == null || envelope.isBlank()) {
+            throw new IllegalArgumentException("Credential envelope must not be blank");
+        }
+        return decryptWithAad(userAad(userId), envelope);
+    }
+
+    private String userAad(Long userId) {
+        return USER_AAD_TEMPLATE.formatted(userId, USER_CREDENTIAL_TYPE_AI_API_KEY);
+    }
+
+    private void validateUserContext(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("User ID must be greater than zero");
+        }
+    }
+
+    /** 使用随机 IV 和指定 AAD 加密明文，生成 v1 信封（服务器/用户维度共用实现）。 */
+    private String encryptWithAad(String aad, String plaintext) {
+        byte[] iv = new byte[IV_BYTES];
+        secureRandom.nextBytes(iv);
+        try {
+            Cipher cipher = createCipher(Cipher.ENCRYPT_MODE, aad, iv);
+            byte[] encryptedBytes = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+            byte[] envelopeBytes = new byte[iv.length + encryptedBytes.length];
+            System.arraycopy(iv, 0, envelopeBytes, 0, iv.length);
+            System.arraycopy(encryptedBytes, 0, envelopeBytes, iv.length, encryptedBytes.length);
+            return ENVELOPE_PREFIX + Base64.getEncoder().encodeToString(envelopeBytes);
+        } catch (GeneralSecurityException exception) {
+            throw new IllegalStateException("Credential encryption failed", exception);
+        }
+    }
+
+    /** 校验 v1 信封后按指定 AAD 解密密文（服务器/用户维度共用实现）。 */
+    private String decryptWithAad(String aad, String envelope) {
+        byte[] envelopeBytes;
+        try {
+            envelopeBytes = Base64.getDecoder().decode(envelope.substring(ENVELOPE_PREFIX.length()));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Credential envelope payload must be valid Base64", exception);
+        }
+        if (envelopeBytes.length <= IV_BYTES) {
+            throw new IllegalArgumentException("Credential envelope payload is invalid");
+        }
+        byte[] iv = new byte[IV_BYTES];
+        byte[] encryptedBytes = new byte[envelopeBytes.length - IV_BYTES];
+        System.arraycopy(envelopeBytes, 0, iv, 0, iv.length);
+        System.arraycopy(envelopeBytes, iv.length, encryptedBytes, 0, encryptedBytes.length);
+        try {
+            Cipher cipher = createCipher(Cipher.DECRYPT_MODE, aad, iv);
+            return new String(cipher.doFinal(encryptedBytes), StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException exception) {
+            throw new IllegalStateException("Credential decryption failed", exception);
+        }
+    }
+
+    /**
      * 创建绑定随机 IV 和 AAD 的 AES-GCM Cipher。
+     *
+     * @param mode 加密或解密模式
+     * @param aad 附加认证数据（服务器或用户维度模板渲染结果）
+     * @param iv 12 字节 GCM IV
+     * @return 已初始化的 Cipher
+     * @throws GeneralSecurityException JCA 初始化失败
+     */
+    private Cipher createCipher(int mode, String aad, byte[] iv)
+            throws GeneralSecurityException {
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(mode, secretKey, new GCMParameterSpec(TAG_BITS, iv));
+        cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
+        return cipher;
+    }
+
+    /**
+     * 创建绑定随机 IV 和 AAD 的 AES-GCM Cipher（服务器维度入口，保持既有调用契约）。
      *
      * @param mode 加密或解密模式
      * @param serverId 服务器 ID
@@ -126,11 +230,7 @@ public class CredentialCipher {
      */
     private Cipher createCipher(int mode, Long serverId, String credentialType, byte[] iv)
             throws GeneralSecurityException {
-        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-        cipher.init(mode, secretKey, new GCMParameterSpec(TAG_BITS, iv));
-        String aad = AAD_TEMPLATE.formatted(serverId, credentialType);
-        cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
-        return cipher;
+        return createCipher(mode, AAD_TEMPLATE.formatted(serverId, credentialType), iv);
     }
 
     /**

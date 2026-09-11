@@ -101,13 +101,6 @@
           AND deleted = 0
     </update>
 
-    <select id="countActiveServers" resultType="java.lang.Long">
-        SELECT COUNT(id)
-        FROM servers
-        WHERE deleted = 0
-        <include refid="KeywordCondition"/>
-    </select>
-
     <select id="selectActiveServers" resultMap="ServerResultMap">
         SELECT
         <include refid="PublicServerColumns"/>
@@ -132,7 +125,6 @@
             <when test="sortOrder == 'asc' or sortOrder == 'ASC'">ASC</when>
             <otherwise>DESC</otherwise>
         </choose>
-        LIMIT #{offset}, #{pageSize}
     </select>
 
     <select id="selectActiveServerById" resultMap="ServerResultMap">

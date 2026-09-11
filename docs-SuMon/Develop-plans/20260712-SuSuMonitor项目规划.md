@@ -2,9 +2,9 @@
 
 **日期**: 2026-07-12  
 **依据**: 根目录 `项目需求与规范.md`  
-**最后核对日期**: 2026-08-28
-**当前实施阶段**: **2026-08-28 当前基线 `main @ 4e4cd86`（文档校准）**；终端断线中继、心跳超时收口修复、alert.resolved.v1、运维收口、Android、HTTPS/WSS 及首管理员空库并发验收均有历史记录（部分基于旧提交 `617ccd0`，未在当前 HEAD 复跑）；当前仍未完成的是多 JVM 实例部署、真实 SMTP、真实 Agent 断网/重启联合 E2E、Monitor 1011 真实背压和备份 crontab 调度。历史明文 HTTP/IP/命令仅作追溯，禁止执行。另见根 README“当前待解决问题”章节（12 项契约缺口，含告警 `load`/`load_avg`、Metrics UTC、Web 分页/PUT/错误码等）。
-**最新进度**：首管理员空库并发真实验收在独立空 MySQL schema 中 conc=8 与 conc=20 均 PASS（基于旧提交，未在当前 HEAD 复跑）；提交链为计划 `ebe96d0`、验收脚本修正 `ebe152e`、验收记录 `617ccd0`。后端 591/590 是历史日志记录（`target-mvntest.log`），未在当前 HEAD 重新执行；`mvnw package` 已生成验收所需 JAR。Agent 指标可靠投递 M1-M4 已完成，隔离联合 E2E 已通过，真实断网/重启/公网场景仍待专项验收。
+**最后核对日期**: 2026-09-10
+**当前实施阶段**: **2026-09-10（AI 阶段 2 推进中）**。2026-09 新增并落地 AI 能力线（详见 `Develop-plans/20260830-大模型只读诊断MVP开发计划.md` 与 `Develop-plans/20260903-AI阶段2-主机操作命令域与智能化业务规划.md`）：AI 阶段 1 只读诊断 MVP 已于 2026-09-03 收口（642 单测 / 26 MySQL IT / 真实网关四路径 E2E）；AI 阶段 2 的 F1 告警智能解释（09-05）、F2 运维问答工具化（09-07）、F4-M1 审批制命令域（09-04，真实 Agent E2E）、F4-M2 自动审批首版（09-10，V33 已部署生产、策略默认关闭且由管理员手动开启）及 Web/Android 三端对接（09-09/09-10）均已完成。此前基线：终端断线中继、心跳超时收口修复、alert.resolved.v1、运维收口、Android、HTTPS/WSS 及首管理员空库并发验收均有历史记录（部分基于旧提交，未在当前 HEAD 复跑）。当前仍未完成：多 JVM 实例部署、真实 SMTP、真实 Agent 断网/重启联合 E2E、Monitor 1011 真实背压、备份 crontab 调度，以及 AI 阶段 2 的 F3 定时健康报告、F4-M3 门禁评审、F4-M2 的事后通知与观察期评审、Android 真机云端全链路手测。历史明文 HTTP/IP/命令仅作追溯，禁止执行。另见根 README“当前待解决问题”章节（12 项契约缺口，含告警 `load`/`load_avg`、Metrics UTC、Web 分页/PUT/错误码等）。
+**最新进度**：2026-09-10 三端测试基线为后端 749 单测 / Web 177（typecheck+lint+test+build 全绿）/ Android 120 单测 + debug APK。AI 命令自动审批已在生产（txcloud #8 真实 Agent）完成端到端验证：中低风险 AI 建议免人工直接 executing→succeeded，审计 `approval_mode=auto`、`approver_id=NULL`；部署链含 V33 迁移与发布前全量备份（证据 `Develop-log/20260910-AI命令自动审批三端实现.md`）。首管理员空库并发真实验收 conc=8/20 均 PASS（基于旧提交，未在当前 HEAD 复跑）；Agent 指标可靠投递 M1-M4 隔离联合 E2E 已通过，真实断网/重启/公网场景仍待专项验收。
 
 当前状态以本节矩阵和最新开发日志为准，后文历史实施顺序不代表当前完成状态。
 

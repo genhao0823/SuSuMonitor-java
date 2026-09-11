@@ -23,8 +23,8 @@ public class CommandTemplateRegistry {
     public record ParamSpec(String name, Pattern pattern) {
     }
 
-    /** 一条白名单命令模板：argv 元素可含 {name} 占位符，无 shell。 */
-    public record Template(String id, String[] argv, ParamSpec[] params) {
+    /** 一条白名单命令模板：argv 元素可含 {name} 占位符，无 shell；risk 为协议冻结的风险等级。 */
+    public record Template(String id, String[] argv, ParamSpec[] params, CommandRiskLevel risk) {
     }
 
     private static final Pattern UNIT_PATTERN = Pattern.compile("^[a-zA-Z0-9_.@:-]{1,128}$");
@@ -32,19 +32,20 @@ public class CommandTemplateRegistry {
 
     private final Map<String, Template> templates = new LinkedHashMap<>();
 
-    /** 构造注册表并装载契约冻结的 L1 只读模板（顺序即展示顺序）。 */
+    /** 构造注册表并装载契约冻结的 L1 只读模板（顺序即展示顺序；全部 low 风险）。 */
     public CommandTemplateRegistry() {
-        register(new Template("disk_free", new String[]{"df", "-h"}, new ParamSpec[0]));
-        register(new Template("mem_free", new String[]{"free", "-m"}, new ParamSpec[0]));
-        register(new Template("uptime", new String[]{"uptime"}, new ParamSpec[0]));
-        register(new Template("listening_ports", new String[]{"ss", "-tlnp"}, new ParamSpec[0]));
-        register(new Template("process_list", new String[]{"ps", "aux"}, new ParamSpec[0]));
-        register(new Template("top_snapshot", new String[]{"top", "-b", "-n1"}, new ParamSpec[0]));
+        register(new Template("disk_free", new String[]{"df", "-h"}, new ParamSpec[0], CommandRiskLevel.LOW));
+        register(new Template("mem_free", new String[]{"free", "-m"}, new ParamSpec[0], CommandRiskLevel.LOW));
+        register(new Template("uptime", new String[]{"uptime"}, new ParamSpec[0], CommandRiskLevel.LOW));
+        register(new Template("listening_ports", new String[]{"ss", "-tlnp"}, new ParamSpec[0], CommandRiskLevel.LOW));
+        register(new Template("process_list", new String[]{"ps", "aux"}, new ParamSpec[0], CommandRiskLevel.LOW));
+        register(new Template("top_snapshot", new String[]{"top", "-b", "-n1"}, new ParamSpec[0], CommandRiskLevel.LOW));
         register(new Template("service_status", new String[]{"systemctl", "status", "{unit}"},
-                new ParamSpec[]{new ParamSpec("unit", UNIT_PATTERN)}));
+                new ParamSpec[]{new ParamSpec("unit", UNIT_PATTERN)}, CommandRiskLevel.LOW));
         register(new Template("service_logs",
                 new String[]{"journalctl", "-u", "{unit}", "-n", "{lines}", "--no-pager"},
-                new ParamSpec[]{new ParamSpec("unit", UNIT_PATTERN), new ParamSpec("lines", LINES_PATTERN)}));
+                new ParamSpec[]{new ParamSpec("unit", UNIT_PATTERN), new ParamSpec("lines", LINES_PATTERN)},
+                CommandRiskLevel.LOW));
     }
 
     private void register(Template template) {

@@ -85,6 +85,24 @@ const protectedChildren: RouteRecordRaw[] = [
     meta: { title: '告警规则', requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/ai/qa',
+    name: 'ai-qa',
+    component: () => import('@/views/AiQaView.vue'),
+    meta: { title: 'AI 运维问答', requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/ai/commands',
+    name: 'ai-commands',
+    component: () => import('@/views/AiCommandsView.vue'),
+    meta: { title: 'AI 命令域', requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/ai/settings',
+    name: 'ai-settings',
+    component: () => import('@/views/AiProviderSettingsView.vue'),
+    meta: { title: 'AI 设置', requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/terminal/:serverId(\\d+)',
     name: 'terminal',
     component: () => import('@/views/TerminalView.vue'),

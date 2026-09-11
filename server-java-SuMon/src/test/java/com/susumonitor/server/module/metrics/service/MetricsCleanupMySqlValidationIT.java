@@ -15,6 +15,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import com.susumonitor.server.common.cleanup.CleanupResult;
 import com.susumonitor.server.config.AppProperties;
 
 /**
@@ -80,7 +81,7 @@ class MetricsCleanupMySqlValidationIT {
                     VALIDATION_SERVER_ID, cutoff.plusSeconds(1));
         });
 
-        MetricsCleanupService.CleanupResult result = cleanupService.cleanupExpiredMetrics(cutoff).orElseThrow();
+        CleanupResult result = cleanupService.cleanupExpiredMetrics(cutoff).orElseThrow();
 
         assertNotNull(result);
         assertEquals(1, result.deletedRows());
@@ -103,14 +104,14 @@ class MetricsCleanupMySqlValidationIT {
         appProperties.getMetrics().setCleanupBatchSize(2);
         appProperties.getMetrics().setCleanupMaxBatchesPerRun(2);
 
-        MetricsCleanupService.CleanupResult first = cleanupService.cleanupExpiredMetrics(cutoff).orElseThrow();
+        CleanupResult first = cleanupService.cleanupExpiredMetrics(cutoff).orElseThrow();
 
         assertEquals(2, first.batchCount());
         assertEquals(4, first.deletedRows());
         assertEquals(1, jdbcTemplate.queryForObject(
                 "SELECT COUNT(id) FROM metrics WHERE server_id = ?", Long.class, VALIDATION_SERVER_ID));
 
-        MetricsCleanupService.CleanupResult second = cleanupService.cleanupExpiredMetrics(cutoff).orElseThrow();
+        CleanupResult second = cleanupService.cleanupExpiredMetrics(cutoff).orElseThrow();
 
         assertEquals(1, second.deletedRows());
         assertEquals(0, jdbcTemplate.queryForObject(

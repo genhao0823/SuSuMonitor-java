@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MetricsLineChart from './MetricsLineChart.vue'
 import type { MetricsHistory } from '@/types/metrics'
@@ -35,6 +36,7 @@ function sample(overrides: Partial<MetricsHistory> = {}): MetricsHistory {
 
 describe('MetricsLineChart', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     setOptionMock.mockClear()
     disposeMock.mockClear()
   })

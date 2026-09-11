@@ -15,7 +15,7 @@ body {
     'Microsoft YaHei',
     sans-serif;
   background-color: var(--susu-page-bg, #f3f4f6);
-  color: var(--susu-text-dark, #2a1626);
+  color: var(--susu-text-dark, var(--susu-ink));
   letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -65,18 +65,18 @@ a:hover {
 
 /* 浅色/默认按钮玻璃化 */
 .el-button--default:not(.is-text) {
-  background: rgba(255, 255, 255, 0.75) !important;
+  background: var(--susu-surface) !important;
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.9) !important;
-  color: #5c3a4d !important;
+  border: 1px solid var(--susu-border-glass) !important;
+  color: var(--susu-ink-muted) !important;
   border-radius: 8px !important;
   box-shadow: 0 2px 8px rgba(183, 50, 92, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
   transition: all 0.2s ease !important;
 }
 
 .el-button--default:hover:not(.is-disabled) {
-  background: rgba(255, 255, 255, 0.95) !important;
+  background: var(--susu-surface-strong) !important;
   color: #ff5b8a !important;
   border-color: rgba(255, 91, 138, 0.4) !important;
   box-shadow: 0 4px 14px rgba(255, 91, 138, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -105,17 +105,17 @@ a:hover {
 .el-table {
   --el-table-bg-color: transparent !important;
   --el-table-tr-bg-color: transparent !important;
-  --el-table-header-bg-color: rgba(255, 255, 255, 0.55) !important;
+  --el-table-header-bg-color: var(--susu-surface-soft) !important;
   --el-table-row-hover-bg-color: rgba(255, 91, 138, 0.08) !important;
   --el-table-border-color: rgba(183, 50, 92, 0.08) !important;
   background: transparent !important;
 }
 
 .el-table th.el-table__cell {
-  background: rgba(255, 255, 255, 0.75) !important;
+  background: var(--susu-table-head-bg) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
-  color: #4a283b !important;
+  color: var(--susu-ink-soft) !important;
   font-weight: 700 !important;
   border-bottom: 1px solid rgba(183, 50, 92, 0.12) !important;
 }
@@ -125,7 +125,7 @@ a:hover {
 }
 
 .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
-  background: rgba(255, 255, 255, 0.35) !important;
+  background: var(--susu-surface-faint) !important;
 }
 
 /* 关键修复：固定列必须具备高遮蔽性实体背景，防止滚动时与底层普通列文字重叠透光 */
@@ -137,27 +137,27 @@ a:hover {
 .el-table__fixed-right td,
 .el-table__fixed th,
 .el-table__fixed td {
-  background-color: #ffffff !important;
-  background: #ffffff !important;
+  background-color: var(--susu-fixed-bg) !important;
+  background: var(--susu-fixed-bg) !important;
   z-index: 3 !important;
 }
 
 .el-table th.el-table-fixed-column--right,
 .el-table th.el-table-fixed-column--left {
-  background-color: #f9fafb !important;
-  background: #f9fafb !important;
+  background-color: var(--susu-fixed-head-bg) !important;
+  background: var(--susu-fixed-head-bg) !important;
 }
 
 .el-table--striped .el-table__body tr.el-table__row--striped td.el-table-fixed-column--right,
 .el-table--striped .el-table__body tr.el-table__row--striped td.el-table-fixed-column--left {
-  background-color: #f6f7f8 !important;
-  background: #f6f7f8 !important;
+  background-color: var(--susu-fixed-stripe-bg) !important;
+  background: var(--susu-fixed-stripe-bg) !important;
 }
 
 .el-table .el-table__body tr:hover > td.el-table-fixed-column--right,
 .el-table .el-table__body tr:hover > td.el-table-fixed-column--left {
-  background-color: #f3f4f6 !important;
-  background: #f3f4f6 !important;
+  background-color: var(--susu-fixed-hover-bg) !important;
+  background: var(--susu-fixed-hover-bg) !important;
 }
 
 /* 表格操作列通用按钮容器，避免换行与重叠 */
@@ -175,18 +175,18 @@ a:hover {
 /* 输入框微晶质感 */
 .el-input__wrapper,
 .el-select__wrapper {
-  background: rgba(255, 255, 255, 0.75) !important;
+  background: var(--susu-surface) !important;
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
   border-radius: 8px !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 6px rgba(183, 50, 92, 0.04) !important;
-  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid var(--susu-border-glass) !important;
   transition: all 0.2s ease !important;
 }
 
 .el-input__wrapper.is-focus,
 .el-select__wrapper.is-focused {
-  background: rgba(255, 255, 255, 0.95) !important;
+  background: var(--susu-surface-strong) !important;
   border-color: #ff5b8a !important;
   box-shadow: 0 0 0 1px #ff5b8a, 0 4px 14px rgba(255, 91, 138, 0.18) !important;
 }
@@ -195,16 +195,16 @@ a:hover {
 .el-overlay {
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
-  background-color: rgba(42, 22, 38, 0.35) !important;
+  background-color: var(--susu-overlay-bg) !important;
 }
 
 .el-dialog {
-  background: rgba(255, 255, 255, 0.85) !important;
+  background: var(--susu-dialog-bg) !important;
   backdrop-filter: blur(32px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid var(--susu-border-glass) !important;
   border-radius: 8px !important;
-  box-shadow: 0 28px 65px rgba(183, 50, 92, 0.2), inset 0 1px 0 rgba(255, 255, 255, 1) !important;
+  box-shadow: 0 28px 65px rgba(0, 0, 0, 0.35), inset 0 1px 0 var(--glass-border-light) !important;
   overflow: hidden;
 }
 
@@ -215,7 +215,7 @@ a:hover {
 }
 
 .el-dialog__title {
-  color: #2a1626 !important;
+  color: var(--susu-ink) !important;
   font-weight: 700 !important;
   font-size: 17px !important;
 }
@@ -228,12 +228,12 @@ a:hover {
 /* 下拉菜单毛玻璃 */
 .el-dropdown__popper.el-popper,
 .el-select__popper.el-popper {
-  background: rgba(255, 255, 255, 0.88) !important;
+  background: var(--susu-dialog-bg) !important;
   backdrop-filter: blur(24px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid var(--susu-border-glass) !important;
   border-radius: 8px !important;
-  box-shadow: 0 16px 36px rgba(183, 50, 92, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3), inset 0 1px 0 var(--glass-border-light) !important;
 }
 
 .el-dropdown-menu__item:hover {

@@ -1,5 +1,6 @@
 package com.susumonitor.server.module.alert.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
@@ -38,12 +39,13 @@ public class AlertRecordServiceImpl implements AlertRecordService {
         if (page == null || page < 1 || pageSize == null || pageSize < 1 || pageSize > MAX_PAGE_SIZE) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
         }
-        long offset = (long) (page - 1) * pageSize;
-        List<AlertRecordEntity> entities = recordMapper.selectRecords(serverId, status, offset, pageSize);
+        // 分页由 MyBatis-Plus 拦截器承担：COUNT 自动执行，total 回写 Page。
+        Page<AlertRecordEntity> pager = new Page<>(page, pageSize);
+        List<AlertRecordEntity> entities = recordMapper.selectRecords(pager, serverId, status);
         List<AlertRecordVo> items = entities.stream().map(this::toVo).toList();
         PageResult<AlertRecordVo> result = new PageResult<>();
         result.setItems(items);
-        result.setTotal(recordMapper.countRecords(serverId, status));
+        result.setTotal(pager.getTotal());
         result.setPage(page);
         result.setPageSize(pageSize);
         return result;

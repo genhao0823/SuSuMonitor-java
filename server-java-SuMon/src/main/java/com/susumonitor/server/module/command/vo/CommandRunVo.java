@@ -20,6 +20,10 @@ public class CommandRunVo {
     private String renderedCommand;
     private String status;
     private String source;
+    @JsonProperty("risk_level")
+    private String riskLevel;
+    @JsonProperty("approval_mode")
+    private String approvalMode;
     private Proposal proposal;
     private Result result;
     @JsonProperty("exit_code")
@@ -83,6 +87,10 @@ public class CommandRunVo {
     public void setStatus(String value) { status = value; }
     public String getSource() { return source; }
     public void setSource(String value) { source = value; }
+    public String getRiskLevel() { return riskLevel; }
+    public void setRiskLevel(String value) { riskLevel = value; }
+    public String getApprovalMode() { return approvalMode; }
+    public void setApprovalMode(String value) { approvalMode = value; }
     public Proposal getProposal() { return proposal; }
     public void setProposal(Proposal value) { proposal = value; }
     public Result getResult() { return result; }

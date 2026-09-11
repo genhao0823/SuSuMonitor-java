@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
+import com.susumonitor.server.common.cleanup.BatchCleanupExecutor;
+import com.susumonitor.server.common.cleanup.CleanupResult;
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.metrics.mapper.MetricsCleanupMapper;
 import java.util.Optional;
@@ -48,7 +50,7 @@ class MetricsCleanupServiceTests {
         when(metricsCleanupMapper.deleteExpiredBatch(any(), any(Integer.class))).thenReturn(0);
         MetricsCleanupService service = newService();
 
-        Optional<MetricsCleanupService.CleanupResult> result = service.cleanupExpiredMetrics();
+        Optional<CleanupResult> result = service.cleanupExpiredMetrics();
 
         assertTrue(result.isPresent());
         assertEquals(0, result.get().batchCount());
@@ -61,7 +63,7 @@ class MetricsCleanupServiceTests {
         when(metricsCleanupMapper.deleteExpiredBatch(any(), any(Integer.class))).thenReturn(2, 2, 2, 2);
         MetricsCleanupService service = newService();
 
-        MetricsCleanupService.CleanupResult result = service.cleanupExpiredMetrics().orElseThrow();
+        CleanupResult result = service.cleanupExpiredMetrics().orElseThrow();
 
         assertEquals(3, result.batchCount());
         assertEquals(6, result.deletedRows());
@@ -93,6 +95,6 @@ class MetricsCleanupServiceTests {
             TransactionCallback<Integer> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
         }).when(transactionTemplate).execute(any());
-        return new MetricsCleanupServiceImpl(metricsCleanupMapper, appProperties, transactionTemplate);
+        return new MetricsCleanupServiceImpl(metricsCleanupMapper, appProperties, new BatchCleanupExecutor(transactionTemplate));
     }
 }

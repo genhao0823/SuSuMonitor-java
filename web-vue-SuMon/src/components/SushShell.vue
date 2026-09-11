@@ -1,6 +1,17 @@
 <template>
   <main class="sush-shell">
-    <div class="sush-shell__glass">
+    <div class="sush-shell__card">
+      <span
+        v-if="effectiveLogoUrl"
+        class="sush-shell__logo-ring"
+      >
+        <img
+          :src="effectiveLogoUrl"
+          :alt="logoAlt"
+          class="sush-shell__logo"
+          @error="onLogoError"
+        >
+      </span>
       <header class="sush-shell__header">
         <h1 class="sush-shell__title">
           {{ panelTitle }}
@@ -23,185 +34,211 @@
 
 <script setup lang="ts">
 /**
- * 涂山苏苏认证页面右侧玻璃形态表单容器。
+ * 认证页面居中磨砂表单卡片(深夜极光版)。
  *
- * - 背景渐变 + 浮动光泽动画(liquid-hue + liquid-shimmer)
- * - 玻璃卡片 + backdrop-filter
+ * - 顶部渐变环(玫粉→鎏金)苏苏头像,加载失败自动隐藏
+ * - 近黑半透明磨砂卡片 + backdrop-filter,浮在极光背景之上
+ * - 色彩令牌(--auth-*)由 AuthLayout 提供,认证页不随明暗主题切换
  *
  * @prop panelTitle 表单标题
  * @prop panelSub 表单副标
  * @prop footerHint 表单底部 hint
+ * @prop logoUrl 头像 URL(可空,空则不渲染)
+ * @prop logoAlt 头像 alt 文本
  */
 
-defineProps<{
-  panelTitle: string
-  panelSub: string
-  footerHint: string
-}>()
+import { computed, ref } from 'vue'
+
+const props = withDefaults(
+  defineProps<{
+    panelTitle: string
+    panelSub: string
+    footerHint: string
+    logoUrl?: string | null
+    logoAlt?: string
+  }>(),
+  {
+    logoUrl: null,
+    logoAlt: '涂山苏苏'
+  }
+)
+
+const logoFailed = ref(false)
+
+const effectiveLogoUrl = computed<string | null>(() => {
+  return logoFailed.value ? null : props.logoUrl
+})
+
+function onLogoError(): void {
+  logoFailed.value = true
+}
 </script>
 
 <style scoped>
 .sush-shell {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 32px;
-  isolation: isolate;
-  overflow: hidden;
-}
-
-.sush-shell::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 20% 15%, rgba(255, 175, 200, 0.55) 0%, transparent 45%),
-    radial-gradient(circle at 80% 85%, rgba(245, 215, 130, 0.4) 0%, transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.3) 0%, transparent 60%);
-  z-index: 0;
-  pointer-events: none;
-  animation: sush-shell__liquid-hue 12s ease-in-out infinite;
-}
-
-.sush-shell::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    115deg,
-    transparent 35%,
-    rgba(255, 255, 255, 0.5) 50%,
-    transparent 65%
-  );
   z-index: 1;
-  pointer-events: none;
-  animation: sush-shell__shimmer 8s linear infinite;
-  mix-blend-mode: overlay;
-}
-
-@keyframes sush-shell__liquid-hue {
-  0%, 100% { transform: translate(0, 0); opacity: 1; }
-  33%      { transform: translate(2%, -1%); opacity: 0.85; }
-  66%      { transform: translate(-1%, 1%); opacity: 0.92; }
-}
-
-@keyframes sush-shell__shimmer {
-  0%   { transform: translate(-30%, -30%) rotate(8deg); }
-  100% { transform: translate(30%, 30%) rotate(8deg); }
-}
-
-.sush-shell__glass {
-  position: relative;
-  z-index: 2;
   width: 100%;
-  max-width: 420px;
-  padding: 36px 32px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.42);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow:
-    0 24px 60px rgba(183, 50, 92, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(183, 50, 92, 0.08);
+  display: flex;
+  justify-content: center;
 }
 
-.sush-shell__glass::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 24px;
-  right: 24px;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.95) 50%,
-    transparent 100%
-  );
-  pointer-events: none;
+.sush-shell__card {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  padding: 28px 30px 22px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.015) 35%, transparent 65%),
+    var(--auth-card-bg);
+  backdrop-filter: blur(24px) saturate(130%);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  border: 1px solid var(--auth-card-border);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.sush-shell__logo-ring {
+  display: flex;
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 14px;
+  padding: 3px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b9d 0%, #f43f7e 45%, #f5b942 100%);
+  box-shadow: 0 8px 24px rgba(244, 63, 126, 0.35);
+}
+
+.sush-shell__logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .sush-shell__header {
-  position: relative;
-  z-index: 1;
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 18px;
 }
 
 .sush-shell__title {
   margin: 0 0 6px;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
-  color: #2a1626;
+  color: var(--auth-ink);
   letter-spacing: 2px;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
 }
 
 .sush-shell__sub {
   margin: 0;
   font-size: 13px;
-  color: #6d3b54;
+  color: var(--auth-ink-soft);
   letter-spacing: 1px;
 }
 
 .sush-shell__form {
-  position: relative;
-  z-index: 1;
   width: 100%;
 }
 
+.sush-shell__form :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
 .sush-shell__form :deep(.el-form-item__label) {
-  color: #2a1626;
-  font-weight: 600;
+  color: var(--auth-ink-soft);
+  font-weight: 500;
+  font-size: 13px;
   padding-bottom: 6px;
 }
 
 .sush-shell__form :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  border-radius: 10px;
-  padding: 4px 12px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  background: var(--auth-input-bg);
+  border-radius: 12px;
+  padding: 2px 14px;
+  box-shadow:
+    0 0 0 1px var(--auth-input-border) inset,
+    inset 0 2px 4px rgba(0, 0, 0, 0.22);
   transition: box-shadow 0.2s, background 0.2s;
 }
 
-.sush-shell__form :deep(.el-input__wrapper.is-focus) {
-  background: rgba(255, 255, 255, 0.95);
+.sush-shell__form :deep(.el-input__wrapper:hover) {
+  background: rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 0 0 1px #ff5b8a inset,
-    0 4px 12px rgba(255, 91, 138, 0.15);
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+    inset 0 2px 4px rgba(0, 0, 0, 0.22);
+}
+
+.sush-shell__form :deep(.el-input__wrapper.is-focus) {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 0 0 1.5px var(--auth-primary-bright) inset,
+    0 0 12px var(--auth-focus-glow),
+    inset 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+
+.sush-shell__form :deep(.el-input__prefix-inner .el-icon) {
+  color: var(--auth-ink-muted);
 }
 
 .sush-shell__form :deep(.el-input__inner) {
-  height: 42px;
+  height: 40px;
   font-size: 14px;
+  color: var(--auth-ink);
+}
+
+.sush-shell__form :deep(.el-input__inner::placeholder) {
+  color: var(--auth-ink-muted);
+}
+
+.sush-shell__form :deep(.el-input__icon) {
+  color: var(--auth-ink-muted);
+}
+
+.sush-shell__form :deep(.el-input__icon:hover) {
+  color: var(--auth-ink-soft);
 }
 
 .sush-shell__footer {
-  position: relative;
-  z-index: 1;
-  margin-top: 20px;
+  margin-top: 14px;
   text-align: center;
-  font-size: 12px;
-  color: #8a5872;
+  font-size: 11px;
+  color: var(--auth-ink-soft);
+  opacity: 0.85;
   letter-spacing: 1px;
 }
 
-@media (max-width: 480px) {
-  .sush-shell {
-    padding: 24px 16px;
+/* 视口较矮(如 720p 笔记本)时进一步紧凑,保证一屏放下 */
+@media (max-height: 820px) {
+  .sush-shell__card {
+    padding: 24px 28px 18px;
   }
 
-  .sush-shell__glass {
-    padding: 28px 22px;
-    border-radius: 20px;
+  .sush-shell__logo-ring {
+    width: 52px;
+    height: 52px;
+    margin-bottom: 12px;
+  }
+
+  .sush-shell__header {
+    margin-bottom: 14px;
+  }
+
+  .sush-shell__form :deep(.el-form-item) {
+    margin-bottom: 10px;
+  }
+
+  .sush-shell__footer {
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sush-shell__card {
+    padding: 24px 20px 18px;
+    border-radius: 18px;
   }
 }
 </style>

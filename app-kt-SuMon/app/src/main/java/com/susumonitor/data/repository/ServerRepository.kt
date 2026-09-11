@@ -9,7 +9,9 @@ import com.susumonitor.data.model.PageResult
 import com.susumonitor.data.model.Server
 import com.susumonitor.data.model.ServerQuery
 import com.susumonitor.data.model.ServerStatus
+import com.susumonitor.data.model.SshHostKeyObservation
 import com.susumonitor.data.model.SshHostKeyVo
+import com.susumonitor.data.model.SshTestHistoryItem
 import com.susumonitor.data.model.SshTestResult
 import com.susumonitor.data.model.UpdateServerRequest
 import com.susumonitor.util.ErrorCodes
@@ -71,6 +73,18 @@ class ServerRepository @Inject constructor(
     /** SSH 连接测试（admin）。 */
     suspend fun testSsh(id: Long): SshTestResult {
         val response = serverApi.testSsh(id)
+        return response.data ?: throw ApiException.Business(response.code, response.message)
+    }
+
+    /** SSH 连接测试历史（admin）。 */
+    suspend fun sshTestHistory(id: Long): List<SshTestHistoryItem> {
+        val response = serverApi.sshTestHistory(id)
+        return response.data ?: throw ApiException.Business(response.code, response.message)
+    }
+
+    /** 观察远端当前主机公钥指纹（admin；不改变信任登记）。 */
+    suspend fun observeHostKey(id: Long): SshHostKeyObservation {
+        val response = serverApi.observeHostKey(id)
         return response.data ?: throw ApiException.Business(response.code, response.message)
     }
 

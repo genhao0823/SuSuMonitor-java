@@ -7,10 +7,11 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import type { MetricsHistory } from '@/types/metrics'
 import type { AlertRule } from '@/types/api'
+import { useThemeStore } from '@/stores/theme'
 
 type MetricKey = 'cpu_percent' | 'memory_percent' | 'disk_percent' | 'net_rx' | 'net_tx'
 
@@ -52,6 +53,11 @@ const RULE_METRIC: Record<MetricKey, string | null> = {
 }
 
 const chartRef = ref<HTMLDivElement>()
+const theme = useThemeStore()
+// canvas 无法解析 CSS 变量，深浅色各用一组确定色值。
+const inkColor = computed(() => (theme.isDark ? '#e8d5e0' : '#2a1626'))
+const mutedColor = computed(() => (theme.isDark ? '#b79fae' : '#8b6b7d'))
+const splitColor = computed(() => (theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(183, 50, 92, 0.08)'))
 let chart: echarts.ECharts | null = null
 
 /** 全部指标为百分比时固定 y 轴 0-100，字节指标交给 ECharts 自动缩放。 */
@@ -78,15 +84,21 @@ function thresholdLines(metric: MetricKey): Array<{ yAxis: number; label: string
 function buildOption(): echarts.EChartsOption {
   return {
     title: props.title
-      ? { text: props.title, left: 'center', textStyle: { fontSize: 14, color: '#2a1626' } }
+      ? { text: props.title, left: 'center', textStyle: { fontSize: 14, color: inkColor.value } }
       : undefined,
     tooltip: { trigger: 'axis' },
     legend: { top: 26, data: props.metrics.map((key) => METRIC_LABELS[key]) },
     grid: { left: 56, right: 24, top: 58, bottom: 32 },
-    xAxis: { type: 'time' },
+    xAxis: {
+      type: 'time',
+      axisLabel: { color: mutedColor.value },
+      splitLine: { show: false }
+    },
     yAxis: {
       type: 'value',
-      ...(percentOnly() ? { min: 0, max: 100 } : {})
+      ...(percentOnly() ? { min: 0, max: 100 } : {}),
+      axisLabel: { color: mutedColor.value },
+      splitLine: { lineStyle: { color: splitColor.value } }
     },
     series: props.metrics.map((key) => {
       const lines = thresholdLines(key)
@@ -135,6 +147,14 @@ watch(
     chart?.setOption(buildOption(), true)
   },
   { deep: true }
+)
+
+// 深浅色切换时用新色值整体重建 option。
+watch(
+  () => theme.isDark,
+  () => {
+    chart?.setOption(buildOption(), true)
+  }
 )
 
 onBeforeUnmount(() => {

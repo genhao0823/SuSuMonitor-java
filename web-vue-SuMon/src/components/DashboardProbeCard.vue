@@ -114,7 +114,7 @@ defineProps<{
 .probe-card__title-text {
   font-size: 15px;
   font-weight: 700;
-  color: #2a1626;
+  color: var(--susu-ink);
   letter-spacing: 0;
 }
 
@@ -129,7 +129,7 @@ defineProps<{
 }
 
 .probe-card__value {
-  color: #2a1626;
+  color: var(--susu-ink);
   font-size: 22px;
   font-weight: 800;
   line-height: 1.35;
@@ -196,7 +196,7 @@ defineProps<{
 .probe-card__fact-val {
   display: block;
   margin-top: 2px;
-  color: #2a1626;
+  color: var(--susu-ink);
   font-size: 12px;
   font-weight: 600;
   overflow-wrap: anywhere;

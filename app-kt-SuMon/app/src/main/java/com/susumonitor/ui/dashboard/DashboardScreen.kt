@@ -37,6 +37,7 @@ import com.susumonitor.ui.components.ServerStatusCard
  * @param isAdmin 控制 admin 入口卡显示
  * @param onViewAlerts 跳转告警列表
  * @param onViewAdmin 跳转用户审核
+ * @param onViewSystemMonitor 跳转 RabbitMQ 监控
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +46,7 @@ fun DashboardScreen(
     onServerClick: (Long) -> Unit = {},
     onViewAlerts: () -> Unit = {},
     onViewAdmin: () -> Unit = {},
+    onViewSystemMonitor: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -91,6 +93,7 @@ fun DashboardScreen(
                     pendingUsers = if (isAdmin) uiState.pendingUserCount else null,
                     onViewAlerts = onViewAlerts,
                     onViewAdmin = onViewAdmin,
+                    onViewSystemMonitor = if (isAdmin) onViewSystemMonitor else null,
                 )
             }
 
@@ -154,6 +157,7 @@ private fun ProbeCard(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun OverviewCard(
     online: Int,
@@ -163,6 +167,7 @@ private fun OverviewCard(
     pendingUsers: Long?,
     onViewAlerts: () -> Unit,
     onViewAdmin: () -> Unit,
+    onViewSystemMonitor: (() -> Unit)? = null,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -180,11 +185,16 @@ private fun OverviewCard(
                     StatItem("待审核", it.toString())
                 }
             }
-            Row {
+            // FlowRow：小屏一行放不下时自动换行，避免按钮文字被挤压折行
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 androidx.compose.material3.TextButton(onClick = onViewAlerts) { Text("查看告警记录") }
                 if (pendingUsers != null) {
-                    Spacer(modifier = Modifier.width(8.dp))
                     androidx.compose.material3.TextButton(onClick = onViewAdmin) { Text("用户审核") }
+                }
+                if (onViewSystemMonitor != null) {
+                    androidx.compose.material3.TextButton(onClick = onViewSystemMonitor) { Text("队列监控") }
                 }
             }
         }

@@ -91,3 +91,17 @@ data class AlertPushAlert(
     val status: String,
     @SerialName("triggered_at") val triggeredAt: String,
 )
+
+/** 告警外发通知投递记录，与后端 `AlertNotification` 查询端点对齐。 */
+@Serializable
+data class AlertNotification(
+    val id: Long,
+    @SerialName("alert_record_id") val alertRecordId: Long,
+    val channel: String,
+    val status: String,
+    val attempts: Int,
+    @SerialName("next_attempt_at") val nextAttemptAt: String? = null,
+    @SerialName("last_error") val lastError: String? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+)

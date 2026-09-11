@@ -16,6 +16,8 @@ public class CommandRunEntity {
     private String renderedCommand;
     private String status;
     private String source;
+    private String riskLevel;
+    private String approvalMode;
     private String proposalJson;
     private String resultJson;
     private Integer exitCode;
@@ -51,6 +53,10 @@ public class CommandRunEntity {
     public void setStatus(String value) { status = value; }
     public String getSource() { return source; }
     public void setSource(String value) { source = value; }
+    public String getRiskLevel() { return riskLevel; }
+    public void setRiskLevel(String value) { riskLevel = value; }
+    public String getApprovalMode() { return approvalMode; }
+    public void setApprovalMode(String value) { approvalMode = value; }
     public String getProposalJson() { return proposalJson; }
     public void setProposalJson(String value) { proposalJson = value; }
     public String getResultJson() { return resultJson; }

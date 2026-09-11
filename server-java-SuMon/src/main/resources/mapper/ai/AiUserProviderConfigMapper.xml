@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.ai.mapper.AiUserProviderConfigMapper">
+    <!-- 按用户 upsert：user_id 唯一键冲突时覆盖业务字段；api_key 只写密文。 -->
+    <insert id="upsert" useGeneratedKeys="true" keyProperty="config.id" keyColumn="id">
+        INSERT INTO ai_user_provider_configs
+        (user_id, provider, base_url, api_key_ciphertext, model, enabled)
+        VALUES
+        (#{config.userId}, #{config.provider}, #{config.baseUrl}, #{config.apiKeyCiphertext},
+         #{config.model}, #{config.enabled})
+        ON DUPLICATE KEY UPDATE
+            provider = VALUES(provider),
+            base_url = VALUES(base_url),
+            api_key_ciphertext = VALUES(api_key_ciphertext),
+            model = VALUES(model),
+            enabled = VALUES(enabled)
+    </insert>
+
+    <select id="selectByUserId" resultType="com.susumonitor.server.module.ai.entity.AiUserProviderConfigEntity">
+        SELECT id, user_id, provider, base_url, api_key_ciphertext, model, enabled, created_at, updated_at
+        FROM ai_user_provider_configs
+        WHERE user_id = #{userId}
+    </select>
+
+    <delete id="deleteByUserId">
+        DELETE FROM ai_user_provider_configs
+        WHERE user_id = #{userId}
+    </delete>
+</mapper>

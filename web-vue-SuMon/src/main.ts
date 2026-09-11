@@ -6,8 +6,11 @@ import router from './router'
 import App from './App.vue'
 import { setApiClientCallbacks } from './api/client'
 import { useAuthStore } from './stores/auth'
+import { useThemeStore } from './stores/theme'
 
 import 'element-plus/dist/index.css'
+// Element Plus 官方深色变量集：html.dark 时自动切换组件库配色。
+import 'element-plus/theme-chalk/dark/css-vars.css'
 import './styles/global.css'
 
 const app = createApp(App)
@@ -15,6 +18,10 @@ const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 
 app.use(pinia)
+
+// 主题必须在挂载前应用：读写持久化偏好（无偏好时跟随系统深色设置）。
+const theme = useThemeStore()
+theme.apply()
 
 /**
  * 注册全局未捕获异常兜底:写入控制台并向用户提示通用消息。

@@ -1,5 +1,6 @@
 package com.susumonitor.server.module.metrics.mapper;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.susumonitor.server.module.metrics.entity.MetricsEntity;
 import com.susumonitor.server.module.metrics.entity.MetricsIngestionEntity;
 import java.time.LocalDateTime;
@@ -41,24 +42,15 @@ public interface MetricsMapper {
     /**
      * 分页查询服务器历史指标。
      *
+     * <p>分页由 MyBatis-Plus 分页拦截器承担：携带 IPage 参数自动执行 COUNT
+     * 并追加 LIMIT，total 回写到传入的 Page 对象。</p>
+     *
+     * @param page 分页参数（页码与每页数量，承载回写的 total）
      * @param serverId 服务器 ID
      * @param startTime 起始时间
      * @param endTime 结束时间
-     * @param offset 偏移量
-     * @param pageSize 每页条数
      * @return 历史指标列表
      */
-    List<MetricsEntity> selectHistory(@Param("serverId") Long serverId,
-            @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime,
-            @Param("offset") long offset, @Param("pageSize") int pageSize);
-    /**
-     * 统计服务器历史指标总数。
-     *
-     * @param serverId 服务器 ID
-     * @param startTime 起始时间
-     * @param endTime 结束时间
-     * @return 历史指标总数
-     */
-    long countHistory(@Param("serverId") Long serverId,
+    List<MetricsEntity> selectHistory(IPage<MetricsEntity> page, @Param("serverId") Long serverId,
             @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
 }

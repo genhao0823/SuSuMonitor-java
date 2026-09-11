@@ -1,6 +1,6 @@
 package com.susumonitor.server.module.server.service;
 
-import com.susumonitor.server.module.metrics.service.MetricsCleanupService.CleanupResult;
+import com.susumonitor.server.common.cleanup.CleanupResult;
 import java.time.LocalDateTime;
 import java.util.Optional;
 

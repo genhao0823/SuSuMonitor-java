@@ -1,5 +1,6 @@
 package com.susumonitor.server.module.metrics.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
@@ -120,12 +121,13 @@ public class MetricsServiceImpl implements MetricsService {
         }
         LocalDateTime start = startTime.atZoneSameInstant(APPLICATION_ZONE).toLocalDateTime();
         LocalDateTime end = endTime.atZoneSameInstant(APPLICATION_ZONE).toLocalDateTime();
-        long offset = (long) (page - 1) * pageSize;
-        List<MetricsHistoryVo> items = metricsMapper.selectHistory(serverId, start, end, offset, pageSize)
+        // 分页由 MyBatis-Plus 拦截器承担：COUNT 自动执行，total 回写 Page。
+        Page<MetricsEntity> pager = new Page<>(page, pageSize);
+        List<MetricsHistoryVo> items = metricsMapper.selectHistory(pager, serverId, start, end)
                 .stream().map(this::toHistoryVo).toList();
         PageResult<MetricsHistoryVo> result = new PageResult<>();
         result.setItems(items);
-        result.setTotal(metricsMapper.countHistory(serverId, start, end));
+        result.setTotal(pager.getTotal());
         result.setPage(page);
         result.setPageSize(pageSize);
         return result;

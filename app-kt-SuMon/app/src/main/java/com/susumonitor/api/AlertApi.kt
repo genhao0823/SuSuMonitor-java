@@ -1,7 +1,9 @@
 package com.susumonitor.api
 
+import com.susumonitor.data.model.AlertNotification
 import com.susumonitor.data.model.AlertRecord
 import com.susumonitor.data.model.AlertRule
+import com.susumonitor.data.model.AiAlertExplanation
 import com.susumonitor.data.model.ApiResponse
 import com.susumonitor.data.model.CreateAlertRuleRequest
 import com.susumonitor.data.model.PageResult
@@ -51,4 +53,12 @@ interface AlertApi {
     /** 标记告警记录为已读（仅 unread 生效）。 */
     @PUT("alerts/records/{id}/read")
     suspend fun markRead(@Path("id") id: Long): ApiResponse<Unit>
+
+    /** 告警智能解释回看（F1；异步生成后查询，未生成时 404）。 */
+    @GET("alerts/records/{id}/explanation")
+    suspend fun explanation(@Path("id") id: Long): ApiResponse<AiAlertExplanation>
+
+    /** 单条告警的外发通知投递记录（渠道/状态/重试）。 */
+    @GET("alerts/records/{id}/notifications")
+    suspend fun notifications(@Path("id") id: Long): ApiResponse<List<AlertNotification>>
 }

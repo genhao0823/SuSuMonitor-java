@@ -189,6 +189,15 @@
                 通知详情
               </el-button>
               <el-button
+                v-if="auth.isAdmin"
+                size="small"
+                type="warning"
+                plain
+                @click="handleShowExplanation(row as AlertRecord)"
+              >
+                AI 解释
+              </el-button>
+              <el-button
                 v-if="row.status === 'unread'"
                 size="small"
                 type="primary"
@@ -295,6 +304,12 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 告警 AI 智能解释回看弹窗 -->
+    <AiAlertExplanationDialog
+      v-model="explanationDialogVisible"
+      :record-id="explanationRecordId"
+    />
   </div>
 </template>
 
@@ -302,9 +317,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
+import AiAlertExplanationDialog from '@/components/AiAlertExplanationDialog.vue'
 import { listServers } from '@/api/server'
 import { listAlertRules, listAlertRecordNotifications } from '@/api/alert'
 import { useAlertsStore } from '@/stores/alerts'
+import { useAuthStore } from '@/stores/auth'
 import { MonitorWebSocket } from '@/services/websocket'
 import { formatDateTime } from '@/utils/format'
 import type {
@@ -316,6 +333,7 @@ import type {
 } from '@/types/api'
 
 const alerts = useAlertsStore()
+const auth = useAuthStore()
 
 /** 筛选与分页状态 */
 const serverOptions = ref<Server[]>([])
@@ -332,6 +350,10 @@ const notificationDialogRecordId = ref<number | null>(null)
 const notificationList = ref<AlertNotification[]>([])
 const notificationLoading = ref(false)
 const notificationsLoadingId = ref<number | null>(null)
+
+/** 告警 AI 解释回看弹窗状态 */
+const explanationDialogVisible = ref(false)
+const explanationRecordId = ref<number | null>(null)
 /** 规则 ID → 已配置的通知渠道；用于区分"规则未配渠道"与"配了但发送失败"。 */
 const ruleChannelsById = ref<Record<number, string[]>>({})
 
@@ -503,6 +525,12 @@ async function handleMarkRead(row: AlertRecord): Promise<void> {
   if (ok) {
     ElMessage.success('已标记为已读')
   }
+}
+
+/** 打开告警 AI 解释回看弹窗。 */
+function handleShowExplanation(row: AlertRecord): void {
+  explanationRecordId.value = row.id
+  explanationDialogVisible.value = true
 }
 
 /** 打开通知投递历史弹窗并加载。 */

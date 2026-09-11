@@ -272,8 +272,8 @@ class OpenAiCompatibleProviderTests {
         // JSON 字符串中换行必须转义，与真实网关的序列化行为一致。
         String escapedContent = content.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
         mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
-                .andRespond(withSuccess("{\"choices\":[{\"message\":{\"content\":\"" + escapedContent
-                        + "\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}}",
+                .andRespond(withSuccess("{\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\""
+                        + escapedContent + "\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}}",
                         MediaType.APPLICATION_JSON));
 
         AiDiagnosisVo result = provider.diagnose("why high?", context());
@@ -289,7 +289,8 @@ class OpenAiCompatibleProviderTests {
         String content = openAiContent().replace("\"severity\":\"warning\"", "\"severity\":\"high\"");
         String escapedContent = content.replace("\"", "\\\"");
         mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
-                .andRespond(withSuccess("{\"choices\":[{\"message\":{\"content\":\"" + escapedContent + "\"}}]}",
+                .andRespond(withSuccess("{\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\""
+                        + escapedContent + "\"}}]}",
                         MediaType.APPLICATION_JSON));
 
         BusinessException exception = assertThrows(BusinessException.class,
@@ -306,7 +307,8 @@ class OpenAiCompatibleProviderTests {
                         + "\"observed_at\":\"current\",\"source\":\"monitoring_summary\"}]");
         String escapedContent = content.replace("\"", "\\\"");
         mockServer.expect(requestTo(BASE_URL + "/chat/completions"))
-                .andRespond(withSuccess("{\"choices\":[{\"message\":{\"content\":\"" + escapedContent + "\"}}]}",
+                .andRespond(withSuccess("{\"choices\":[{\"index\":0,\"finish_reason\":\"stop\","
+                        + "\"message\":{\"role\":\"assistant\",\"content\":\"" + escapedContent + "\"}}]}",
                         MediaType.APPLICATION_JSON));
 
         AiDiagnosisVo result = provider.diagnose("why high?", context());
@@ -381,7 +383,8 @@ class OpenAiCompatibleProviderTests {
             content = content.substring(0, content.length() - 1) + extraField + "}";
         }
         String escapedContent = content.replace("\"", "\\\"");
-        return "{\"choices\":[{\"message\":{\"content\":\"" + escapedContent + "\"}}],"
+        return "{\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\""
+                + escapedContent + "\"}}],"
                 + "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}";
     }
 
@@ -410,7 +413,8 @@ class OpenAiCompatibleProviderTests {
     /** 将解释 content 转义后包进 OpenAI-compatible 200 响应，并附带 usage。 */
     private String explanationBody(String content) {
         String escapedContent = content.replace("\"", "\\\"");
-        return "{\"choices\":[{\"message\":{\"content\":\"" + escapedContent + "\"}}],"
+        return "{\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\""
+                + escapedContent + "\"}}],"
                 + "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}";
     }
 

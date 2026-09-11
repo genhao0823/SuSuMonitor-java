@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.ai.mapper.AiQaRunMapper">
+    <insert id="insertRun" useGeneratedKeys="true" keyProperty="run.id" keyColumn="id">
+        INSERT INTO ai_qa_runs
+        (request_id, correlation_id, actor_id, server_id, prompt_version, provider, model, status,
+         question_hash, created_at)
+        VALUES
+        (#{run.requestId}, #{run.correlationId}, #{run.actorId}, #{run.serverId}, #{run.promptVersion},
+         #{run.provider}, #{run.model}, #{run.status}, #{run.questionHash}, #{run.createdAt})
+    </insert>
+    <update id="completeRun">
+        UPDATE ai_qa_runs
+        SET status = #{run.status}, tool_calls_json = #{run.toolCallsJson}, result_json = #{run.resultJson},
+            input_tokens = #{run.inputTokens}, output_tokens = #{run.outputTokens},
+            total_tokens = #{run.totalTokens}, duration_ms = #{run.durationMs},
+            completed_at = #{run.completedAt}
+        WHERE id = #{run.id}
+    </update>
+    <update id="failRun">
+        UPDATE ai_qa_runs
+        SET status = #{run.status}, error_code = #{run.errorCode}, duration_ms = #{run.durationMs},
+            completed_at = #{run.completedAt}
+        WHERE id = #{run.id}
+    </update>
+    <delete id="deleteExpiredBatch">
+        DELETE FROM ai_qa_runs
+        WHERE created_at &lt; #{cutoffTime}
+        ORDER BY id
+        LIMIT #{batchSize}
+    </delete>
+    <!-- 按天预算聚合：仅统计 completed 问答，命中 idx_ai_qa_runs_created_at 范围扫描。 -->
+    <select id="selectTotalTokensBetween" resultType="java.lang.Long">
+        SELECT COALESCE(SUM(total_tokens), 0)
+        FROM ai_qa_runs
+        WHERE status = 'completed'
+          AND created_at &gt;= #{startTime}
+          AND created_at &lt; #{endTime}
+    </select>
+</mapper>

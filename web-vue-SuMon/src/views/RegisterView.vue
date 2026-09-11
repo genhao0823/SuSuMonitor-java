@@ -25,6 +25,7 @@
             v-model="form.username"
             autocomplete="username"
             placeholder="3-50 位字母、数字或下划线"
+            :prefix-icon="User"
             clearable
           />
         </el-form-item>
@@ -38,6 +39,7 @@
             autocomplete="new-password"
             show-password
             placeholder="8-64 位"
+            :prefix-icon="Lock"
           />
         </el-form-item>
         <el-form-item
@@ -50,6 +52,7 @@
             autocomplete="new-password"
             show-password
             placeholder="请再次输入密码"
+            :prefix-icon="Lock"
           />
         </el-form-item>
         <el-button
@@ -59,7 +62,7 @@
           class="register-view__submit"
           @click="handleSubmit"
         >
-          注 册
+          注册
         </el-button>
         <div class="register-view__footer">
           <span>已有账户?</span>
@@ -76,6 +79,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { Lock, User } from '@element-plus/icons-vue'
 import AuthLayout from '@/views/AuthLayout.vue'
 import { ApiBusinessError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -197,43 +201,46 @@ async function handleSubmit(): Promise<void> {
 <style scoped>
 .register-view__submit {
   width: 100%;
-  height: 46px;
+  height: 44px;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 8px;
-  margin-top: 12px;
-  background: linear-gradient(135deg, #ff5b8a 0%, #b7325c 100%);
+  margin-top: 10px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #ff6b9d 0%, #f43f7e 55%, #e0356f 100%);
   border: none;
-  border-radius: 10px;
-  box-shadow: 0 6px 16px rgba(255, 91, 138, 0.3);
-  transition: transform 0.15s, box-shadow 0.15s;
+  border-radius: 12px;
+  box-shadow: 0 10px 26px rgba(244, 63, 126, 0.35);
+  transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
-.register-view__submit:hover {
-  background: linear-gradient(135deg, #ff7aa3 0%, #c8426f 100%);
+.register-view__submit:hover,
+.register-view__submit:focus-visible {
+  filter: brightness(1.08);
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(255, 91, 138, 0.4);
+  box-shadow: 0 12px 30px rgba(244, 63, 126, 0.45);
 }
 
 .register-view__submit:active {
+  filter: brightness(0.95);
   transform: translateY(0);
 }
 
 .register-view__footer {
-  margin-top: 22px;
+  margin-top: 16px;
   text-align: center;
   font-size: 13px;
-  color: #6d3b54;
+  color: var(--auth-ink-muted);
 }
 
 .register-view__footer a {
   margin-left: 4px;
-  color: #b7325c;
+  color: var(--auth-link);
   text-decoration: none;
   font-weight: 700;
 }
 
 .register-view__footer a:hover {
-  color: #ff5b8a;
+  color: var(--auth-primary-bright);
 }
 </style>

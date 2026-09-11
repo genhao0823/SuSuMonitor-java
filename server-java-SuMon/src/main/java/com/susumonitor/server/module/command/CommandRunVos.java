@@ -24,6 +24,8 @@ public final class CommandRunVos {
         vo.setRenderedCommand(entity.getRenderedCommand());
         vo.setStatus(entity.getStatus());
         vo.setSource(entity.getSource());
+        vo.setRiskLevel(entity.getRiskLevel());
+        vo.setApprovalMode(entity.getApprovalMode());
         vo.setProposal(parseProposal(entity.getProposalJson(), objectMapper));
         vo.setResult(parseResult(entity.getResultJson(), objectMapper));
         vo.setExitCode(entity.getExitCode());

@@ -2,11 +2,11 @@ package com.susumonitor.server.module.ai.limit;
 
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
+import com.susumonitor.server.common.limit.FixedWindowRateLimiter;
+import com.susumonitor.server.common.limit.RedisFixedWindowRateLimiter;
 import com.susumonitor.server.config.AppProperties;
 import java.time.Clock;
-import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.time.Duration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,7 +16,8 @@ import org.springframework.context.annotation.Configuration;
  *
  * <p>类级条件保证 AI 关闭时不装配任何限流 Bean（零额外依赖）；方法级条件
  * 复用注册限流的互斥约定：Redis 关闭（默认）用单 JVM 内存实现，开启时用
- * Redis 计数以支持跨实例共享。</p>
+ * Redis 计数以支持跨实例共享。窗口/阈值逻辑统一由 common/limit 的
+ * 固定窗口实现承担（Bucket4j / 原子 Lua）。</p>
  */
 @Configuration
 @ConditionalOnProperty(name = "susumonitor.ai.enabled", havingValue = "true")
@@ -52,72 +53,48 @@ public class AiRateLimiterConfig {
     }
 
     /**
-     * 单 JVM 内存实现：每 {@code actorId} 固定窗口计数，窗口按首次访问时间起点滑动重置。
+     * 单 JVM 内存实现：按管理员固定窗口计数，窗口按首次访问时间起点整量补充。
      */
     static class InMemoryAiDiagnosisRateLimiter implements AiDiagnosisRateLimiter {
 
-        private final ConcurrentMap<Long, Window> windows = new ConcurrentHashMap<>();
-        private final int maxRequests;
-        private final long windowSeconds;
-        private final Clock clock;
+        private final FixedWindowRateLimiter window;
 
         /** 注入 AI 限流参数与统一 UTC Clock。 */
         InMemoryAiDiagnosisRateLimiter(AppProperties appProperties, Clock clock) {
-            this.maxRequests = appProperties.getAi().getRateLimitMaxRequests();
-            this.windowSeconds = appProperties.getAi().getRateLimitWindowSeconds();
-            this.clock = clock;
+            this.window = new FixedWindowRateLimiter(
+                    appProperties.getAi().getRateLimitMaxRequests(),
+                    Duration.ofSeconds(appProperties.getAi().getRateLimitWindowSeconds()), clock);
         }
 
         /** 记录一次尝试；窗口内计数超过阈值抛 42906。 */
         @Override
         public void checkAllowed(Long actorId) {
-            Instant now = Instant.now(clock);
-            Window window = windows.compute(actorId, (id, existing) -> {
-                if (existing == null || !existing.startedAt().plusSeconds(windowSeconds).isAfter(now)) {
-                    return new Window(now, 1);
-                }
-                return new Window(existing.startedAt(), existing.count() + 1);
-            });
-            if (window.count() > maxRequests) {
+            if (!window.tryAcquire(String.valueOf(actorId))) {
                 throw new BusinessException(ErrorCode.AI_RATE_LIMIT_REACHED);
             }
-        }
-
-        /** 固定窗口状态：窗口起点与已计数。 */
-        private record Window(Instant startedAt, int count) {
         }
     }
 
     /**
-     * Redis 实现：{@code INCR susumonitor:ai-diagnosis-limit:<actorId>}，首次计数设置窗口 TTL。
-     *
-     * <p>INCR 与 EXPIRE 存在与注册限流相同的极小首窗口竞态，EXPIRE 幂等可接受。</p>
+     * Redis 实现：{@code INCR susumonitor:ai-diagnosis-limit:<actorId>}（原子 Lua），
+     * 首次计数原子设置窗口 TTL，计数跨实例共享。
      */
     static class RedisAiDiagnosisRateLimiter implements AiDiagnosisRateLimiter {
 
-        private static final String COUNTER_KEY_PREFIX = "susumonitor:ai-diagnosis-limit:";
-
-        private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
-        private final int maxRequests;
-        private final java.time.Duration window;
+        private final RedisFixedWindowRateLimiter window;
 
         /** 注入 Redis 模板与 AI 限流参数。 */
         RedisAiDiagnosisRateLimiter(org.springframework.data.redis.core.StringRedisTemplate redisTemplate,
                 AppProperties appProperties) {
-            this.redisTemplate = redisTemplate;
-            this.maxRequests = appProperties.getAi().getRateLimitMaxRequests();
-            this.window = java.time.Duration.ofSeconds(appProperties.getAi().getRateLimitWindowSeconds());
+            this.window = new RedisFixedWindowRateLimiter(redisTemplate, "susumonitor:ai-diagnosis-limit:",
+                    appProperties.getAi().getRateLimitMaxRequests(),
+                    appProperties.getAi().getRateLimitWindowSeconds());
         }
 
-        /** 递增计数并设置窗口 TTL；超过阈值抛 42906。 */
+        /** 原子递增计数并保证首窗口 TTL；超过阈值抛 42906。 */
         @Override
         public void checkAllowed(Long actorId) {
-            String key = COUNTER_KEY_PREFIX + actorId;
-            Long count = redisTemplate.opsForValue().increment(key);
-            if (count != null && count == 1) {
-                redisTemplate.expire(key, window);
-            }
-            if (count != null && count > maxRequests) {
+            if (!window.tryAcquire(String.valueOf(actorId))) {
                 throw new BusinessException(ErrorCode.AI_RATE_LIMIT_REACHED);
             }
         }

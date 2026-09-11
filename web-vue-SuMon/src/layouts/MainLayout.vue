@@ -52,7 +52,23 @@
             {{ pageTitle }}
           </div>
         </div>
-        <div class="main-layout__user">
+        <div class="main-layout__header-right">
+          <el-tooltip
+            :content="themeToggleLabel"
+            placement="bottom"
+          >
+            <button
+              type="button"
+              class="main-layout__sidebar-toggle"
+              :aria-label="themeToggleLabel"
+              @click="theme.toggle()"
+            >
+              <el-icon>
+                <Moon v-if="!theme.isDark" />
+                <Sunny v-else />
+              </el-icon>
+            </button>
+          </el-tooltip>
           <el-dropdown
             trigger="click"
             @command="handleCommand"
@@ -96,23 +112,38 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Bell,
+  ChatDotRound,
   DataLine,
   Document,
   Expand,
   Fold,
+  MagicStick,
   Monitor,
+  Moon,
   Notification,
   Promotion,
+  Setting,
+  Sunny,
   UserFilled
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { userRoleLabel } from '@/utils/format'
 
 interface MenuItem {
   name: string
   label: string
-  icon: 'Monitor' | 'DataLine' | 'Document' | 'Bell' | 'Notification' | 'Promotion'
+  icon:
+    | 'Monitor'
+    | 'DataLine'
+    | 'Document'
+    | 'Bell'
+    | 'Notification'
+    | 'Promotion'
+    | 'ChatDotRound'
+    | 'MagicStick'
+    | 'Setting'
   requiresAdmin?: boolean
   /**
    * 菜单是否需要选择目标 server 才能跳转(Web 终端依赖 :serverId 形参)。
@@ -124,10 +155,12 @@ interface MenuItem {
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const theme = useThemeStore()
 const isSidebarCollapsed = ref(true)
 
 const sidebarWidth = computed(() => (isSidebarCollapsed.value ? '0px' : '230px'))
 const sidebarToggleLabel = computed(() => (isSidebarCollapsed.value ? '展开侧栏' : '收起侧栏'))
+const themeToggleLabel = computed(() => (theme.isDark ? '切换到浅色模式' : '切换到深色模式'))
 
 function toggleSidebar(): void {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
@@ -141,6 +174,9 @@ const allMenus: MenuItem[] = [
   { name: 'servers', label: '服务器', icon: 'DataLine' },
   { name: 'alert-records', label: '告警记录', icon: 'Bell' },
   { name: 'alert-rules', label: '告警规则', icon: 'Notification', requiresAdmin: true },
+  { name: 'ai-qa', label: 'AI 问答', icon: 'ChatDotRound', requiresAdmin: true },
+  { name: 'ai-commands', label: 'AI 命令域', icon: 'MagicStick', requiresAdmin: true },
+  { name: 'ai-settings', label: 'AI 设置', icon: 'Setting', requiresAdmin: true },
   { name: 'admin-users', label: '用户审核', icon: 'Document', requiresAdmin: true },
   { name: 'terminal', label: 'Web 终端', icon: 'Promotion', requiresServer: true }
 ]
@@ -157,7 +193,10 @@ const iconMap: Record<MenuItem['icon'], typeof Monitor> = {
   Document,
   Bell,
   Notification,
-  Promotion
+  Promotion,
+  ChatDotRound,
+  MagicStick,
+  Setting
 }
 
 const pageTitle = computed<string>(() => {
@@ -349,19 +388,19 @@ defineExpose({ iconMap })
   width: 36px;
   height: 36px;
   padding: 0;
-  color: #5c3a4d;
-  background: rgba(255, 255, 255, 0.6);
+  color: var(--susu-ink-muted);
+  background: var(--susu-surface);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--susu-border-glass);
   border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(183, 50, 92, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(183, 50, 92, 0.06), inset 0 1px 0 var(--susu-border-glass);
   transition: all 0.22s ease;
 }
 
 .main-layout__sidebar-toggle:hover {
   color: #ff5b8a;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--susu-surface-strong);
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(255, 91, 138, 0.2);
 }
@@ -374,13 +413,14 @@ defineExpose({ iconMap })
 .main-layout__header-title {
   font-size: 17px;
   font-weight: 700;
-  color: #2a1626;
+  color: var(--susu-ink);
   letter-spacing: 0;
 }
 
-.main-layout__user {
+.main-layout__header-right {
   display: flex;
   align-items: center;
+  gap: 12px;
 }
 
 .main-layout__user-trigger {
@@ -390,16 +430,16 @@ defineExpose({ iconMap })
   cursor: pointer;
   padding: 6px 14px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.65);
+  background: var(--susu-surface);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  color: #2a1626;
-  box-shadow: 0 2px 8px rgba(183, 50, 92, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--susu-border-glass);
+  color: var(--susu-ink);
+  box-shadow: 0 2px 8px rgba(183, 50, 92, 0.06), inset 0 1px 0 var(--susu-border-glass);
   transition: all 0.22s ease;
 }
 
 .main-layout__user-trigger:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--susu-surface-strong);
   border-color: rgba(255, 91, 138, 0.4);
   box-shadow: 0 4px 14px rgba(255, 91, 138, 0.18);
   transform: translateY(-1px);
@@ -421,7 +461,7 @@ defineExpose({ iconMap })
 .main-layout__username {
   font-size: 13.5px;
   font-weight: 600;
-  color: #2a1626;
+  color: var(--susu-ink);
 }
 
 .main-layout__role {

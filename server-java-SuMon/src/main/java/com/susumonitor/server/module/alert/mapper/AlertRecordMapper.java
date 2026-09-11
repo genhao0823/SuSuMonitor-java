@@ -1,5 +1,6 @@
 package com.susumonitor.server.module.alert.mapper;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.susumonitor.server.module.alert.entity.AlertRecordEntity;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,10 +30,12 @@ public interface AlertRecordMapper {
     int updateNotifiedInfo(@Param("id") Long id, @Param("notifiedAt") LocalDateTime notifiedAt,
             @Param("notifyChannels") String notifyChannels);
 
-    /** 分页查询告警记录，支持按服务器和状态筛选。 */
-    List<AlertRecordEntity> selectRecords(@Param("serverId") Long serverId,
-            @Param("status") String status, @Param("offset") long offset, @Param("pageSize") int pageSize);
-
-    /** 统计告警记录总数，支持按服务器和状态筛选。 */
-    long countRecords(@Param("serverId") Long serverId, @Param("status") String status);
+    /**
+     * 分页查询告警记录，支持按服务器和状态筛选。
+     *
+     * <p>分页由 MyBatis-Plus 分页拦截器承担：携带 IPage 参数自动执行 COUNT
+     * 并追加 LIMIT，total 回写到传入的 Page 对象。</p>
+     */
+    List<AlertRecordEntity> selectRecords(IPage<AlertRecordEntity> page, @Param("serverId") Long serverId,
+            @Param("status") String status);
 }

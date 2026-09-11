@@ -2,14 +2,16 @@ package com.susumonitor.data.repository
 
 import com.susumonitor.api.SystemApi
 import com.susumonitor.data.ApiException
+import com.susumonitor.data.model.ConsumeStats
 import com.susumonitor.data.model.HealthStatus
 import com.susumonitor.data.model.MonitorTicket
+import com.susumonitor.data.model.QueueBacklog
 import com.susumonitor.data.model.ReadyStatus
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 系统仓库：健康检查 + 就绪检查 + Monitor Ticket 获取。
+ * 系统仓库：健康检查 + 就绪检查 + Monitor Ticket 获取 + RabbitMQ 监控。
  */
 @Singleton
 class SystemRepository @Inject constructor(
@@ -31,6 +33,18 @@ class SystemRepository @Inject constructor(
     /** 获取 30 秒一次性 Monitor Ticket（WS 连接握手用）。 */
     suspend fun monitorTicket(): MonitorTicket {
         val response = systemApi.monitorTicket()
+        return response.data ?: throw ApiException.Business(response.code, response.message)
+    }
+
+    /** RabbitMQ 队列积压深度（admin）。 */
+    suspend fun rabbitmqQueues(): List<QueueBacklog> {
+        val response = systemApi.rabbitmqQueues()
+        return response.data ?: throw ApiException.Business(response.code, response.message)
+    }
+
+    /** RabbitMQ 消费者吞吐统计（admin）。 */
+    suspend fun rabbitmqConsumers(): List<ConsumeStats> {
+        val response = systemApi.rabbitmqConsumers()
         return response.data ?: throw ApiException.Business(response.code, response.message)
     }
 }

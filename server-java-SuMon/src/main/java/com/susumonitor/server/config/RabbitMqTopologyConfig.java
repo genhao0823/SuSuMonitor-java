@@ -13,7 +13,13 @@ import org.springframework.context.annotation.Configuration;
  * 冻结的 RabbitMQ 拓扑声明（rabbitmq-topology-v1.md §二/§三）。
  *
  * <p>MVP-10 声明完整四件套：业务 Exchange、死信 Exchange、业务队列（带 DLX 参数）
- * 与死信队列。消息堆积在业务队列等待 MVP-11 消费者接入，不视为丢失。</p>
+ * 与死信队列。</p>
+ *
+ * <p>四个业务队列均已接入消费者：metrics→alert-evaluator、triggered→alert-notifier、
+ * resolved→alert-resolved-notifier、explanation→ai-explainer（对照
+ * rabbitmq-topology-v1.md §二/§十一）。因此业务队列出现积压不再属于"等待消费者接入"
+ * 的过渡态，而是消费者故障或消费能力不足的信号，须按
+ * {@code QueueBacklogProbeService} 的 backlog 告警定位，不可按正常状态放过。</p>
  *
  * <p>所有组件 durable + non-auto-delete；队列名不包含实例 ID。</p>
  */
@@ -64,10 +70,12 @@ public class RabbitMqTopologyConfig {
     }
 
     /**
-     * alert.triggered.v1 业务队列（出站告警事件，供未来消费者/外部系统接入）。
+     * alert.triggered.v1 业务队列（出站告警触发事件）。
      *
-     * <p>告警事件由 Outbox 发布器按行 routing_key 路由至此；当前暂无消费者，
-     * 消息堆积在业务队列等待消费者接入，不视为丢失（与 MVP-10 发布先行先例一致）。</p>
+     * <p>告警事件由 Outbox 发布器按行 routing_key 路由至此；消费者
+     * {@code alert-notifier}（AlertTriggeredConsumer）在消费事务内为规则配置的渠道排程
+     * 通知、提交后异步发送（2026-08-12 接入，见 rabbitmq-topology-v1.md §十一）。
+     * 本队列积压意味着外部告警通知停发，须按故障处置而非视为正常等待。</p>
      */
     @Bean
     Queue susumonitorAlertTriggeredQueue() {

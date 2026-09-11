@@ -41,6 +41,9 @@ class AiCommandRunMySqlValidationIT {
     private CommandRunMapper commandRunMapper;
 
     @Autowired
+    private CommandAutoApprovalPolicyMapper commandAutoApprovalPolicyMapper;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     private final List<Long> insertedRunIds = new ArrayList<>();
@@ -66,6 +69,65 @@ class AiCommandRunMySqlValidationIT {
         assertEquals(1, migrationCount);
         assertEquals(1, tableCount);
         assertEquals(1, uniqueIndex);
+    }
+
+    /** 验证 V33 已执行：审计表新增列 + 策略单行表含禁用种子行。 */
+    @Test
+    void v33ShouldAddRiskColumnsAndPolicyTable() {
+        Integer migrationCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM flyway_schema_history
+                WHERE version = '33' AND success = 1
+                """, Integer.class);
+        Integer riskColumn = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_schema = DATABASE() AND table_name = 'ai_command_runs'
+                  AND column_name IN ('risk_level', 'approval_mode')
+                """, Integer.class);
+        Map<String, Object> seed = jdbcTemplate.queryForMap(
+                "SELECT enabled, max_risk_level FROM ai_command_auto_approval_policies WHERE id = 1");
+
+        assertEquals(1, migrationCount);
+        assertEquals(2, riskColumn);
+        assertEquals(0, ((Number) seed.get("enabled")).intValue());
+        assertEquals("medium", seed.get("max_risk_level"));
+    }
+
+    /** autoApproveRun 仅对 pending_approval 生效并标记 approval_mode=auto，不写 approver_id。 */
+    @Test
+    void autoApproveShouldCasFromPending() {
+        LocalDateTime now = LocalDateTime.of(2026, 9, 1, 12, 0, 0);
+        CommandRunEntity second = newRun("pending_approval", now.minusMinutes(1), now.plusMinutes(5));
+        insertAndTrack(second);
+
+        assertEquals(1, commandRunMapper.autoApproveRun(second.getId()));
+        assertEquals(0, commandRunMapper.autoApproveRun(second.getId()), "非 pending 行 CAS 失败");
+
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "SELECT status, approval_mode, approver_id FROM ai_command_runs WHERE id = ?",
+                second.getId());
+        assertEquals("approved", row.get("status"));
+        assertEquals("auto", row.get("approval_mode"));
+        assertEquals(null, row.get("approver_id"));
+    }
+
+    /** 策略表 upsert：插入与更新单行均生效，CHECK 约束拒绝非法阈值。 */
+    @Test
+    void policyUpsertShouldReplaceSingleRow() {
+        assertEquals(1, commandAutoApprovalPolicyMapper.upsertPolicy(true, "low", TEST_APPROVER_ID, now()));
+        assertEquals(1, commandAutoApprovalPolicyMapper.upsertPolicy(false, "medium", TEST_APPROVER_ID, now()));
+
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "SELECT enabled, max_risk_level FROM ai_command_auto_approval_policies WHERE id = 1");
+        assertEquals(0, ((Number) row.get("enabled")).intValue());
+        assertEquals("medium", row.get("max_risk_level"));
+
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ai_command_auto_approval_policies", Integer.class),
+                "upsert 仍保持单行");
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.of(2026, 9, 1, 12, 0, 0);
     }
 
     /** insertRun 回填自增主键，且审批审计字段按实体的值落库。 */

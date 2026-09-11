@@ -52,7 +52,9 @@ object NetworkModule {
     ): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
+            // 读超时=字节间隔上限：AI 诊断/问答在服务端推理期间不吐字节，可到分钟级；
+            // 普通接口快速返回不受影响，故统一放宽而非单为 AI 拆分通道
+            .readTimeout(120, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
 

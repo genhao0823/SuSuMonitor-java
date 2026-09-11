@@ -107,7 +107,7 @@ function formatNumber(value: number): string {
 
 .recent-alerts-card__title {
   margin: 4px 0 0;
-  color: #2a1626;
+  color: var(--susu-ink);
   font-size: 17px;
   font-weight: 700;
 }
@@ -154,7 +154,7 @@ function formatNumber(value: number): string {
 
 .recent-alerts-card__name {
   overflow: hidden;
-  color: #2a1626;
+  color: var(--susu-ink);
   font-size: 13.5px;
   font-weight: 700;
   text-overflow: ellipsis;

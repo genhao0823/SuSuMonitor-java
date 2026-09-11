@@ -45,6 +45,25 @@
   --glass-specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.96);
   --glass-specular-bottom: inset 0 -1px 0 rgba(39, 39, 42, 0.04);
   --glass-specular-dark: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+
+  /* 文字/表面语义令牌：组件层统一引用；深色模式在 html.dark 中整体覆盖。 */
+  --susu-ink: #2a1626;
+  --susu-ink-soft: #4a283b;
+  --susu-ink-muted: #5c3a4d;
+  --susu-accent-deep: #a82c51;
+  --susu-surface: rgba(255, 255, 255, 0.75);
+  --susu-surface-strong: rgba(255, 255, 255, 0.95);
+  --susu-surface-soft: rgba(255, 255, 255, 0.55);
+  --susu-surface-faint: rgba(255, 255, 255, 0.35);
+  --susu-border-glass: rgba(255, 255, 255, 0.85);
+  --susu-table-head-bg: rgba(255, 255, 255, 0.75);
+  --susu-fixed-bg: #ffffff;
+  --susu-fixed-head-bg: #f9fafb;
+  --susu-fixed-stripe-bg: #f6f7f8;
+  --susu-fixed-hover-bg: #f3f4f6;
+  --susu-dialog-bg: rgba(255, 255, 255, 0.88);
+  --susu-overlay-bg: rgba(42, 22, 38, 0.35);
+  --susu-chart-muted: #8b6b7d;
 }
 
 .liquid-glass-card {
@@ -234,4 +253,57 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ================= 深色模式（html.dark，由 stores/theme.ts 切换） ================= */
+/* 深色玻璃：降低表面亮度与描边透明度，阴影加深；品牌粉仅微调以保持对比。 */
+html.dark {
+  color-scheme: dark;
+  --susu-page-bg: #15121a;
+  --susu-text-dark: #f2e6ed;
+  --susu-text-muted: #a89aa5;
+
+  --susu-ink: #f2e6ed;
+  --susu-ink-soft: #dcc6d3;
+  --susu-ink-muted: #b79fae;
+  --susu-accent-deep: #ff8aa8;
+  --susu-surface: rgba(255, 255, 255, 0.06);
+  --susu-surface-strong: rgba(255, 255, 255, 0.12);
+  --susu-surface-soft: rgba(255, 255, 255, 0.05);
+  --susu-surface-faint: rgba(255, 255, 255, 0.04);
+  --susu-border-glass: rgba(255, 255, 255, 0.16);
+  --susu-table-head-bg: rgba(255, 255, 255, 0.05);
+  --susu-fixed-bg: #201a24;
+  --susu-fixed-head-bg: #272029;
+  --susu-fixed-stripe-bg: #241e27;
+  --susu-fixed-hover-bg: #2b2330;
+  --susu-dialog-bg: rgba(30, 25, 34, 0.92);
+  --susu-overlay-bg: rgba(0, 0, 0, 0.55);
+  --susu-chart-muted: #b79fae;
+
+  --glass-bg-card: rgba(32, 27, 38, 0.66);
+  --glass-bg-card-hover: rgba(43, 36, 50, 0.82);
+  --glass-bg-subtle: rgba(43, 36, 50, 0.45);
+  --glass-bg-strong: rgba(36, 30, 42, 0.9);
+  --glass-bg-header: rgba(24, 21, 29, 0.8);
+  --glass-border-light: rgba(255, 255, 255, 0.14);
+  --glass-border-subtle: rgba(255, 255, 255, 0.1);
+  --glass-shadow-base: 0 10px 26px rgba(0, 0, 0, 0.45);
+  --glass-shadow-hover: 0 14px 32px rgba(0, 0, 0, 0.55);
+  --glass-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --glass-specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-specular-bottom: inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* 深色下玻璃卡片顶部高光线与悬停描边降噪。 */
+html.dark .liquid-glass-card::before {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html.dark .liquid-glass-card:hover {
+  border-color: rgba(255, 122, 163, 0.35) !important;
+}
+
+html.dark .liquid-glass-subtle:hover {
+  background: rgba(255, 255, 255, 0.08);
 }

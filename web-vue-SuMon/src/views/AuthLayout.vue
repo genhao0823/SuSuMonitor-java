@@ -1,162 +1,69 @@
 <template>
-  <div class="auth-view">
-    <aside
-      class="auth-view__stage"
-      :class="{ 'auth-view__stage--wild': isWildActive }"
+  <div
+    class="auth-view"
+    :class="{ 'auth-view--compact': isRegisterPage }"
+  >
+    <div
+      class="auth-view__aurora"
+      aria-hidden="true"
     >
-      <img
-        v-if="effectiveHeroImage"
-        :src="effectiveHeroImage"
-        :alt="heroAlt"
-        class="auth-view__stage-img"
-        @error="onHeroImageError"
-      >
-      <div class="auth-view__veil" />
+      <span class="auth-view__orb auth-view__orb--rose" />
+      <span class="auth-view__orb auth-view__orb--gold" />
+      <span class="auth-view__orb auth-view__orb--violet" />
+    </div>
 
-      <svg
-        class="auth-view__pattern auth-view__pattern--top"
-        viewBox="0 0 320 80"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <path
-          d="M0 60 Q40 30 80 60 T160 60 T240 60 T320 60"
-          fill="none"
-          stroke="#ffd0d8"
-          stroke-width="2"
-          stroke-linecap="round"
-          opacity="0.55"
-        />
-        <path
-          d="M0 70 Q40 50 80 70 T160 70 T240 70 T320 70"
-          fill="none"
-          stroke="#ffb6c1"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          opacity="0.45"
-        />
-      </svg>
-
-      <svg
-        class="auth-view__pattern auth-view__pattern--bottom"
-        viewBox="0 0 320 80"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <path
-          d="M0 20 Q40 -10 80 20 T160 20 T240 20 T320 20"
-          fill="none"
-          stroke="#ffd0d8"
-          stroke-width="2"
-          stroke-linecap="round"
-          opacity="0.55"
-        />
-      </svg>
-
-      <svg
-        class="auth-view__bells auth-view__bells--left"
-        viewBox="0 0 64 80"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <path
-          d="M32 6 C28 6 26 10 26 16 L26 44 L18 50 L46 50 L38 44 L38 16 C38 10 36 6 32 6 Z"
-          fill="#f5b942"
-          stroke="#b7325c"
-          stroke-width="1.5"
-        />
-        <circle
-          cx="32"
-          cy="58"
-          r="4"
-          fill="#b7325c"
-        />
-        <path
-          d="M32 56 L32 70"
-          stroke="#b7325c"
-          stroke-width="1.5"
-        />
-      </svg>
-
-      <svg
-        class="auth-view__bells auth-view__bells--right"
-        viewBox="0 0 64 80"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <path
-          d="M32 6 C28 6 26 10 26 16 L26 44 L18 50 L46 50 L38 44 L38 16 C38 10 36 6 32 6 Z"
-          fill="#f5b942"
-          stroke="#b7325c"
-          stroke-width="1.5"
-        />
-        <circle
-          cx="32"
-          cy="58"
-          r="4"
-          fill="#b7325c"
-        />
-        <path
-          d="M32 56 L32 70"
-          stroke="#b7325c"
-          stroke-width="1.5"
-        />
-      </svg>
-
-      <SushFallingPetals />
-
-      <div class="auth-view__brand-block">
-        <div class="auth-view__brand-title">
-          <span class="auth-view__brand-mark">Su</span><span class="auth-view__brand-mark auth-view__brand-mark--accent">Su</span><span class="auth-view__brand-suffix">Monitor</span>
-        </div>
-        <div class="auth-view__brand-tagline">
-          {{ stageTagline }}
-        </div>
-        <div class="auth-view__brand-meta">
-          SuSu · 与运维一同成长
-        </div>
+    <div class="auth-view__brand">
+      <div class="auth-view__brand-row">
+        <span class="auth-view__brand-mark">Su</span>
+        <span class="auth-view__brand-mark auth-view__brand-mark--accent">Su</span>
+        <span class="auth-view__brand-name">Monitor</span>
       </div>
-
-      <SushQuote :stage-quotes="stageQuotes" />
-    </aside>
+      <div class="auth-view__brand-tagline">
+        {{ stageTagline }}
+      </div>
+    </div>
 
     <SushShell
       :panel-title="panelTitle"
       :panel-sub="panelSub"
       :footer-hint="footerHint"
+      :logo-url="effectiveHeroImage"
+      :logo-alt="heroAlt"
     >
       <slot />
     </SushShell>
+
+    <SushQuote :stage-quotes="stageQuotes" />
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * 认证页面共享布局。
+ * 认证页面共享布局(深夜极光版)。
  *
- * 左侧:涂山苏苏主题装饰舞台(波浪线、铃铛、品牌标题 + 飘落花瓣 + 可点击切换的签名引言)。
- * 右侧:聚焦的玻璃形态表单卡片(由 SushShell 提供)。
+ * - 近黑底 + 玫粉/鎏金/紫罗兰三团极光光晕缓慢漂移,叠加细点阵纹理
+ * - 左上角紧凑品牌标识(双色块 + Monitor + 标语)
+ * - 中央悬浮磨砂卡片(由 SushShell 提供,顶部渐变环苏苏头像)
+ * - 卡片下方一行可点击切换的签名引言(SushQuote)
  *
  * 子组件:
- * - SushFallingPetals: 飘落花瓣动画
  * - SushQuote: 可点击切换的签名引言
- * - SushShell: 右侧玻璃表单容器
+ * - SushShell: 居中磨砂表单卡片
  *
  * 父组件只需提供 slot 内的表单字段与提交逻辑。
  */
 
-import SushFallingPetals from '@/components/SushFallingPetals.vue'
 import SushQuote from '@/components/SushQuote.vue'
 import SushShell from '@/components/SushShell.vue'
 import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
 
 /**
- * 控制全屏装饰联动(铃铛/花瓣/品牌/波浪)。
- * 用户希望整页停留期间持续展示 wild 动效,因此设为常量 true:
- * 铃铛永远狂摇、花瓣永远雪崩、品牌永远脉冲、波浪永远亮起。
- * 离开该页(Dashboard/Forbidden)组件销毁后,所有 CSS 动画自然停止。
+ * 注册页表单更长:矮视口(≤780px 高)下隐藏引言保证一屏放下,登录页不受影响。
  */
-const isWildActive = true
+const isRegisterPage = computed(() => route.name === 'register')
 
 const props = withDefaults(
   defineProps<{
@@ -179,10 +86,10 @@ const props = withDefaults(
 const heroImageFailed = ref(false)
 
 /**
- * 当前实际渲染的图片 URL:
+ * 当前实际渲染的头像 URL:
  * 1. 优先 heroImage
  * 2. 失败或缺失时降级 heroImageFallback
- * 3. 都缺失返回 null,模板不渲染 <img>
+ * 3. 都缺失返回 null,卡片不渲染头像
  */
 const effectiveHeroImage = computed<string | null>(() => {
   if (props.heroImage && !heroImageFailed.value) {
@@ -193,225 +100,192 @@ const effectiveHeroImage = computed<string | null>(() => {
   }
   return null
 })
-
-function onHeroImageError(): void {
-  heroImageFailed.value = true
-}
 </script>
 
 <style scoped>
+/*
+ * 认证页采用固定的「深夜极光」视觉,不随明暗主题切换:
+ * 近黑底 + 品牌色光晕 + 细点阵,聚焦中央磨砂卡片。
+ * 所有子组件(SushShell / SushQuote / 登录注册表单)通过下方 --auth-* 令牌取色。
+ */
 .auth-view {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 1.05fr);
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 25% 30%, #ffd0e0 0%, transparent 45%),
-    radial-gradient(circle at 75% 70%, #f5d8a4 0%, transparent 45%),
-    linear-gradient(135deg, #ffeaf1 0%, #ffd0d8 50%, #f9b8c8 100%);
-}
+  --auth-ink: #f5eef4;
+  --auth-ink-soft: #b9a9b8;
+  --auth-ink-muted: #9d8ca6;
+  --auth-primary: #f43f7e;
+  --auth-primary-bright: #ff6b9d;
+  --auth-primary-deep: #d63468;
+  --auth-gold: #f5b942;
+  --auth-link: #ff9db8;
+  --auth-card-bg: rgba(21, 16, 27, 0.78);
+  --auth-card-border: rgba(255, 255, 255, 0.09);
+  --auth-input-bg: rgba(255, 255, 255, 0.05);
+  --auth-input-border: rgba(255, 255, 255, 0.1);
+  --auth-focus-glow: rgba(255, 107, 157, 0.25);
 
-.auth-view__stage {
   position: relative;
-  overflow: hidden;
+  box-sizing: border-box;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  gap: 14px;
+  min-height: 100vh;
+  padding: 64px 20px 32px;
+  overflow: hidden;
+  background: #0d0a11;
 }
 
-.auth-view__stage-img {
+/* 细点阵纹理:极低调的技术感底纹 */
+.auth-view::before {
+  content: '';
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 25%;
   z-index: 0;
-  display: block;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.4px);
+  background-size: 26px 26px;
 }
 
-.auth-view__veil {
+/* 极光氛围:三团大模糊光斑缓慢漂移(仅 transform,走 GPU 合成) */
+.auth-view__aurora {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    155deg,
-    rgba(255, 232, 239, 0.05) 0%,
-    rgba(183, 50, 92, 0.15) 60%,
-    rgba(45, 18, 36, 0.25) 100%
-  );
-  z-index: 1;
+  z-index: 0;
   pointer-events: none;
 }
 
-.auth-view__pattern {
+.auth-view__orb {
   position: absolute;
-  left: 0;
-  right: 0;
-  width: 100%;
-  height: 80px;
+  width: 560px;
+  height: 560px;
+  border-radius: 50%;
+  filter: blur(110px);
+}
+
+.auth-view__orb--rose {
+  top: -180px;
+  left: -120px;
+  background: rgba(244, 63, 126, 0.28);
+  animation: auth-orb-a 22s ease-in-out infinite alternate;
+}
+
+.auth-view__orb--gold {
+  right: -160px;
+  bottom: -220px;
+  background: rgba(245, 185, 66, 0.13);
+  animation: auth-orb-b 26s ease-in-out infinite alternate;
+}
+
+.auth-view__orb--violet {
+  top: 28%;
+  right: -8%;
+  width: 460px;
+  height: 460px;
+  background: rgba(139, 92, 246, 0.16);
+  animation: auth-orb-c 30s ease-in-out infinite alternate;
+}
+
+@keyframes auth-orb-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(60px, 40px, 0) scale(1.08); }
+}
+
+@keyframes auth-orb-b {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(-50px, -30px, 0) scale(1.05); }
+}
+
+@keyframes auth-orb-c {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(-40px, 50px, 0) scale(1.1); }
+}
+
+/* 左上角紧凑品牌标识 */
+.auth-view__brand {
+  position: absolute;
+  top: 28px;
+  left: 32px;
   z-index: 2;
-  pointer-events: none;
 }
 
-.auth-view__pattern--top {
-  top: 0;
-}
-
-.auth-view__pattern--bottom {
-  bottom: 0;
-  transform: scaleY(-1);
-}
-
-.auth-view__bells {
-  position: absolute;
-  width: 56px;
-  height: 70px;
-  z-index: 3;
-  filter: drop-shadow(0 6px 12px rgba(183, 50, 92, 0.25));
-  animation: bells-sway 4s ease-in-out infinite;
-}
-
-.auth-view__bells--left {
-  top: 16%;
-  left: 12%;
-}
-
-.auth-view__bells--right {
-  top: 64%;
-  right: 12%;
-  animation-delay: 2s;
-}
-
-@keyframes bells-sway {
-  0%, 100% { transform: rotate(-4deg); }
-  50%      { transform: rotate(4deg); }
-}
-
-.auth-view__brand-block {
-  position: absolute;
-  bottom: 180px;
-  left: 0;
-  right: 0;
-  z-index: 6;
-  text-align: center;
-  color: #2a1626;
-  padding: 0 24px;
-}
-
-.auth-view__brand-title {
-  font-size: 38px;
-  font-weight: 800;
-  letter-spacing: 4px;
-  margin-bottom: 8px;
-  text-shadow: 0 2px 8px rgba(255, 255, 255, 0.6);
+.auth-view__brand-row {
+  display: flex;
+  align-items: center;
 }
 
 .auth-view__brand-mark {
-  color: #b7325c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 4px;
+  border-radius: 8px;
+  background: var(--auth-primary);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .auth-view__brand-mark--accent {
-  color: #f5b942;
+  background: var(--auth-gold);
+  color: #4a283b;
 }
 
-.auth-view__brand-suffix {
-  color: #6d3b54;
-  font-size: 22px;
-  letter-spacing: 6px;
-  margin-left: 6px;
-  font-weight: 500;
+.auth-view__brand-name {
+  margin-left: 8px;
+  color: var(--auth-ink);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 3px;
 }
 
 .auth-view__brand-tagline {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 5px;
-  margin-bottom: 4px;
-  color: #b7325c;
-}
-
-.auth-view__brand-meta {
-  font-size: 12px;
+  margin-top: 8px;
+  color: var(--auth-ink-soft);
+  font-size: 11px;
   letter-spacing: 2px;
-  opacity: 0.7;
-  color: #6d3b54;
-}
-
-/* ---------- wild 联动动效 ----------
- * `.auth-view__stage--wild` 类挂载于容器,触发以下同步增强:
- * - 铃铛摆动 ±14°,周期 1.2s
- * - 花瓣下落加速到 6s
- * - 品牌标题慢脉冲 1.04x,周期 3s
- * - 顶部/底部波浪线 opacity 拉到 1
- */
-.auth-view__stage--wild .auth-view__bells {
-  animation: bells-sway-wild 1.2s ease-in-out infinite;
-}
-
-.auth-view__stage--wild .auth-view__bells--right {
-  animation-delay: 0.6s;
-}
-
-.auth-view__stage--wild :deep(.sush-falling-petals__petal) {
-  animation-duration: 6s;
-}
-
-.auth-view__stage--wild .auth-view__brand-title {
-  animation: brand-pulse 3s ease-in-out infinite;
-}
-
-.auth-view__stage--wild .auth-view__pattern {
-  opacity: 1;
-}
-
-@keyframes bells-sway-wild {
-  0%, 100% { transform: rotate(-14deg); }
-  50%      { transform: rotate(14deg); }
-}
-
-@keyframes brand-pulse {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.04); }
 }
 
 @media (max-width: 960px) {
   .auth-view {
-    grid-template-columns: 1fr;
-    grid-template-rows: 260px auto;
+    padding: 96px 16px 32px;
   }
 
-  .auth-view__stage {
-    height: 260px;
+  .auth-view__brand {
+    top: 18px;
+    left: 18px;
   }
 
-  .auth-view__brand-block {
-    bottom: 100px;
+  .auth-view__brand-mark {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+    border-radius: 6px;
   }
 
-  .auth-view__brand-title {
-    font-size: 28px;
-  }
-
-  .auth-view__brand-suffix {
-    font-size: 16px;
+  .auth-view__brand-name {
+    font-size: 13px;
+    letter-spacing: 2px;
   }
 
   .auth-view__brand-tagline {
-    font-size: 12px;
-    letter-spacing: 3px;
+    font-size: 10px;
+    letter-spacing: 1px;
   }
+}
 
-  .auth-view__bells {
-    width: 36px;
-    height: 46px;
+@media (prefers-reduced-motion: reduce) {
+  .auth-view__orb {
+    animation: none;
   }
+}
 
-  .auth-view__bells--left {
-    top: 8%;
-  }
-
-  .auth-view__bells--right {
-    top: 50%;
+/* 矮视口下注册页隐藏引言,登录页保留 */
+@media (max-height: 780px) {
+  .auth-view--compact :deep(.sush-quote) {
+    display: none;
   }
 }
 </style>

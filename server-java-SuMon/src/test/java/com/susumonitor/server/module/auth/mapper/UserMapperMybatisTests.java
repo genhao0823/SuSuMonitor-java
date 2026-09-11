@@ -2,6 +2,10 @@ package com.susumonitor.server.module.auth.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.baomidou.mybatisplus.annotation.DbType;
+import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.List;
@@ -17,7 +21,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * 验证待审核用户分页/搜索 Mapper 的真实参数绑定：keyword 模糊过滤 + LIMIT 分页。
+ * 验证待审核用户分页/搜索 Mapper 的真实参数绑定：keyword 模糊过滤 +
+ * MyBatis-Plus 分页拦截器的 COUNT/LIMIT。
  */
 class UserMapperMybatisTests {
 
@@ -45,6 +50,10 @@ class UserMapperMybatisTests {
         }
         Environment environment = new Environment("test", new JdbcTransactionFactory(), dataSource);
         Configuration configuration = new Configuration(environment);
+        // 与生产 MybatisPlusConfig 同款分页拦截器，方言按测试库使用 H2。
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.H2));
+        configuration.addInterceptor(interceptor);
         configuration.addMapper(UserMapper.class);
         try (var mapperXml = Resources.getResourceAsReader("mapper/auth/UserMapper.xml")) {
             new org.apache.ibatis.builder.xml.XMLMapperBuilder(mapperXml, configuration,
@@ -63,14 +72,15 @@ class UserMapperMybatisTests {
             insertPending(mapper, "carol");
             insertReview(mapper, "zoe");
 
-            List<com.susumonitor.server.module.auth.entity.UserEntity> page = mapper.selectPageUsers("pending", null, 0, 2);
-            long total = mapper.countUsers("pending", null);
+            Page<com.susumonitor.server.module.auth.entity.UserEntity> pager = new Page<>(1, 2);
+            List<com.susumonitor.server.module.auth.entity.UserEntity> page =
+                    mapper.selectPageUsers(pager, "pending", null);
 
             assertEquals(2, page.size());
             // 管理视图统一 created_at DESC:后插入的 carol/bob 在前。
             assertEquals("carol", page.get(0).getUsername());
             assertEquals("bob", page.get(1).getUsername());
-            assertEquals(3, total); // zoe 已审核不计入 pending
+            assertEquals(3, pager.getTotal()); // zoe 已审核不计入 pending
         }
     }
 
@@ -82,16 +92,17 @@ class UserMapperMybatisTests {
             insertPending(mapper, "alice");
             insertReview(mapper, "zoe");
 
-            List<com.susumonitor.server.module.auth.entity.UserEntity> page = mapper.selectPageUsers("approved", null, 0, 20);
-            long total = mapper.countUsers("approved", null);
+            Page<com.susumonitor.server.module.auth.entity.UserEntity> pager = new Page<>(1, 20);
+            List<com.susumonitor.server.module.auth.entity.UserEntity> page =
+                    mapper.selectPageUsers(pager, "approved", null);
 
             assertEquals(1, page.size());
             assertEquals("zoe", page.get(0).getUsername());
-            assertEquals(1, total);
+            assertEquals(1, pager.getTotal());
         }
     }
 
-    /** status 为空时不过滤：全部普通用户。 */
+    /** status 为空时不过滤：全部普通用户计入 total。 */
     @Test
     void pageUsersWithoutStatusShouldReturnAll() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
@@ -99,7 +110,10 @@ class UserMapperMybatisTests {
             insertPending(mapper, "alice");
             insertReview(mapper, "zoe");
 
-            assertEquals(2, mapper.countUsers(null, null));
+            Page<com.susumonitor.server.module.auth.entity.UserEntity> pager = new Page<>(1, 20);
+            mapper.selectPageUsers(pager, null, null);
+
+            assertEquals(2, pager.getTotal());
         }
     }
 
@@ -111,12 +125,13 @@ class UserMapperMybatisTests {
             insertPending(mapper, "alice");
             insertPending(mapper, "bob");
 
-            List<com.susumonitor.server.module.auth.entity.UserEntity> page = mapper.selectPageUsers(null, "li", 0, 20);
-            long total = mapper.countUsers(null, "li");
+            Page<com.susumonitor.server.module.auth.entity.UserEntity> pager = new Page<>(1, 20);
+            List<com.susumonitor.server.module.auth.entity.UserEntity> page =
+                    mapper.selectPageUsers(pager, null, "li");
 
             assertEquals(1, page.size());
             assertEquals("alice", page.get(0).getUsername());
-            assertEquals(1, total);
+            assertEquals(1, pager.getTotal());
         }
     }
 

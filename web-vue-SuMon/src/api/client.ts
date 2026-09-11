@@ -5,6 +5,18 @@ import type { ApiResponse } from '@/types/api'
 import { ErrorCode } from '@/types/error-code'
 
 /**
+ * 扩展 axios 请求配置:允许单个请求声明 silent,
+ * 业务错误时跳过全局 ElMessage 弹窗,由调用方自行处理
+ * (例如"告警暂无 AI 解释"的 404 属正常空态,不应弹错误提示)。
+ * 40100/40300 的登录态回调不受 silent 影响,始终触发。
+ */
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    silent?: boolean
+  }
+}
+
+/**
  * 持久化 token 的 localStorage 键名,与 stores/auth.ts 的 persist key 保持一致。
  */
 const AUTH_STORAGE_KEY = 'susumonitor-auth'
@@ -90,18 +102,21 @@ function extractBusinessCode(error: AxiosError): number | undefined {
 }
 
 /**
- * 统一处理非 2xx 业务响应:展示提示并触发回调。
+ * 统一处理非 2xx 业务响应:触发登录态回调并展示提示。
  *
  * @param code 业务错误码
  * @param message 业务消息
+ * @param silent 为 true 时跳过 ElMessage 弹窗(回调不受影响)
  */
-function handleBusinessError(code: number, message: string): void {
+function handleBusinessError(code: number, message: string, silent?: boolean): void {
   if (code === ErrorCode.UNAUTHORIZED) {
     callbacks.onUnauthorized?.()
   } else if (code === ErrorCode.FORBIDDEN) {
     callbacks.onForbidden?.()
   }
-  ElMessage.error(message || '请求失败')
+  if (silent !== true) {
+    ElMessage.error(message || '请求失败')
+  }
 }
 
 /**
@@ -133,7 +148,7 @@ apiClient.interceptors.response.use(
   (response) => {
     const payload = response.data as ApiResponse<unknown> | undefined
     if (payload && payload.code !== ErrorCode.SUCCESS) {
-      handleBusinessError(payload.code, payload.message)
+      handleBusinessError(payload.code, payload.message, response.config.silent)
       return Promise.reject(new ApiBusinessError(payload.code, payload.message))
     }
     return response
@@ -143,7 +158,7 @@ apiClient.interceptors.response.use(
     if (code !== undefined) {
       const message =
         (error.response?.data as ApiResponse<unknown> | undefined)?.message ?? error.message
-      handleBusinessError(code, message)
+      handleBusinessError(code, message, error.config?.silent)
       return Promise.reject(new ApiBusinessError(code, message))
     }
     ElMessage.error('网络异常,请稍后重试')

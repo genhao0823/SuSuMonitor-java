@@ -414,12 +414,12 @@ function onClose(): void {
 }
 
 .server-form-dialog__form :deep(.el-form-item__label) {
-  color: #2a1626;
+  color: var(--susu-ink);
   font-weight: 600;
 }
 
 .server-form-dialog__form :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--susu-surface);
 }
 
 .server-form-dialog__port {

@@ -39,7 +39,8 @@ private val DarkColorScheme = darkColorScheme(
     onSecondaryContainer = SusuPinkLight,
     background = SusuDarkBg,
     onBackground = androidx.compose.ui.graphics.Color.White,
-    surface = SusuDarkBg,
+    // surface 略亮于 background：卡片在暗色下有 tonal 层次（M3 惯例），不再与页面背景融为一体
+    surface = androidx.compose.ui.graphics.Color(0xFF241F33),
     onSurface = androidx.compose.ui.graphics.Color.White,
     surfaceVariant = SusuPurpleDark,
     onSurfaceVariant = SusuPinkLight,

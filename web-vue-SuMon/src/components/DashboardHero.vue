@@ -97,7 +97,7 @@ const emit = defineEmits<{
   background: var(--glass-bg-card) !important;
   backdrop-filter: blur(28px) saturate(185%);
   -webkit-backdrop-filter: blur(28px) saturate(185%);
-  border: 1px solid rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid var(--susu-border-glass) !important;
   border-radius: var(--glass-radius-card) !important;
   box-shadow: 0 20px 48px rgba(183, 50, 92, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95);
   position: relative;
@@ -130,7 +130,7 @@ const emit = defineEmits<{
   margin: 0;
   font-size: 26px;
   font-weight: 800;
-  color: #2a1626;
+  color: var(--susu-ink);
   letter-spacing: 0;
   line-height: 1.35;
 }
@@ -205,8 +205,8 @@ const emit = defineEmits<{
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: 0;
-  color: #b7325c;
-  background: rgba(255, 255, 255, 0.7);
+  color: var(--susu-accent-deep);
+  background: var(--susu-surface);
   border: 1px solid rgba(183, 50, 92, 0.25);
   border-radius: 8px;
   backdrop-filter: blur(10px);

@@ -25,6 +25,13 @@
         <springdoc.version>2.8.9</springdoc.version>
         <jjwt.version>0.12.6</jjwt.version>
         <sshj.version>0.39.0</sshj.version>
+        <!-- F2 运维问答（2026-09-07）：Spring AI 1.0.x GA（Boot 3.x / JDK17+，Apache-2.0）。
+             仅引入 openai 模型模块与 client-chat 核心（ChatClient + Tool Calling），
+             不引 starter 自动配置，Bean 由 susumonitor.ai.qa.enabled 条件装配，默认零加载。 -->
+        <spring-ai.version>1.0.0</spring-ai.version>
+        <!-- 限流统一到 Bucket4j（2026-09-08）：替换 auth/ai/command 固定窗口与
+             websocket 令牌桶的多份手写实现；jdk17-core 为单 JVM 本地桶。 -->
+        <bucket4j.version>8.19.0</bucket4j.version>
     </properties>
 
     <dependencies>
@@ -59,6 +66,12 @@
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+        <!-- 3.5.9+ 分页拦截器（PaginationInnerInterceptor）拆分到独立构件，按需引入。 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
             <version>${mybatis-plus.version}</version>
         </dependency>
         <dependency>
@@ -101,6 +114,21 @@
             <artifactId>sshj</artifactId>
             <version>${sshj.version}</version>
         </dependency>
+        <!-- 限流：本地令牌桶/固定窗口统一实现（支持注入 Clock 供确定性测试）。 -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>${bucket4j.version}</version>
+        </dependency>
+        <!-- F2 运维问答：官方 OpenAI 兼容模型模块与 ChatClient 核心，版本由 spring-ai-bom 管理。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -122,6 +150,19 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <!-- Spring AI 1.0.x 版本统一经官方 BOM 管理（兼容 Boot 3.4.x / Java 21）。 -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>

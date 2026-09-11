@@ -1,5 +1,6 @@
 package com.susumonitor.server.module.server.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
@@ -112,13 +113,13 @@ public class ServerServiceImpl implements ServerService {
     public PageResult<ServerVo> list(ServerQueryRequest request) {
         QueryValues query = validateQuery(request);
         try {
-            long total = serverMapper.countActiveServers(query.keyword());
-            List<ServerVo> items = serverMapper.selectActiveServers(
-                    query.keyword(), query.offset(), query.pageSize(), query.sortBy(), query.sortOrder())
-                    .stream().map(this::toServerVo).toList();
+            // 分页由 MyBatis-Plus 拦截器承担：COUNT 自动执行，total 回写 Page。
+            Page<ServerEntity> pager = new Page<>(query.page(), query.pageSize());
+            List<ServerEntity> rows = serverMapper.selectActiveServers(
+                    pager, query.keyword(), query.sortBy(), query.sortOrder());
             PageResult<ServerVo> result = new PageResult<>();
-            result.setItems(items);
-            result.setTotal(total);
+            result.setItems(rows.stream().map(this::toServerVo).toList());
+            result.setTotal(pager.getTotal());
             result.setPage(query.page());
             result.setPageSize(query.pageSize());
             return result;
@@ -364,7 +365,7 @@ public class ServerServiceImpl implements ServerService {
                 || !SORT_BY_WHITELIST.contains(sortBy) || !SORT_ORDER_WHITELIST.contains(sortOrder)) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
         }
-        return new QueryValues(page, pageSize, keyword, (long) (page - 1) * pageSize, sortBy, sortOrder);
+        return new QueryValues(page, pageSize, keyword, sortBy, sortOrder);
     }
 
     /** 将创建请求转换为不含凭据明文的基础实体。 */
@@ -487,6 +488,6 @@ public class ServerServiceImpl implements ServerService {
     }
 
     /** 保存校验后的分页查询值，避免后续重新读取可变 DTO。 */
-    private record QueryValues(int page, int pageSize, String keyword, long offset, String sortBy, String sortOrder) {
+    private record QueryValues(int page, int pageSize, String keyword, String sortBy, String sortOrder) {
     }
 }

@@ -1,6 +1,7 @@
 package com.susumonitor.server.module.auth.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.susumonitor.server.module.auth.entity.UserEntity;
 import java.util.List;
 import java.time.LocalDateTime;
@@ -40,26 +41,18 @@ public interface UserMapper extends BaseMapper<UserEntity> {
     /**
      * 分页查询普通用户（管理面）。
      *
+     * <p>分页由 MyBatis-Plus 分页拦截器承担：携带 IPage 参数自动执行 COUNT
+     * 并追加 LIMIT，total 回写到传入的 Page 对象。</p>
+     *
+     * @param page     分页参数（页码与每页数量，承载回写的 total）
      * @param status   审核状态过滤（pending/approved/rejected），null 时不过滤
      * @param keyword  用户名模糊关键字，null 时不过滤
-     * @param offset   偏移量
-     * @param pageSize 每页大小
-     * @return 用户实体列表
+     * @return 当前页用户实体列表
      */
     List<UserEntity> selectPageUsers(
+            IPage<UserEntity> page,
             @Param("status") String status,
-            @Param("keyword") String keyword,
-            @Param("offset") int offset,
-            @Param("pageSize") int pageSize);
-
-    /**
-     * 统计普通用户总数（status/keyword 过滤与 selectPageUsers 一致）。
-     *
-     * @param status  审核状态过滤，null 时不过滤
-     * @param keyword 用户名模糊关键字，null 时不过滤
-     * @return 用户总数
-     */
-    long countUsers(@Param("status") String status, @Param("keyword") String keyword);
+            @Param("keyword") String keyword);
 
     /**
      * 仅当目标仍是待审核普通用户时原子更新审核结果。

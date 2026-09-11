@@ -8,16 +8,14 @@
     @keydown.enter.prevent="advanceQuote"
     @keydown.space.prevent="advanceQuote"
   >
-    <div class="sush-quote__text-wrap">
-      <transition name="quote-fade">
-        <p
-          :key="quoteIndex"
-          class="sush-quote__text"
-        >
-          {{ stageQuotes[quoteIndex] }}
-        </p>
-      </transition>
-    </div>
+    <transition name="quote-fade">
+      <p
+        :key="quoteIndex"
+        class="sush-quote__text"
+      >
+        {{ stageQuotes[quoteIndex] }}
+      </p>
+    </transition>
     <p class="sush-quote__author">
       — 涂山 苏苏
     </p>
@@ -52,7 +50,7 @@
 import { onMounted, ref } from 'vue'
 
 /**
- * 涂山苏苏签名引言:可点击切换 + 键盘 Enter/Space 切换。
+ * 涂山苏苏签名引言:认证卡片下方的一行小字,可点击/键盘切换。
  *
  * @prop stageQuotes 引言池
  * @event click 点击切换
@@ -88,48 +86,39 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 卡片下方的一行极简引言:色彩令牌继承自 AuthLayout 的 --auth-* */
 .sush-quote {
-  position: absolute;
-  bottom: 32px;
-  left: 32px;
-  right: 32px;
-  z-index: 6;
+  position: relative;
+  z-index: 1;
+  max-width: 560px;
   text-align: center;
-  color: #2a1626;
+  color: var(--auth-ink-soft);
   cursor: pointer;
   user-select: none;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.0);
-  border: 1px dashed transparent;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  padding: 6px 14px;
+  border-radius: 10px;
   outline: none;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .sush-quote:hover,
 .sush-quote:focus-visible {
-  background: rgba(255, 255, 255, 0.45);
-  border-color: rgba(255, 91, 138, 0.35);
-  transform: translateY(-1px);
-}
-
-.sush-quote:active {
-  transform: translateY(0);
-  background: rgba(255, 255, 255, 0.6);
-}
-
-.sush-quote__text-wrap {
-  position: relative;
+  color: var(--auth-ink-soft);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .sush-quote__text {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: 1px;
   font-style: italic;
-  color: #2a1626;
   transition: color 0.2s ease;
+}
+
+.sush-quote:hover .sush-quote__text,
+.sush-quote:focus-visible .sush-quote__text {
+  color: var(--auth-link);
 }
 
 .quote-fade-enter-active,
@@ -137,54 +126,57 @@ onMounted(() => {
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-.quote-fade-leave-active {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-}
-
 .quote-fade-enter-from {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(6px);
 }
 
 .quote-fade-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
-}
-
-.sush-quote:hover .sush-quote__text,
-.sush-quote:focus-visible .sush-quote__text {
-  color: #b7325c;
+  transform: translateY(-6px);
 }
 
 .sush-quote__author {
-  margin: 6px 0 0;
-  font-size: 11px;
-  opacity: 0.7;
+  margin: 4px 0 0;
+  font-size: 10px;
+  opacity: 0.75;
   letter-spacing: 1px;
 }
 
 .sush-quote__hint {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 8px;
   font-size: 10px;
   letter-spacing: 1px;
-  color: #b7325c;
+  color: var(--auth-link);
   opacity: 0;
   transition: opacity 0.2s ease;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .sush-quote:hover .sush-quote__hint,
 .sush-quote:focus-visible .sush-quote__hint {
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
 .sush-quote__hint svg {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
+}
+
+@media (max-width: 480px) {
+  .sush-quote {
+    max-width: 100%;
+  }
+
+  .sush-quote__text {
+    font-size: 11px;
+  }
 }
 </style>

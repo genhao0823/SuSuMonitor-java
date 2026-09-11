@@ -42,11 +42,6 @@
         SELECT <include refid="MetricColumns"/> FROM metrics
         WHERE server_id = #{serverId}
           AND collected_at &gt;= #{startTime} AND collected_at &lt;= #{endTime}
-        ORDER BY collected_at DESC, id DESC LIMIT #{offset}, #{pageSize}
-    </select>
-    <select id="countHistory" resultType="long">
-        SELECT COUNT(id) FROM metrics
-        WHERE server_id = #{serverId}
-          AND collected_at &gt;= #{startTime} AND collected_at &lt;= #{endTime}
+        ORDER BY collected_at DESC, id DESC
     </select>
 </mapper>

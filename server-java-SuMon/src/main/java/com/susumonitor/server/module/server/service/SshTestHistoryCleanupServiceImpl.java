@@ -1,20 +1,18 @@
 package com.susumonitor.server.module.server.service;
 
+import com.susumonitor.server.common.cleanup.BatchCleanupExecutor;
+import com.susumonitor.server.common.cleanup.CleanupResult;
 import com.susumonitor.server.config.AppProperties;
-import com.susumonitor.server.module.metrics.service.MetricsCleanupService.CleanupResult;
 import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 分批清理超过保留期的 SSH 测试历史（ssh_test_history），并保证同一 JVM 内定时任务不重叠。
+ * 分批清理超过保留期的 SSH 测试历史（ssh_test_history）；防重入与批量循环由共享执行器承担。
  */
 @Slf4j
 @Service
@@ -23,21 +21,20 @@ public class SshTestHistoryCleanupServiceImpl implements SshTestHistoryCleanupSe
 
     private final SshTestHistoryMapper sshTestHistoryMapper;
     private final AppProperties appProperties;
-    private final TransactionTemplate transactionTemplate;
-    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final BatchCleanupExecutor batchCleanupExecutor;
 
     /**
      * 构造 SSH 测试历史清理服务。
      *
      * @param sshTestHistoryMapper SSH 测试历史 Mapper
      * @param appProperties 应用配置
-     * @param transactionTemplate 每批独立事务模板
+     * @param batchCleanupExecutor 共享批量清理执行器
      */
     public SshTestHistoryCleanupServiceImpl(SshTestHistoryMapper sshTestHistoryMapper,
-            AppProperties appProperties, TransactionTemplate transactionTemplate) {
+            AppProperties appProperties, BatchCleanupExecutor batchCleanupExecutor) {
         this.sshTestHistoryMapper = sshTestHistoryMapper;
         this.appProperties = appProperties;
-        this.transactionTemplate = transactionTemplate;
+        this.batchCleanupExecutor = batchCleanupExecutor;
     }
 
     /**
@@ -60,31 +57,10 @@ public class SshTestHistoryCleanupServiceImpl implements SshTestHistoryCleanupSe
      */
     @Override
     public Optional<CleanupResult> cleanupExpiredSshTestHistory(LocalDateTime cutoffTime) {
-        if (!running.compareAndSet(false, true)) {
-            return Optional.empty();
-        }
-
-        long startedAt = System.nanoTime();
-        int batchCount = 0;
-        int deletedRows = 0;
-        try {
-            int maxBatches = appProperties.getSshTestHistory().getCleanupMaxBatchesPerRun();
-            int batchSize = appProperties.getSshTestHistory().getCleanupBatchSize();
-            while (batchCount < maxBatches) {
-                Integer deleted = transactionTemplate.execute(status ->
-                        sshTestHistoryMapper.deleteExpiredBatch(cutoffTime, batchSize));
-                int currentDeleted = deleted == null ? 0 : deleted;
-                if (currentDeleted == 0) {
-                    break;
-                }
-                batchCount++;
-                deletedRows += currentDeleted;
-            }
-            long durationMs = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
-            return Optional.of(new CleanupResult(cutoffTime, batchCount, deletedRows, durationMs));
-        } finally {
-            running.set(false);
-        }
+        return batchCleanupExecutor.run("ssh-test-history", cutoffTime,
+                sshTestHistoryMapper::deleteExpiredBatch,
+                appProperties.getSshTestHistory().getCleanupBatchSize(),
+                appProperties.getSshTestHistory().getCleanupMaxBatchesPerRun());
     }
 
 }

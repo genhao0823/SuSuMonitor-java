@@ -1,5 +1,6 @@
 package com.susumonitor.server.module.auth.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.module.auth.dto.LoginRequest;
@@ -15,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -64,11 +66,13 @@ public class UserServiceImpl implements UserService {
             String status, String keyword, int page, int pageSize) {
         String normalizedStatus = status == null ? null : status.trim();
         String normalizedKeyword = keyword == null ? null : keyword.trim();
-        int offset = (page - 1) * pageSize;
+        // 分页由 MyBatis-Plus 拦截器承担：COUNT 自动执行，total 回写 Page。
+        Page<UserEntity> pager = new Page<>(page, pageSize);
+        List<UserEntity> rows = userMapper.selectPageUsers(pager, normalizedStatus, normalizedKeyword);
         com.susumonitor.server.common.vo.PageResult<UserEntity> result =
                 new com.susumonitor.server.common.vo.PageResult<>();
-        result.setItems(userMapper.selectPageUsers(normalizedStatus, normalizedKeyword, offset, pageSize));
-        result.setTotal(userMapper.countUsers(normalizedStatus, normalizedKeyword));
+        result.setItems(rows);
+        result.setTotal(pager.getTotal());
         result.setPage(page);
         result.setPageSize(pageSize);
         return result;

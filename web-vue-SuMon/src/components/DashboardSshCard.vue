@@ -94,7 +94,7 @@ defineProps<{
   gap: 8px;
   font-size: 14.5px;
   font-weight: 700;
-  color: #2a1626;
+  color: var(--susu-ink);
 }
 
 .dashboard-ssh-card__list {

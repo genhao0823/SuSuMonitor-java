@@ -1,8 +1,8 @@
 # SuSuMonitor 技术栈总结（Java 全栈实习面试参考）
 
-> 最后核对日期：2026-08-29（RC1 规划基线）
+> 最后核对日期：2026-09-06（AI 命令域 M1 + F1 告警智能解释基线）
 > 整理范围：`server-java-SuMon`（Java 后端）、`agent-go-SuMon`（Go 采集 Agent）、`web-vue-SuMon`（Vue 前端）、`app-kt-SuMon`（Android 客户端）、`api-test`（接口验证）及工程化基础设施。
-> 编写原则：只描述代码中真实落地或真实声明的技术，对“已声明但未使用”“当前工作区未提交”和“需要真实环境验收”的内容分别标注，不夸大当前发布状态。当前实际 HEAD 为 `main @ 09b3911`；上一轮安全审计和收尾改动仍处于工作区，发布前必须在干净提交上重新验证。
+> 编写原则：只描述代码中真实落地或真实声明的技术，对“已声明但未使用”“当前工作区未提交”和“需要真实环境验收”的内容分别标注，不夸大当前发布状态。当前实际 HEAD 为 `main @ d8eb375`（2026-09-06 核对）；安全审计与收尾改动均已提交，工作区干净，与 `origin/main` 一致。
 
 > **文档进度对齐说明（2026-07-25 修订，仅文档层）**
 >
@@ -14,8 +14,8 @@
 
 | 能力 | 状态 | 依据 |
 |---|---|---|
-| Spring Boot 3.4.13 后端 | 当前工作区已升级，尚未进入 HEAD 发布提交 | `server-java-SuMon/pom.xml`；RC1 前需在干净提交复验 |
-| Flyway V1-V27 | 当前可用 | `db/migration/` |
+| Spring Boot 3.4.13 后端 | 已进入 HEAD 发布提交（`d8eb375` 基线） | `server-java-SuMon/pom.xml` |
+| Flyway V1-V30 | 当前可用 | `db/migration/` |
 | MySQL 8.4 集成 | 当前可用；生产网络边界和恢复演练待验收 | `application.yml`、Docker Compose |
 | JWT 72h 认证 + 行锁首管理员 | 当前可用；首管理员并发历史验收基于旧提交，当前 HEAD 待复跑 | `JwtKeyConfig`、`UserService.java`、历史验收脚本 |
 | Go Agent WS 鉴权/心跳/重连 | 当前可用；真实公网 WSS 联合故障验收待做 | `wsclient/client.go` |
@@ -55,7 +55,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 | 技术 | 版本 | 用途 |
 |---|---|---|
 | Java | 21 LTS | 主语言（用到 record、虚拟线程） |
-| Spring Boot | 3.4.7 | 应用框架、自动配置、配置绑定 |
+| Spring Boot | 3.4.13 | 应用框架、自动配置、配置绑定（2026-09-06 更新：原 3.4.7 已升级，覆盖 CVE-2025-35249/35250） |
 | Spring Web MVC | - | REST API |
 | Spring Security | - | 无状态 Bearer 鉴权、RBAC |
 | Spring Validation（Hibernate Validator） | - | 参数校验 |
@@ -66,7 +66,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 | MyBatis-Plus | 3.5.12 | 数据访问、分页、条件构造 |
 | MySQL | 8.4 | 主数据库 |
 | HikariCP | - | 连接池 |
-| Flyway | - | 数据库版本化迁移（V1~V27） |
+| Flyway | - | 数据库版本化迁移（V1~V30） |
 | JJWT | 0.12.6 | JWT 签发/校验（HS256） |
 | BCrypt | - | 密码哈希 |
 | JDK JCA AES-256-GCM | - | SSH 凭据加密 |
@@ -207,7 +207,7 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 
 **在项目中如何使用：**
 - 启用 `baseline-on-migrate: true`，迁移脚本位于 `classpath:db/migration`（`application.yml:18-21`）。
-- 版本脚本 V1~V27：V1 建 users 表、V2 servers、V3 metrics、V4 commands、V5 alert 表、V6 ssh_sessions、V7 auth_bootstrap_state、V8 server SSH 主机密钥字段、V9 agent_token 生命周期字段、V10 告警状态与规则软删除、V11 指标幂等表、V12 终端会话、V13 告警活跃规则唯一索引、V14 outbox 表、V15 消费幂等表、V16 outbox 清理索引、V17 心跳微秒精度、V18 告警确认窗口、V19 投递统计列、V20 通知渠道列、V21 通知表、V22 清理索引、V23 SSH 测试历史、V24 历史保留索引、V25 outbox routing_key、V26 告警 resolved_at、V27 通知清理索引（V20-V27 为 2026-08-16 更新补齐）。
+- 版本脚本 V1~V30：V1 建 users 表、V2 servers、V3 metrics、V4 commands、V5 alert 表、V6 ssh_sessions、V7 auth_bootstrap_state、V8 server SSH 主机密钥字段、V9 agent_token 生命周期字段、V10 告警状态与规则软删除、V11 指标幂等表、V12 终端会话、V13 告警活跃规则唯一索引、V14 outbox 表、V15 消费幂等表、V16 outbox 清理索引、V17 心跳微秒精度、V18 告警确认窗口、V19 投递统计列、V20 通知渠道列、V21 通知表、V22 清理索引、V23 SSH 测试历史、V24 历史保留索引、V25 outbox routing_key、V26 告警 resolved_at、V27 通知清理索引（V20-V27 为 2026-08-16 更新补齐）、V28 AI 诊断审计表、V29 AI 命令运行表、V30 AI 告警解释表（V28-V30 为 2026-09-06 更新补齐）。
 - 表结构规范：`BIGINT UNSIGNED` 主键自增、`COMMENT` 字段注释、`InnoDB + utf8mb4_unicode_ci`、合理索引（见 V1 脚本）。
 
 ### 3.12 Spring WebSocket（双通道实时通信）
@@ -414,6 +414,8 @@ SuSuMonitor 是一个 **Linux 服务器性能监控平台**，采用**模块化�
 ## 七、增强阶段规划（未落地，面试可谈"未来演进"）
 
 以下在需求文档中规划但**当前代码未实现**，面试中可作为技术视野展示，需诚实区分"规划"与"已做"：
+>
+> **2026-09-06 更新**：大模型只读诊断 MVP（`POST /api/ai/diagnoses`）、AI 命令域 M1（`/api/ai/commands` 审批制 + Go Agent 受限执行器）、告警智能解释 F1（V30 + 回看端点）均已落地（默认关闭，详见根 README 快照与 `Develop-plans/20260903`），不再属于"规划未实现"。
 
 - Spring Data Redis：**已落地（2026-08-17 多实例化阶段一：Monitor ticket 共享）**；指标缓存、JWT 黑名单、限流、Agent 在线状态缓存仍为规划
 - Micrometer + Prometheus + Grafana：应用指标采集与监控

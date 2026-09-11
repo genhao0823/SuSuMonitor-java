@@ -32,6 +32,16 @@
           编辑
         </el-button>
         <el-button
+          v-if="auth.isAdmin"
+          type="danger"
+          plain
+          :disabled="!data"
+          class="server-detail-view__ai"
+          @click="openAiDiagnosis"
+        >
+          AI 智能诊断
+        </el-button>
+        <el-button
           type="success"
           plain
           :disabled="!data"
@@ -336,6 +346,12 @@
       @success="reload"
     />
 
+    <AiDiagnosisDialog
+      v-model="aiDiagnosisOpen"
+      :server-id="data?.id ?? null"
+      :server-name="data?.name ?? ''"
+    />
+
     <AgentTokenDialog
       v-model="agentDialogOpen"
       :mode="agentDialogMode"
@@ -353,6 +369,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import ServerFormDialog from '@/components/ServerFormDialog.vue'
 import AgentTokenDialog from '@/components/AgentTokenDialog.vue'
+import AiDiagnosisDialog from '@/components/AiDiagnosisDialog.vue'
 import TushanFoxMark from '@/components/TushanFoxMark.vue'
 import { ApiBusinessError } from '@/api/client'
 import { confirmSshHostKey, deleteServer, getServer, getServerStatus, observeSshHostKey, testSshConnection } from '@/api/server'
@@ -370,6 +387,7 @@ const loading = ref(false)
 const data = ref<Server | null>(null)
 const status = ref<ServerStatus | null>(null)
 const editOpen = ref(false)
+const aiDiagnosisOpen = ref(false)
 const agentDialogOpen = ref(false)
 const agentDialogMode = ref<'register' | 'rotate'>('register')
 const agentBusy = ref(false)
@@ -456,6 +474,10 @@ function goBack(): void {
 
 function openEdit(): void {
   editOpen.value = true
+}
+
+function openAiDiagnosis(): void {
+  aiDiagnosisOpen.value = true
 }
 
 function goMetrics(): void {
@@ -772,10 +794,10 @@ onBeforeUnmount(() => {
 }
 
 .server-detail-view__card {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--susu-surface-soft);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--susu-border-glass);
   border-radius: 16px;
   box-shadow:
     0 12px 32px rgba(183, 50, 92, 0.12),
@@ -797,7 +819,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   font-size: 15px;
   font-weight: 700;
-  color: #2a1626;
+  color: var(--susu-ink);
 }
 
 .server-detail-view__back-icon {
@@ -814,7 +836,7 @@ onBeforeUnmount(() => {
 }
 
 .server-detail-view__desc :deep(.el-descriptions__content) {
-  color: #2a1626;
+  color: var(--susu-ink);
   font-weight: 500;
 }
 
@@ -851,20 +873,20 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--susu-surface-soft);
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--susu-border-glass);
 }
 
 .server-detail-view__status-label {
   font-size: 13px;
-  color: #8a5872;
+  color: var(--susu-ink-muted);
   letter-spacing: 0.5px;
 }
 
 .server-detail-view__status-value {
   font-size: 13px;
-  color: #2a1626;
+  color: var(--susu-ink);
   font-weight: 500;
 }
 

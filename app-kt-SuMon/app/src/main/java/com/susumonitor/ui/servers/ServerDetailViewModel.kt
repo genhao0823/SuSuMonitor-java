@@ -8,7 +8,9 @@ import com.susumonitor.data.model.AgentTokenVo
 import com.susumonitor.data.model.Metrics
 import com.susumonitor.data.model.Server
 import com.susumonitor.data.model.ServerStatus
+import com.susumonitor.data.model.SshHostKeyObservation
 import com.susumonitor.data.model.SshHostKeyVo
+import com.susumonitor.data.model.SshTestHistoryItem
 import com.susumonitor.data.model.SshTestResult
 import com.susumonitor.data.repository.MetricsRepository
 import com.susumonitor.data.repository.ServerRepository
@@ -35,6 +37,10 @@ data class ServerDetailUiState(
     val agentToken: AgentTokenVo? = null,
     /** 主机指纹确认结果。 */
     val hostKeyResult: SshHostKeyVo? = null,
+    /** 远端指纹观察结果（观察后展示，含当前与已登记对比）。 */
+    val hostKeyObservation: SshHostKeyObservation? = null,
+    /** SSH 测试历史（加载后展示）。 */
+    val sshTestHistory: List<SshTestHistoryItem>? = null,
     /** 是否正在执行管理操作。 */
     val actionInProgress: Boolean = false,
 )
@@ -156,6 +162,39 @@ class ServerDetailViewModel @Inject constructor(
         }
     }
 
+    /** 观察远端当前主机指纹（admin；不改变信任登记）。 */
+    fun observeHostKey() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(actionInProgress = true, errorMessage = null)
+            try {
+                val observation = serverRepository.observeHostKey(serverId)
+                _uiState.value = _uiState.value.copy(
+                    actionInProgress = false,
+                    hostKeyObservation = observation,
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    actionInProgress = false,
+                    errorMessage = friendlyMessage(e),
+                )
+            }
+        }
+    }
+
+    /** 加载 SSH 测试历史（admin）。 */
+    fun loadSshTestHistory() {
+        if (_uiState.value.sshTestHistory != null) return
+        viewModelScope.launch {
+            runCatching { serverRepository.sshTestHistory(serverId) }
+                .onSuccess { history ->
+                    _uiState.value = _uiState.value.copy(sshTestHistory = history)
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(errorMessage = friendlyMessage(e))
+                }
+        }
+    }
+
     /** 生成 Agent Token（admin）。 */
     fun registerAgentToken() {
         viewModelScope.launch {
@@ -219,11 +258,12 @@ class ServerDetailViewModel @Inject constructor(
             sshTest = null,
             agentToken = null,
             hostKeyResult = null,
+            hostKeyObservation = null,
             errorMessage = null,
         )
     }
 
-    private fun friendlyMessage(e: Exception): String = when (val api = ApiException.from(e)) {
+    private fun friendlyMessage(e: Throwable): String = when (val api = ApiException.from(e)) {
         is ApiException.Business -> when (api.code) {
             ErrorCodes.SSH_AUTHENTICATION_FAILED -> "SSH 认证失败，请检查凭据"
             ErrorCodes.SSH_CONNECTION_TIMEOUT -> "SSH 连接超时"

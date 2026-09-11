@@ -89,7 +89,7 @@ const emit = defineEmits<{
 }
 
 .server-search-bar__input :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--susu-surface);
 }
 
 .server-search-bar__input :deep(.el-input__prefix svg) {

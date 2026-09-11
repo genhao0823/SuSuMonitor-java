@@ -402,7 +402,7 @@ function onClose(): void {
 }
 
 .alert-rule-dialog__form :deep(.el-form-item__label) {
-  color: #2a1626;
+  color: var(--susu-ink);
   font-weight: 600;
 }
 
@@ -439,7 +439,7 @@ function onClose(): void {
 
 .alert-rule-dialog__notification :deep(.el-collapse-item__header) {
   font-weight: 600;
-  color: #2a1626;
+  color: var(--susu-ink);
 }
 
 .alert-rule-dialog__notification-tip {

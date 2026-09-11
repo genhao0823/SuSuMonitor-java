@@ -476,10 +476,10 @@ onMounted(() => {
 }
 
 .admin-users-view__card {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--susu-surface-soft);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--susu-border-glass);
   border-radius: 16px;
   box-shadow:
     0 12px 32px rgba(183, 50, 92, 0.12),
@@ -516,7 +516,7 @@ onMounted(() => {
 .admin-users-view__summary-label {
   font-size: 14px;
   font-weight: 600;
-  color: #2a1626;
+  color: var(--susu-ink);
 }
 
 .admin-users-view__refresh {

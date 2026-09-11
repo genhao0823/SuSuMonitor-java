@@ -78,19 +78,6 @@
             AND username LIKE CONCAT('%', #{keyword}, '%')
         </if>
         ORDER BY created_at DESC, id DESC
-        LIMIT #{offset}, #{pageSize}
-    </select>
-
-    <select id="countUsers" resultType="long">
-        SELECT COUNT(id)
-        FROM users
-        WHERE role = 'user'
-        <if test="status != null and status != ''">
-            AND review_status = #{status}
-        </if>
-        <if test="keyword != null and keyword != ''">
-            AND username LIKE CONCAT('%', #{keyword}, '%')
-        </if>
     </select>
 
     <update id="updateReviewStatus">

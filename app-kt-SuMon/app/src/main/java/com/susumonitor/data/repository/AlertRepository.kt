@@ -2,6 +2,7 @@ package com.susumonitor.data.repository
 
 import com.susumonitor.api.AlertApi
 import com.susumonitor.data.ApiException
+import com.susumonitor.data.model.AlertNotification
 import com.susumonitor.data.model.AlertRecord
 import com.susumonitor.data.model.AlertRecordQuery
 import com.susumonitor.data.model.AlertRule
@@ -13,7 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 告警仓库：规则列表/CRUD + 记录分页/已读。
+ * 告警仓库：规则列表/CRUD + 记录分页/已读 + 通知投递记录。
  */
 @Singleton
 class AlertRepository @Inject constructor(
@@ -63,5 +64,11 @@ class AlertRepository @Inject constructor(
         if (response.code != ErrorCodes.SUCCESS) {
             throw ApiException.Business(response.code, response.message)
         }
+    }
+
+    /** 单条告警的外发通知投递记录（渠道/状态/重试）。 */
+    suspend fun notifications(id: Long): List<AlertNotification> {
+        val response = alertApi.notifications(id)
+        return response.data ?: throw ApiException.Business(response.code, response.message)
     }
 }

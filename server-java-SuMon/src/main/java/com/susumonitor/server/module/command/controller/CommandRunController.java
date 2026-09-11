@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.susumonitor.server.common.ApiResponse;
 import com.susumonitor.server.common.vo.PageResult;
 import com.susumonitor.server.module.command.AiCommandSuggestionService;
+import com.susumonitor.server.module.command.CommandAutoApprovalPolicyService;
 import com.susumonitor.server.module.command.CommandRunService;
 import com.susumonitor.server.module.command.CommandRunVos;
 import com.susumonitor.server.module.command.CommandTemplateRegistry;
+import com.susumonitor.server.module.command.dto.AutoApprovalPolicyRequest;
 import com.susumonitor.server.module.command.dto.CommandSuggestionRequest;
 import com.susumonitor.server.module.command.dto.ManualCommandRequest;
 import com.susumonitor.server.module.command.entity.CommandRunEntity;
@@ -30,6 +32,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -49,6 +52,7 @@ public class CommandRunController {
     private final CommandRunService commandRunService;
     private final CommandTemplateRegistry templateRegistry;
     private final AiCommandSuggestionService suggestionService;
+    private final CommandAutoApprovalPolicyService autoApprovalPolicyService;
     private final ObjectMapper objectMapper;
 
     /** AI 根据意图生成建议并逐条创建待审批运行（返回可能为空列表）。 */
@@ -129,7 +133,7 @@ public class CommandRunController {
         return ApiResponse.success(result);
     }
 
-    /** 列出白名单模板（id/argv/参数正则），契约 command-protocol-v1.md 的 Java 镜像。 */
+    /** 列出白名单模板（id/argv/参数正则/风险等级），契约 command-protocol-v1.md 的 Java 镜像。 */
     @Operation(summary = "List whitelisted command templates",
             security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/templates")
@@ -139,6 +143,7 @@ public class CommandRunController {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", template.id());
             item.put("argv", template.argv());
+            item.put("risk_level", template.risk().value());
             List<Map<String, String>> params = new ArrayList<>();
             for (CommandTemplateRegistry.ParamSpec spec : template.params()) {
                 params.add(Map.of("name", spec.name(), "pattern", spec.pattern().pattern()));
@@ -147,5 +152,37 @@ public class CommandRunController {
             result.add(item);
         }
         return ApiResponse.success(result);
+    }
+
+    /** 读取实例级自动审批策略（行缺失按禁用返回）。 */
+    @Operation(summary = "Get the auto-approval policy",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/auto-approval-policy")
+    public ApiResponse<Map<String, Object>> getAutoApprovalPolicy() {
+        return ApiResponse.success(toPolicyVo(autoApprovalPolicyService.get()));
+    }
+
+    /** 更新自动审批策略（admin 专属；阈值仅允许 low/medium）。 */
+    @Operation(summary = "Update the auto-approval policy",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PutMapping("/auto-approval-policy")
+    public ApiResponse<Map<String, Object>> updateAutoApprovalPolicy(
+            @Valid @RequestBody AutoApprovalPolicyRequest request,
+            @AuthenticationPrincipal AuthenticatedUser operator) {
+        return ApiResponse.success(toPolicyVo(
+                autoApprovalPolicyService.update(request.getEnabled(), request.getMaxRiskLevel(),
+                        operator.id())));
+    }
+
+    /** 策略快照转 API 输出。 */
+    private Map<String, Object> toPolicyVo(CommandAutoApprovalPolicyService.Snapshot snapshot) {
+        Map<String, Object> vo = new LinkedHashMap<>();
+        vo.put("enabled", snapshot.enabled());
+        vo.put("max_risk_level", snapshot.maxRiskLevel().value());
+        vo.put("updated_at", snapshot.updatedAt());
+        if (snapshot.updatedBy() != null) {
+            vo.put("updated_by", snapshot.updatedBy());
+        }
+        return vo;
     }
 }

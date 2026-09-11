@@ -197,20 +197,36 @@ private fun ServerListCard(
             latest = latest,
             onClick = onClick,
         )
-        // 操作栏（admin 可见 SSH 测试/编辑/删除）
+        // 操作栏（admin 可见 SSH 测试/编辑/删除）；压缩内边距避免小屏文字折行
         if (isAdmin) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedButton(onClick = onTestSsh, modifier = Modifier.weight(1f)) {
-                    Text(if (sshTest != null) "SSH ✓ ${sshTest.durationMs}ms" else "SSH 测试")
+                OutlinedButton(
+                    onClick = onTestSsh,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+                ) {
+                    Text(
+                        if (sshTest != null) "SSH ✓ ${sshTest.durationMs}ms" else "SSH 测试",
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
                 }
-                OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
-                    Text("编辑")
+                OutlinedButton(
+                    onClick = onEdit,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+                ) {
+                    Text("编辑", maxLines = 1)
                 }
-                OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
-                    Text("删除")
+                OutlinedButton(
+                    onClick = onDelete,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+                ) {
+                    Text("删除", maxLines = 1)
                 }
             }
         }
@@ -241,9 +257,11 @@ private fun SortSelector(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // weight 必须挂在 Row 直接子级 ExposedDropdownMenuBox 上，否则下拉框溢出屏幕
         ExposedDropdownMenuBox(
             expanded = sortByMenu,
             onExpandedChange = { sortByMenu = it },
+            modifier = Modifier.weight(1f),
         ) {
             OutlinedTextField(
                 value = SortFields.firstOrNull { it.first == sortBy }?.second ?: "默认(ID)",
@@ -252,7 +270,7 @@ private fun SortSelector(
                 label = { Text("排序字段") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortByMenu) },
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .menuAnchor(MenuAnchorType.PrimaryNotEditable),
             )
             ExposedDropdownMenu(
@@ -273,6 +291,7 @@ private fun SortSelector(
         ExposedDropdownMenuBox(
             expanded = sortOrderMenu,
             onExpandedChange = { sortOrderMenu = it },
+            modifier = Modifier.weight(1f),
         ) {
             OutlinedTextField(
                 value = if (sortOrder == "asc") "升序" else "降序",
@@ -281,7 +300,7 @@ private fun SortSelector(
                 label = { Text("排序方向") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortOrderMenu) },
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .menuAnchor(MenuAnchorType.PrimaryNotEditable),
             )
             ExposedDropdownMenu(

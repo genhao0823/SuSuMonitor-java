@@ -81,3 +81,26 @@ data class AgentTokenVo(
     @SerialName("agent_token") val agentToken: String,
     @SerialName("created_at") val createdAt: String,
 )
+
+/** 远端主机指纹观察结果，与后端 `SshHostKeyObservationVo` 对齐。 */
+@Serializable
+data class SshHostKeyObservation(
+    @SerialName("server_id") val serverId: Long,
+    @SerialName("host_key_algorithm") val hostKeyAlgorithm: String,
+    @SerialName("host_key_fingerprint") val hostKeyFingerprint: String,
+    @SerialName("registered_fingerprint") val registeredFingerprint: String? = null,
+    @SerialName("observed_at") val observedAt: String,
+)
+
+/** SSH 测试历史记录，与后端 `SshTestHistoryVo` 对齐。 */
+@Serializable
+data class SshTestHistoryItem(
+    @SerialName("server_id") val serverId: Long,
+    val connected: Boolean,
+    @SerialName("error_code") val errorCode: Int? = null,
+    @SerialName("host_key_algorithm") val hostKeyAlgorithm: String? = null,
+    @SerialName("host_key_fingerprint") val hostKeyFingerprint: String? = null,
+    @SerialName("auth_type") val authType: String,
+    @SerialName("duration_ms") val durationMs: Long,
+    @SerialName("tested_at") val testedAt: String,
+)
