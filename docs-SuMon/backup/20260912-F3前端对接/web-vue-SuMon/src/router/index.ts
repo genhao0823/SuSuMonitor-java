@@ -97,12 +97,6 @@ const protectedChildren: RouteRecordRaw[] = [
     meta: { title: 'AI 命令域', requiresAuth: true, requiresAdmin: true }
   },
   {
-    path: '/ai/reports',
-    name: 'ai-health-reports',
-    component: () => import('@/views/AiHealthReportsView.vue'),
-    meta: { title: 'AI 健康报告', requiresAuth: true, requiresAdmin: true }
-  },
-  {
     path: '/ai/settings',
     name: 'ai-settings',
     component: () => import('@/views/AiProviderSettingsView.vue'),

@@ -22,7 +22,7 @@
           class="main-layout__menu-item"
         >
           <el-icon class="main-layout__menu-icon">
-            <component :is="iconMap[item.icon]" />
+            <component :is="item.icon" />
           </el-icon>
           <template #title>
             <span class="main-layout__menu-text">{{ item.label }}</span>
@@ -124,7 +124,6 @@ import {
   Promotion,
   Setting,
   Sunny,
-  TrendCharts,
   UserFilled
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -144,7 +143,6 @@ interface MenuItem {
     | 'Promotion'
     | 'ChatDotRound'
     | 'MagicStick'
-    | 'TrendCharts'
     | 'Setting'
   requiresAdmin?: boolean
   /**
@@ -178,7 +176,6 @@ const allMenus: MenuItem[] = [
   { name: 'alert-rules', label: '告警规则', icon: 'Notification', requiresAdmin: true },
   { name: 'ai-qa', label: 'AI 问答', icon: 'ChatDotRound', requiresAdmin: true },
   { name: 'ai-commands', label: 'AI 命令域', icon: 'MagicStick', requiresAdmin: true },
-  { name: 'ai-health-reports', label: 'AI 报告', icon: 'TrendCharts', requiresAdmin: true },
   { name: 'ai-settings', label: 'AI 设置', icon: 'Setting', requiresAdmin: true },
   { name: 'admin-users', label: '用户审核', icon: 'Document', requiresAdmin: true },
   { name: 'terminal', label: 'Web 终端', icon: 'Promotion', requiresServer: true }
@@ -199,7 +196,6 @@ const iconMap: Record<MenuItem['icon'], typeof Monitor> = {
   Promotion,
   ChatDotRound,
   MagicStick,
-  TrendCharts,
   Setting
 }
 
