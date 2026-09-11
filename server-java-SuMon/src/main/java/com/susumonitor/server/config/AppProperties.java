@@ -1798,26 +1798,6 @@ public class AppProperties {
         @Max(value = 1000, message = "Alert notification cleanup max batches must not exceed 1000")
         private int notificationCleanupMaxBatchesPerRun = 100;
 
-        /** 单渠道通知最大尝试次数（首次 + 重试，达上限置 failed）。 */
-        @Min(value = 1, message = "Notification retry max attempts must be at least one")
-        @Max(value = 20, message = "Notification retry max attempts must not exceed 20")
-        private int notificationRetryMaxAttempts = 5;
-
-        /** 通知重试退避上限（秒）。 */
-        @Min(value = 1, message = "Notification retry max backoff must be at least one second")
-        @Max(value = 3600, message = "Notification retry max backoff must not exceed 3600 seconds")
-        private int notificationRetryMaxBackoffSeconds = 60;
-
-        /** 重试调度单轮最多处理的通知数。 */
-        @Min(value = 1, message = "Notification retry batch limit must be at least one")
-        @Max(value = 500, message = "Notification retry batch limit must not exceed 500")
-        private int notificationRetryBatchLimit = 50;
-
-        /** 重试调度扫描间隔（毫秒）。 */
-        @Min(value = 1000, message = "Notification retry poll interval must be at least 1000 ms")
-        @Max(value = 600000, message = "Notification retry poll interval must not exceed 600000 ms")
-        private long notificationRetryPollIntervalMs = 30000;
-
         /** 通知 HTTP 连接超时（毫秒），防止渠道挂起拖死通知线程。 */
         @Min(value = 500, message = "Notification HTTP connect timeout must be at least 500 ms")
         @Max(value = 60000, message = "Notification HTTP connect timeout must not exceed 60000 ms")
@@ -1827,51 +1807,6 @@ public class AppProperties {
         @Min(value = 500, message = "Notification HTTP read timeout must be at least 500 ms")
         @Max(value = 120000, message = "Notification HTTP read timeout must not exceed 120000 ms")
         private int notificationHttpReadTimeoutMs = 10000;
-
-        /** SMTP 连接/读写超时（毫秒）。 */
-        @Min(value = 500, message = "Notification SMTP timeout must be at least 500 ms")
-        @Max(value = 120000, message = "Notification SMTP timeout must not exceed 120000 ms")
-        private int notificationSmtpTimeoutMs = 10000;
-
-        /** 获取单渠道通知最大尝试次数。 */
-        public int getNotificationRetryMaxAttempts() {
-            return notificationRetryMaxAttempts;
-        }
-
-        /** 设置单渠道通知最大尝试次数。 */
-        public void setNotificationRetryMaxAttempts(int notificationRetryMaxAttempts) {
-            this.notificationRetryMaxAttempts = notificationRetryMaxAttempts;
-        }
-
-        /** 获取通知重试退避上限（秒）。 */
-        public int getNotificationRetryMaxBackoffSeconds() {
-            return notificationRetryMaxBackoffSeconds;
-        }
-
-        /** 设置通知重试退避上限（秒）。 */
-        public void setNotificationRetryMaxBackoffSeconds(int notificationRetryMaxBackoffSeconds) {
-            this.notificationRetryMaxBackoffSeconds = notificationRetryMaxBackoffSeconds;
-        }
-
-        /** 获取重试调度单轮批量上限。 */
-        public int getNotificationRetryBatchLimit() {
-            return notificationRetryBatchLimit;
-        }
-
-        /** 设置重试调度单轮批量上限。 */
-        public void setNotificationRetryBatchLimit(int notificationRetryBatchLimit) {
-            this.notificationRetryBatchLimit = notificationRetryBatchLimit;
-        }
-
-        /** 获取重试调度扫描间隔（毫秒）。 */
-        public long getNotificationRetryPollIntervalMs() {
-            return notificationRetryPollIntervalMs;
-        }
-
-        /** 设置重试调度扫描间隔（毫秒）。 */
-        public void setNotificationRetryPollIntervalMs(long notificationRetryPollIntervalMs) {
-            this.notificationRetryPollIntervalMs = notificationRetryPollIntervalMs;
-        }
 
         /** 获取通知 HTTP 连接超时（毫秒）。 */
         public int getNotificationHttpConnectTimeoutMs() {
@@ -1891,16 +1826,6 @@ public class AppProperties {
         /** 设置通知 HTTP 读取超时（毫秒）。 */
         public void setNotificationHttpReadTimeoutMs(int notificationHttpReadTimeoutMs) {
             this.notificationHttpReadTimeoutMs = notificationHttpReadTimeoutMs;
-        }
-
-        /** 获取 SMTP 超时（毫秒）。 */
-        public int getNotificationSmtpTimeoutMs() {
-            return notificationSmtpTimeoutMs;
-        }
-
-        /** 设置 SMTP 超时（毫秒）。 */
-        public void setNotificationSmtpTimeoutMs(int notificationSmtpTimeoutMs) {
-            this.notificationSmtpTimeoutMs = notificationSmtpTimeoutMs;
         }
 
         /**
@@ -2305,6 +2230,24 @@ public class AppProperties {
             return explanation;
         }
 
+        // 运维问答（F2）子配置：工具化问答链路的独立 kill switch 与治理参数。
+        @Valid
+        private final Qa qa = new Qa();
+
+        /** 获取运维问答子配置。 */
+        public Qa getQa() {
+            return qa;
+        }
+
+        // 定时健康报告（F3）子配置：调度生成链路的独立 kill switch 与治理参数。
+        @Valid
+        private final Report report = new Report();
+
+        /** 获取定时健康报告子配置。 */
+        public Report getReport() {
+            return report;
+        }
+
         /**
          * 命令域 M1 配置：enabled 独立于只读诊断开关；审批过期与执行超时驱动状态机扫描。
          */
@@ -2389,6 +2332,43 @@ public class AppProperties {
             public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
             public int getSweepIntervalSeconds() { return sweepIntervalSeconds; }
             public void setSweepIntervalSeconds(int value) { sweepIntervalSeconds = value; }
+
+            // 策略自动审批事后通知子配置（M2 收口）：与命令域开关同生命周期，渠道独立配置。
+            @Valid
+            private final AutoApproval autoApproval = new AutoApproval();
+
+            /** 获取自动审批事后通知子配置。 */
+            public AutoApproval getAutoApproval() {
+                return autoApproval;
+            }
+
+            /**
+             * 自动审批事后通知配置：尽力而为多渠道推送，不落库不重试；
+             * notify-enabled 独立于告警通知总开关，渠道为空时静默跳过。
+             */
+            public static class AutoApproval {
+
+                // 事后通知开关（默认关闭）：关闭时自动审批结果不推送任何渠道。
+                private boolean notifyEnabled = false;
+
+                // 通知邮箱（逗号分隔）；为空跳过邮件渠道。
+                private String notifyEmail;
+
+                // 钉钉机器人 Webhook；为空跳过钉钉渠道。
+                private String notifyDingtalk;
+
+                // 通用 Webhook；为空跳过 Webhook 渠道。
+                private String notifyWebhook;
+
+                public boolean isNotifyEnabled() { return notifyEnabled; }
+                public void setNotifyEnabled(boolean value) { notifyEnabled = value; }
+                public String getNotifyEmail() { return notifyEmail; }
+                public void setNotifyEmail(String value) { notifyEmail = value; }
+                public String getNotifyDingtalk() { return notifyDingtalk; }
+                public void setNotifyDingtalk(String value) { notifyDingtalk = value; }
+                public String getNotifyWebhook() { return notifyWebhook; }
+                public void setNotifyWebhook(String value) { notifyWebhook = value; }
+            }
         }
 
         /**
@@ -2441,6 +2421,190 @@ public class AppProperties {
             public void setAuditCleanupBatchSize(int value) { auditCleanupBatchSize = value; }
             public int getAuditCleanupMaxBatchesPerRun() { return auditCleanupMaxBatchesPerRun; }
             public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
+        }
+
+        /**
+         * 运维问答（F2）配置：enabled 独立控制问答端点与工具化调用装配；
+         * 工具轮次上限、限流、按天 token 预算与审计清理防止成本与存储失控。
+         */
+        public static class Qa {
+
+            // 运维问答总开关（默认关闭）：关闭时 Service 层短路 50304，不调 provider 不建审计。
+            private boolean enabled = false;
+
+            // 服务端固定的问答 prompt 版本。
+            @NotBlank(message = "AI QA prompt version must not be blank")
+            private String promptVersion = "ai-qa-v1";
+
+            // 单次问答允许的只读工具调用总轮次上限，超限终止工具循环。
+            @Min(value = 1, message = "AI QA max tool iterations must be at least one")
+            @Max(value = 20, message = "AI QA max tool iterations must not exceed 20")
+            private int maxToolIterations = 6;
+
+            // 问题最大长度（字符）；Bean Validation 静态上限 4000 之内按此动态收紧。
+            @Min(value = 1, message = "AI QA max question length must be at least one")
+            @Max(value = 4000, message = "AI QA max question length must not exceed 4000")
+            private int maxQuestionLength = 2000;
+
+            // 按管理员固定窗口限流：窗口内最大问答请求数。
+            @Min(value = 1, message = "AI QA rate limit max requests must be at least one")
+            @Max(value = 10000, message = "AI QA rate limit max requests must not exceed 10000")
+            private int rateLimitMaxRequests = 10;
+
+            // 按管理员固定窗口限流：窗口秒数。
+            @Min(value = 5, message = "AI QA rate limit window must be at least 5 seconds")
+            @Max(value = 86400, message = "AI QA rate limit window must not exceed 86400 seconds")
+            private int rateLimitWindowSeconds = 3600;
+
+            // 按天（UTC）token 预算：当日 completed 问答的 total_tokens 总和达到上限后拒绝新请求；0 表示不限。
+            @Min(value = 0, message = "AI QA daily token budget must not be negative")
+            @Max(value = 100000000, message = "AI QA daily token budget must not exceed 100000000")
+            private int dailyTokenBudget = 0;
+
+            // 问答审计保留天数。
+            @Min(value = 1, message = "AI QA audit retention days must be at least one")
+            @Max(value = 3650, message = "AI QA audit retention days must not exceed 3650")
+            private int auditRetentionDays = 30;
+
+            // 审计清理 cron。
+            @NotBlank(message = "AI QA audit cleanup cron must not be blank")
+            private String auditCleanupCron = "0 15 4 * * ?";
+
+            // 是否启用审计保留期清理。
+            private boolean auditCleanupEnabled = true;
+
+            // 审计清理单批上限。
+            @Min(value = 1, message = "AI QA audit cleanup batch size must be at least one")
+            @Max(value = 10000, message = "AI QA audit cleanup batch size must not exceed 10000")
+            private int auditCleanupBatchSize = 1000;
+
+            // 单轮审计清理最多批次数。
+            @Min(value = 1, message = "AI QA audit cleanup max batches must be at least one")
+            @Max(value = 1000, message = "AI QA audit cleanup max batches must not exceed 1000")
+            private int auditCleanupMaxBatchesPerRun = 100;
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean value) { enabled = value; }
+            public String getPromptVersion() { return promptVersion; }
+            public void setPromptVersion(String value) { promptVersion = value; }
+            public int getMaxToolIterations() { return maxToolIterations; }
+            public void setMaxToolIterations(int value) { maxToolIterations = value; }
+            public int getMaxQuestionLength() { return maxQuestionLength; }
+            public void setMaxQuestionLength(int value) { maxQuestionLength = value; }
+            public int getRateLimitMaxRequests() { return rateLimitMaxRequests; }
+            public void setRateLimitMaxRequests(int value) { rateLimitMaxRequests = value; }
+            public int getRateLimitWindowSeconds() { return rateLimitWindowSeconds; }
+            public void setRateLimitWindowSeconds(int value) { rateLimitWindowSeconds = value; }
+            public int getDailyTokenBudget() { return dailyTokenBudget; }
+            public void setDailyTokenBudget(int value) { dailyTokenBudget = value; }
+            public int getAuditRetentionDays() { return auditRetentionDays; }
+            public void setAuditRetentionDays(int value) { auditRetentionDays = value; }
+            public String getAuditCleanupCron() { return auditCleanupCron; }
+            public void setAuditCleanupCron(String value) { auditCleanupCron = value; }
+            public boolean isAuditCleanupEnabled() { return auditCleanupEnabled; }
+            public void setAuditCleanupEnabled(boolean value) { auditCleanupEnabled = value; }
+            public int getAuditCleanupBatchSize() { return auditCleanupBatchSize; }
+            public void setAuditCleanupBatchSize(int value) { auditCleanupBatchSize = value; }
+            public int getAuditCleanupMaxBatchesPerRun() { return auditCleanupMaxBatchesPerRun; }
+            public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
+        }
+
+        /**
+         * 定时健康报告（F3）配置：enabled 独立控制调度器/端点/存储装配；
+         * 生成 cron、限流、按天 token 预算、保留期清理与通知渠道防止成本与存储失控。
+         */
+        public static class Report {
+
+            // 定时健康报告总开关（默认关闭）：关闭时调度器/端点/存储均不装配。
+            private boolean enabled = false;
+
+            // 服务端固定的报告 prompt 版本。
+            @NotBlank(message = "AI report prompt version must not be blank")
+            private String promptVersion = "ai-health-report-v1";
+
+            // 报告生成 cron（默认每日 07:30 生成昨日报告）。
+            @NotBlank(message = "AI report generate cron must not be blank")
+            private String generateCron = "0 30 7 * * ?";
+
+            // 手动触发按管理员固定窗口限流：窗口内最大生成请求数。
+            @Min(value = 1, message = "AI report rate limit max requests must be at least one")
+            @Max(value = 10000, message = "AI report rate limit max requests must not exceed 10000")
+            private int rateLimitMaxRequests = 10;
+
+            // 手动触发固定窗口限流：窗口秒数。
+            @Min(value = 5, message = "AI report rate limit window must be at least 5 seconds")
+            @Max(value = 86400, message = "AI report rate limit window must not exceed 86400 seconds")
+            private int rateLimitWindowSeconds = 3600;
+
+            // 按天（UTC）token 预算：当日已落库报告的 total_tokens 总和达到上限后降级生成；0 表示不限。
+            @Min(value = 0, message = "AI report daily token budget must not be negative")
+            @Max(value = 100000000, message = "AI report daily token budget must not exceed 100000000")
+            private int dailyTokenBudget = 0;
+
+            // 报告存储保留天数。
+            @Min(value = 1, message = "AI report retention days must be at least one")
+            @Max(value = 3650, message = "AI report retention days must not exceed 3650")
+            private int auditRetentionDays = 90;
+
+            // 清理 cron。
+            @NotBlank(message = "AI report cleanup cron must not be blank")
+            private String auditCleanupCron = "0 30 4 * * ?";
+
+            // 是否启用保留期清理。
+            private boolean auditCleanupEnabled = true;
+
+            // 清理单批上限。
+            @Min(value = 1, message = "AI report cleanup batch size must be at least one")
+            @Max(value = 10000, message = "AI report cleanup batch size must not exceed 10000")
+            private int auditCleanupBatchSize = 1000;
+
+            // 单轮清理最多批次数。
+            @Min(value = 1, message = "AI report cleanup max batches must be at least one")
+            @Max(value = 1000, message = "AI report cleanup max batches must not exceed 1000")
+            private int auditCleanupMaxBatchesPerRun = 100;
+
+            // 事后通知总开关（默认关闭）：关闭时报告生成后不推送任何渠道。
+            private boolean notifyEnabled = false;
+
+            // 通知邮箱（逗号分隔）；为空跳过邮件渠道。
+            private String notifyEmail;
+
+            // 钉钉机器人 Webhook；为空跳过钉钉渠道。
+            private String notifyDingtalk;
+
+            // 通用 Webhook；为空跳过 Webhook 渠道。
+            private String notifyWebhook;
+
+            public boolean isEnabled() { return enabled; }
+            public void setEnabled(boolean value) { enabled = value; }
+            public String getPromptVersion() { return promptVersion; }
+            public void setPromptVersion(String value) { promptVersion = value; }
+            public String getGenerateCron() { return generateCron; }
+            public void setGenerateCron(String value) { generateCron = value; }
+            public int getRateLimitMaxRequests() { return rateLimitMaxRequests; }
+            public void setRateLimitMaxRequests(int value) { rateLimitMaxRequests = value; }
+            public int getRateLimitWindowSeconds() { return rateLimitWindowSeconds; }
+            public void setRateLimitWindowSeconds(int value) { rateLimitWindowSeconds = value; }
+            public int getDailyTokenBudget() { return dailyTokenBudget; }
+            public void setDailyTokenBudget(int value) { dailyTokenBudget = value; }
+            public int getAuditRetentionDays() { return auditRetentionDays; }
+            public void setAuditRetentionDays(int value) { auditRetentionDays = value; }
+            public String getAuditCleanupCron() { return auditCleanupCron; }
+            public void setAuditCleanupCron(String value) { auditCleanupCron = value; }
+            public boolean isAuditCleanupEnabled() { return auditCleanupEnabled; }
+            public void setAuditCleanupEnabled(boolean value) { auditCleanupEnabled = value; }
+            public int getAuditCleanupBatchSize() { return auditCleanupBatchSize; }
+            public void setAuditCleanupBatchSize(int value) { auditCleanupBatchSize = value; }
+            public int getAuditCleanupMaxBatchesPerRun() { return auditCleanupMaxBatchesPerRun; }
+            public void setAuditCleanupMaxBatchesPerRun(int value) { auditCleanupMaxBatchesPerRun = value; }
+            public boolean isNotifyEnabled() { return notifyEnabled; }
+            public void setNotifyEnabled(boolean value) { notifyEnabled = value; }
+            public String getNotifyEmail() { return notifyEmail; }
+            public void setNotifyEmail(String value) { notifyEmail = value; }
+            public String getNotifyDingtalk() { return notifyDingtalk; }
+            public void setNotifyDingtalk(String value) { notifyDingtalk = value; }
+            public String getNotifyWebhook() { return notifyWebhook; }
+            public void setNotifyWebhook(String value) { notifyWebhook = value; }
         }
     }
 

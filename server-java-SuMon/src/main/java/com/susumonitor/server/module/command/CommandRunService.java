@@ -1,11 +1,13 @@
 package com.susumonitor.server.module.command;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
+import com.susumonitor.server.common.limit.FixedWindowRateLimiter;
 import com.susumonitor.server.common.vo.PageResult;
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.command.entity.CommandRunEntity;
@@ -14,14 +16,15 @@ import com.susumonitor.server.module.server.service.ServerService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -52,6 +55,10 @@ public class CommandRunService implements CommandResultHandler {
     public static final String SOURCE_AI = "ai";
     public static final String SOURCE_MANUAL = "manual";
 
+    /** 审批方式：人工或策略自动（自动时 approver_id 保持 NULL）。 */
+    public static final String APPROVAL_MODE_MANUAL = "manual";
+    public static final String APPROVAL_MODE_AUTO = "auto";
+
     private final CommandRunMapper runMapper;
     private final CommandTemplateRegistry templateRegistry;
     private final CommandTransport transport;
@@ -59,12 +66,14 @@ public class CommandRunService implements CommandResultHandler {
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
     private final Clock clock;
-    private final Map<Long, Window> rateWindows = new ConcurrentHashMap<>();
+    private final FixedWindowRateLimiter rateLimiter;
+    private final ObjectProvider<CommandAutoApprovalNotifier> autoApprovalNotifier;
 
     /** 注入审计 Mapper、模板注册表、出站端口与治理组件。 */
     public CommandRunService(CommandRunMapper runMapper, CommandTemplateRegistry templateRegistry,
             CommandTransport transport, ServerService serverService, AppProperties appProperties,
-            ObjectMapper objectMapper, Clock clock) {
+            ObjectMapper objectMapper, Clock clock,
+            ObjectProvider<CommandAutoApprovalNotifier> autoApprovalNotifier) {
         this.runMapper = runMapper;
         this.templateRegistry = templateRegistry;
         this.transport = transport;
@@ -72,6 +81,10 @@ public class CommandRunService implements CommandResultHandler {
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.autoApprovalNotifier = autoApprovalNotifier;
+        this.rateLimiter = new FixedWindowRateLimiter(
+                appProperties.getAi().getCommand().getRateLimitMaxRequests(),
+                Duration.ofSeconds(appProperties.getAi().getCommand().getRateLimitWindowSeconds()), clock);
     }
 
     /**
@@ -84,6 +97,7 @@ public class CommandRunService implements CommandResultHandler {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
         String rendered = templateRegistry.validateAndRender(templateId, params);
+        CommandTemplateRegistry.Template template = templateRegistry.find(templateId);
         CommandRunEntity run = new CommandRunEntity();
         run.setExecutionId(UUID.randomUUID().toString());
         run.setRequestId(MDC.get("request_id"));
@@ -95,6 +109,8 @@ public class CommandRunService implements CommandResultHandler {
         run.setRenderedCommand(rendered);
         run.setStatus(STATUS_PENDING);
         run.setSource(source);
+        run.setRiskLevel(template.risk().value());
+        run.setApprovalMode(APPROVAL_MODE_MANUAL);
         run.setProposalJson(proposalJson);
         LocalDateTime now = LocalDateTime.now(clock);
         run.setCreatedAt(now);
@@ -140,6 +156,26 @@ public class CommandRunService implements CommandResultHandler {
     }
 
     /**
+     * 策略自动审批并立即下发；仅由建议服务在创建后立即调用（无对应 REST 路由）。
+     *
+     * <p>与人工 approve 的差异：不写 approver_id（机器审批以 approval_mode='auto'
+     * 标识）；刚创建的行无需过期检查，CAS 仅以 pending_approval 状态为准。
+     * 下发失败同样置 failed(40906) 并向调用方抛出稳定错误。</p>
+     */
+    public CommandRunEntity autoApprove(Long runId) {
+        CommandRunEntity run = requireRun(runId);
+        if (runMapper.autoApproveRun(runId) != 1) {
+            throw new BusinessException(ErrorCode.COMMAND_RUN_STATE_CONFLICT);
+        }
+        if (!dispatch(run)) {
+            runMapper.markFailed(runId, ErrorCode.COMMAND_AGENT_OFFLINE.getCode(), LocalDateTime.now(clock));
+            throw new BusinessException(ErrorCode.COMMAND_AGENT_OFFLINE);
+        }
+        runMapper.markExecuting(runId);
+        return requireRun(runId);
+    }
+
+    /**
      * Agent 结果回填入口（由 WS handler 调用）：execution_id 幂等，终态行忽略迟到结果。
      */
     @Override
@@ -164,6 +200,12 @@ public class CommandRunService implements CommandResultHandler {
                 payload.path("duration_ms").asLong(0), null, LocalDateTime.now(clock));
         log.info("command result stored, executionId={}, finalStatus={}, exitCode={}",
                 executionId, finalStatus, payload.path("exit_code").asInt(0));
+        // 自动审批的事后通知（M2 收口）：终态回填后尽力而为推送；人工审批不推送。
+        // 用回填值补齐内存实体，避免为通知再查一次库。
+        run.setStatus(finalStatus);
+        run.setExitCode(payload.path("exit_code").asInt(0));
+        run.setDurationMs(payload.path("duration_ms").asLong(0));
+        notifyAutoApprovals(List.of(run), finalStatus);
     }
 
     /** 过期/超时双扫描：把到期 pending 置 expired、超过执行时限的 executing 置 timeout。 */
@@ -177,12 +219,33 @@ public class CommandRunService implements CommandResultHandler {
         LocalDateTime threshold = now.minusSeconds(appProperties.getAi().getCommand().getExecutionTimeoutSeconds() + 30);
         List<Long> timedOut = runMapper.selectTimeoutIds(threshold, 500);
         if (!timedOut.isEmpty()) {
-            runMapper.updateStatusByIds(timedOut, STATUS_TIMEOUT, ErrorCode.COMMAND_EXECUTION_TIMEOUT.getCode(), now);
+            // 置 timeout 前先取行：自动审批运行需要事后通知，人工运行不推送。
+            List<CommandRunEntity> timedOutRuns = runMapper.selectRunsByIds(timedOut);
+            runMapper.updateStatusByIds(timedOut, STATUS_TIMEOUT,
+                    ErrorCode.COMMAND_EXECUTION_TIMEOUT.getCode(), now);
             log.info("command runs timed out, count={}", timedOut.size());
+            notifyAutoApprovals(timedOutRuns, STATUS_TIMEOUT);
         }
     }
 
-    /** 查询单条运行记录；不存在返回 40404。 */
+    /** 对 auto 审批的运行逐条推送结果通知；通知器缺席（理论上不可能，同开关装配）时静默跳过。 */
+    private void notifyAutoApprovals(List<CommandRunEntity> runs, String finalStatus) {
+        CommandAutoApprovalNotifier notification = autoApprovalNotifier.getIfAvailable();
+        if (notification == null) {
+            return;
+        }
+        for (CommandRunEntity run : runs) {
+            if (run == null || !APPROVAL_MODE_AUTO.equals(run.getApprovalMode())) {
+                continue;
+            }
+            try {
+                notification.notifyCompletion(run, finalStatus);
+            } catch (RuntimeException exception) {
+                log.warn("command auto-approval notification failed unexpectedly, runId={}", run.getId(),
+                        exception);
+            }
+        }
+    }    /** 查询单条运行记录；不存在返回 40404。 */
     public CommandRunEntity get(Long runId) {
         return requireRun(runId);
     }
@@ -193,11 +256,12 @@ public class CommandRunService implements CommandResultHandler {
                 || (status != null && !isValidStatus(status))) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
         }
-        long offset = (long) (page - 1) * pageSize;
-        List<CommandRunEntity> items = runMapper.selectRuns(serverId, status, offset, pageSize);
+        // 分页由 MyBatis-Plus 拦截器承担：COUNT 自动执行，total 回写 Page。
+        Page<CommandRunEntity> pager = new Page<>(page, pageSize);
+        List<CommandRunEntity> items = runMapper.selectRuns(pager, serverId, status);
         PageResult<CommandRunEntity> result = new PageResult<>();
         result.setItems(items);
-        result.setTotal(runMapper.countRuns(serverId, status));
+        result.setTotal(pager.getTotal());
         result.setPage(page);
         result.setPageSize(pageSize);
         return result;
@@ -253,18 +317,7 @@ public class CommandRunService implements CommandResultHandler {
 
     /** 按管理员固定窗口限流（M1 单 JVM 内存实现；Redis 版列为开放项）。 */
     private void checkRateLimit(Long actorId) {
-        var commandProps = appProperties.getAi().getCommand();
-        Window window = rateWindows.compute(actorId, (id, existing) -> {
-            LocalDateTime now = LocalDateTime.now(clock);
-            if (existing == null
-                    || existing.startedAt.plusSeconds(commandProps.getRateLimitWindowSeconds())
-                            .isBefore(now)) {
-                return new Window(now, 1);
-            }
-            existing.count++;
-            return existing;
-        });
-        if (window.count > commandProps.getRateLimitMaxRequests()) {
+        if (!rateLimiter.tryAcquire(String.valueOf(actorId))) {
             throw new BusinessException(ErrorCode.COMMAND_RATE_LIMIT_REACHED);
         }
     }
@@ -314,17 +367,6 @@ public class CommandRunService implements CommandResultHandler {
             return result.toString();
         } catch (java.security.NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
-        }
-    }
-
-    /** 固定窗口计数状态。 */
-    private static final class Window {
-        private final LocalDateTime startedAt;
-        private int count;
-
-        private Window(LocalDateTime startedAt, int count) {
-            this.startedAt = startedAt;
-            this.count = count;
         }
     }
 }

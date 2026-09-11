@@ -2,11 +2,12 @@ package com.susumonitor.server.module.ai.provider;
 
 import com.susumonitor.server.module.ai.model.AiAlertFacts;
 import com.susumonitor.server.module.ai.model.AiDiagnosisContext;
+import com.susumonitor.server.module.ai.model.AiHealthReportFacts;
 import com.susumonitor.server.module.ai.vo.AiAlertExplanationVo;
 import com.susumonitor.server.module.ai.vo.AiDiagnosisVo;
 import java.util.List;
 
-/** 定义供应商无关的模型调用端口：只读诊断、告警解释与命令建议共用统一出口。 */
+/** 定义供应商无关的模型调用端口：只读诊断、告警解释、命令建议与健康报告共用统一出口。 */
 public interface AiProvider {
 
     /** 使用服务端固定配置和白名单上下文生成结构化诊断。 */
@@ -31,4 +32,12 @@ public interface AiProvider {
      */
     List<CommandSuggestion> suggestCommands(String intent, AiDiagnosisContext context,
             List<String> whitelistedTemplates);
+
+    /**
+     * 根据服务端聚合的白名单健康事实生成一页式日报摘要（F3，单次调用）。
+     *
+     * @param facts 报告窗口内的聚合事实（服务端只读 SQL 产出，不含地址与凭据）
+     * @return 摘要 + "值得关注的三件事" + limitations；事实以 facts 为准，模型仅作解读
+     */
+    AiHealthReportSummary summarizeDailyHealth(AiHealthReportFacts facts);
 }

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.ai.mapper.AiHealthReportMapper">
+    <!-- 同一自然日重复生成覆盖旧行：唯一键 uk_ai_health_reports_date 承担幂等。 -->
+    <insert id="upsertReport">
+        INSERT INTO ai_health_reports
+        (report_date, status, provider, model, prompt_version, summary, result_json, error_code,
+         input_tokens, output_tokens, total_tokens, duration_ms, created_at)
+        VALUES
+        (#{report.reportDate}, #{report.status}, #{report.provider}, #{report.model},
+         #{report.promptVersion}, #{report.summary}, #{report.resultJson}, #{report.errorCode},
+         #{report.inputTokens}, #{report.outputTokens}, #{report.totalTokens},
+         #{report.durationMs}, #{report.createdAt})
+        ON DUPLICATE KEY UPDATE
+        status = VALUES(status), provider = VALUES(provider), model = VALUES(model),
+        prompt_version = VALUES(prompt_version), summary = VALUES(summary),
+        result_json = VALUES(result_json), error_code = VALUES(error_code),
+        input_tokens = VALUES(input_tokens), output_tokens = VALUES(output_tokens),
+        total_tokens = VALUES(total_tokens), duration_ms = VALUES(duration_ms),
+        created_at = VALUES(created_at)
+    </insert>
+    <select id="selectByDate" resultType="com.susumonitor.server.module.ai.entity.AiHealthReportEntity">
+        SELECT id, report_date, status, provider, model, prompt_version, summary, result_json,
+               error_code, input_tokens, output_tokens, total_tokens, duration_ms, created_at
+        FROM ai_health_reports
+        WHERE report_date = #{reportDate}
+    </select>
+    <select id="selectById" resultType="com.susumonitor.server.module.ai.entity.AiHealthReportEntity">
+        SELECT id, report_date, status, provider, model, prompt_version, summary, result_json,
+               error_code, input_tokens, output_tokens, total_tokens, duration_ms, created_at
+        FROM ai_health_reports
+        WHERE id = #{id}
+    </select>
+    <select id="selectReports" resultType="com.susumonitor.server.module.ai.entity.AiHealthReportEntity">
+        SELECT id, report_date, status, provider, model, prompt_version, summary, result_json,
+               error_code, input_tokens, output_tokens, total_tokens, duration_ms, created_at
+        FROM ai_health_reports
+        ORDER BY report_date DESC, id DESC
+    </select>
+    <!-- 按天预算聚合：命中 idx_ai_health_reports_created_at 范围扫描。 -->
+    <select id="sumTotalTokensBetween" resultType="java.lang.Long">
+        SELECT COALESCE(SUM(total_tokens), 0)
+        FROM ai_health_reports
+        WHERE created_at &gt;= #{startTime}
+          AND created_at &lt; #{endTime}
+    </select>
+    <delete id="deleteExpiredBatch">
+        DELETE FROM ai_health_reports
+        WHERE created_at &lt; #{cutoffTime}
+        ORDER BY id
+        LIMIT #{batchSize}
+    </delete>
+
+    <!-- 聚合数据源（只读）：全部排除软删服务器；指标均值/峰值按采样行聚合。 -->
+    <select id="selectServerInventory" resultType="java.util.HashMap">
+        SELECT COUNT(*) AS total_count,
+               COALESCE(SUM(CASE WHEN status = 'online' THEN 1 ELSE 0 END), 0) AS online_count
+        FROM servers
+        WHERE deleted = 0
+    </select>
+    <select id="selectOfflineServers" resultType="java.util.HashMap">
+        SELECT id AS server_id, name AS server_name, agent_status AS agent_status,
+               last_heartbeat_at AS last_heartbeat_at
+        FROM servers
+        WHERE deleted = 0 AND status &lt;&gt; 'online'
+        ORDER BY last_heartbeat_at ASC, id ASC
+        LIMIT #{limit}
+    </select>
+    <select id="selectMetricAggregates" resultType="java.util.HashMap">
+        SELECT AVG(m.cpu_percent) AS avg_cpu_percent, MAX(m.cpu_percent) AS max_cpu_percent,
+               AVG(m.memory_percent) AS avg_memory_percent, MAX(m.memory_percent) AS max_memory_percent,
+               AVG(m.disk_percent) AS avg_disk_percent, MAX(m.disk_percent) AS max_disk_percent
+        FROM metrics m
+        JOIN servers s ON s.id = m.server_id AND s.deleted = 0
+        WHERE m.collected_at &gt;= #{startTime}
+          AND m.collected_at &lt; #{endTime}
+    </select>
+    <select id="selectMaxCpuServerId" resultType="java.lang.Long">
+        SELECT m.server_id
+        FROM metrics m
+        JOIN servers s ON s.id = m.server_id AND s.deleted = 0
+        WHERE m.collected_at &gt;= #{startTime}
+          AND m.collected_at &lt; #{endTime}
+          AND m.cpu_percent IS NOT NULL
+        ORDER BY m.cpu_percent DESC, m.id DESC
+        LIMIT 1
+    </select>
+    <select id="selectMaxMemoryServerId" resultType="java.lang.Long">
+        SELECT m.server_id
+        FROM metrics m
+        JOIN servers s ON s.id = m.server_id AND s.deleted = 0
+        WHERE m.collected_at &gt;= #{startTime}
+          AND m.collected_at &lt; #{endTime}
+          AND m.memory_percent IS NOT NULL
+        ORDER BY m.memory_percent DESC, m.id DESC
+        LIMIT 1
+    </select>
+    <select id="selectMaxDiskServerId" resultType="java.lang.Long">
+        SELECT m.server_id
+        FROM metrics m
+        JOIN servers s ON s.id = m.server_id AND s.deleted = 0
+        WHERE m.collected_at &gt;= #{startTime}
+          AND m.collected_at &lt; #{endTime}
+          AND m.disk_percent IS NOT NULL
+        ORDER BY m.disk_percent DESC, m.id DESC
+        LIMIT 1
+    </select>
+    <select id="selectAlertStatistics" resultType="java.util.HashMap">
+        SELECT COUNT(*) AS total_triggered,
+               COALESCE(SUM(CASE WHEN level = 'critical' THEN 1 ELSE 0 END), 0) AS critical_count,
+               COALESCE(SUM(CASE WHEN level = 'warning' THEN 1 ELSE 0 END), 0) AS warning_count,
+               COALESCE(SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END), 0) AS resolved_count
+        FROM alert_records
+        WHERE triggered_at &gt;= #{startTime}
+          AND triggered_at &lt; #{endTime}
+    </select>
+    <select id="selectTopAlertServers" resultType="java.util.HashMap">
+        SELECT r.server_id AS server_id, s.name AS server_name,
+               COUNT(*) AS alert_count,
+               COALESCE(SUM(CASE WHEN r.level = 'critical' THEN 1 ELSE 0 END), 0) AS critical_count
+        FROM alert_records r
+        JOIN servers s ON s.id = r.server_id AND s.deleted = 0
+        WHERE r.triggered_at &gt;= #{startTime}
+          AND r.triggered_at &lt; #{endTime}
+        GROUP BY r.server_id, s.name
+        ORDER BY alert_count DESC, r.server_id ASC
+        LIMIT #{limit}
+    </select>
+</mapper>

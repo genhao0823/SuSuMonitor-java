@@ -18,11 +18,11 @@
 | `openapi-auth.json` | 注册 / 登录 / 当前用户 / 登出 | 4 |
 | `openapi-admin.json` | 管理员用户分页/搜索与单个、批量审核（ROLE_ADMIN） | 5 |
 | `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹与观察 / SSH 测试与历史 / Agent Token / Monitor Ticket / 指标最新值 / 指标历史 | 13 路径 / 16 端点操作 |
-| `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读 / 通知投递历史（ROLE_ADMIN + 已认证） | 5 路径 / 7 端点操作 |
-| `openapi-ai.json` | 大模型只读诊断 MVP（已实现·代码级；admin Bearer；仅白名单脱敏监控摘要；运行期由 `susumonitor.ai.enabled` 门控，默认关闭） | 1 路径 / 1 端点操作 |
-| `openapi-command.json` | AI 命令域 M1 审批制（admin Bearer；白名单模板 + 审批状态机 + 审计；运行期由 `susumonitor.ai.command.enabled` 门控，默认关闭） | 5 路径 / 7 端点操作 |
+| `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读 / 通知投递历史 / 告警智能解释回看（ROLE_ADMIN + 已认证） | 6 路径 / 8 端点操作 |
+| `openapi-ai.json` | 大模型只读诊断 MVP + 运维问答 F2 + AI 服务商配置 + 告警解释回看 + 定时健康报告 F3（已实现·代码级；admin Bearer；诊断仅白名单脱敏监控摘要，问答仅平台注册只读工具；运行期由 `susumonitor.ai.enabled` / `susumonitor.ai.qa.enabled` / `susumonitor.ai.report.enabled` 门控，默认关闭） | 7 路径 / 9 端点操作 |
+| `openapi-command.json` | AI 命令域 M1 审批制 + M2 自动审批策略（admin Bearer；白名单模板 + 审批状态机 + 审计；运行期由 `susumonitor.ai.command.enabled` 门控，默认关闭） | 7 路径 / 9 端点操作 |
 
-合计 37 条文档路径 / 44 个端点操作，全部与当前 Java Controller 声明 1:1 对齐（`openapi:check` 严格双向校验）。代码级实现不等于生产验收：真实 Agent 联调、隔离库 MySQL IT 执行与 RC1 门槛仍待完成。
+合计 46 条文档路径 / 55 个端点操作，全部与当前 Java Controller 声明 1:1 对齐（`openapi:check` 严格双向校验）。代码级实现不等于生产验收：命令域 M1 已完成真实 Agent E2E（2026-09-04，见 `Develop-log/20260904-AI命令域M1后端先行与真实AgentE2E.md`）；隔离库 MySQL IT 执行与 RC1 门槛仍待完成。
 
 ## 端点索引
 
@@ -106,12 +106,23 @@
 | GET | `/api/alerts/records` | 已认证 | 告警记录分页（按 server_id/status/时间窗口过滤） | 40002, 40100 |
 | PUT | `/api/alerts/records/{id}/read` | 已认证 | 标记告警记录已读（unread → read） | 40002, 40100, 40300, 40400, 40900 |
 | GET | `/api/alerts/records/{id}/notifications` | 已认证 | 告警通知投递历史（V21） | 40002, 40100, 40400 |
+| GET | `/api/alerts/records/{id}/explanation` | ADMIN | 告警智能解释回看（F1，V30；仅 `susumonitor.ai.explanation.enabled=true` 时挂载，否则 404） | 40100, 40300, 40400 |
 
 ### AI 只读诊断（已实现·代码级，默认关闭）
 
 | 方法 | 路径 | 权限 | 说明 | 错误码 |
 |---|---|---|---|---|
 | POST | `/api/ai/diagnoses` | ADMIN Bearer | 读取白名单、脱敏后的监控摘要并返回结构化建议；不读取/发送终端或 SSH 数据，不执行任何写操作；`susumonitor.ai.enabled=false`（默认）时 Controller 不加载，请求在安全链后得到 404 | 40002, 40100, 40300, 40400, 42906, 50000, 50303, 50304, 50401 |
+
+### AI 定时健康报告（F3，已实现·代码级，默认关闭）
+
+| 方法 | 路径 | 权限 | 说明 | 错误码 |
+|---|---|---|---|---|
+| GET | `/api/ai/health-reports` | ADMIN | 历史报告分页（`page`/`page_size` 必填，按 report_date 倒序；V34） | 40002, 40100, 40300 |
+| GET | `/api/ai/health-reports/{id}` | ADMIN | 单份报告回看：摘要/关注点/limitations + 聚合事实快照；不存在返回 404 | 40002, 40100, 40300, 40400 |
+| POST | `/api/ai/health-reports/generate` | ADMIN | 手动触发生成（`report_date` 缺省昨日、不可晚于当日；同日重生成走 UPSERT 幂等；provider 失败降级为 `status=degraded` 纯事实报告，不阻塞主链路） | 40002, 40100, 40300, 42906 |
+
+仅 `susumonitor.ai.report.enabled=true` 时挂载（默认关闭，否则 404）；调度生成走 `susumonitor.ai.report.generate-cron`（默认每日 07:30 生成昨日报告）。人工审批不受影响：报告链路全程不读取服务器地址、SSH 与凭据数据。
 
 AI 错误码已由 Java 主线定稿（`ErrorCode.java`）：`42906` AI 限流（按管理员窗口限流 / 按天 token 预算耗尽 / 全局并发上限）、`50303` provider 不可用、`50304` AI 关闭/配置无效/脱敏失败、`50401` provider 超时；`50305`（provider 响应无效）仅内部使用。`50003` 保持 SSH authentication failed 语义，AI 不复用。当前 MVP 行为：`50303/50304/50401/50305` 在服务层被转换为 HTTP 200 的确定性降级（`model_used=false`），原始错误码记录于 `ai_diagnostic_runs.error_code`，不透传客户端；`42906` 在限流/预算/并发命中时直接返回。provider 429 与瞬时网络错误按 `AI_RETRY_MAX_ATTEMPTS`（默认 2）进程内有界重试。默认仅允许 HTTPS provider endpoint；`AI_ALLOW_INSECURE_HTTP=true` 显式放宽明文 HTTP（仅内网/联调，明文会暴露 API key）。代码级测试与契约检查通过不等于接口生产验收通过。
 
@@ -157,8 +168,8 @@ AI 错误码已由 Java 主线定稿（`ErrorCode.java`）：`42906` AI 限流�
 
 ## 字段命名约定
 
-- 系统/认证/管理员模块使用 camelCase（如 `reviewStatus`、`createdAt`）。
-- 服务器/Agent/指标模块使用 snake_case（如 `ssh_host`、`agent_id`、`collected_at`）。
+- 认证/管理员模块与系统健康/就绪端点（`/api/health`、`/api/ready`）使用 camelCase（如 `reviewStatus`、`createdAt`）。
+- 服务器/Agent/指标/告警/终端/命令/AI 模块，以及 system 域 RabbitMQ 运维快照端点（`/api/system/rabbitmq/*`，如 `warn_threshold`、`failure_rate`）使用 snake_case（如 `ssh_host`、`agent_id`、`collected_at`）；admin 域批量审核结果的 `failed_ids` 为 snake_case 例外（前端已消费，保留）。
 - `ApiResponse` 统一信封：`{ code, message, data }`。
 
 ## WebSocket 协议

@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "SuSuMonitor AI Read-only Diagnosis API",
+    "title": "SuSuMonitor AI API (Diagnosis, Q&A & Health Reports)",
     "description": "Read-only diagnosis contract implemented at code level (Java module ai). The endpoint is gated by susumonitor.ai.enabled (default false): while disabled the Controller bean is not loaded and requests receive 404 after the security chain. When enabled, the service sends only allowlisted, validated, fail-closed monitoring summaries to a configured provider. It never sends credentials, SSH data, terminal frames, raw terminal input/output, or write-operation instructions, and it never grants tools or execution access to a model. Provider failures (timeout/5xx/invalid response) return HTTP 200 with a deterministic fallback and model_used=false; the provider error code is recorded in ai_diagnostic_runs.error_code. 429 responses with a Retry-After-capable provider are retried in-process (bounded, default 2 attempts); only 429 and transient network errors are retried. Governance: per-admin fixed-window rate limit and a daily token budget (susumonitor.ai.daily-token-budget, 0=unlimited) both reject with 42906 before any provider call. By default the provider endpoint must use HTTPS; susumonitor.ai.allow-insecure-http=true explicitly permits plaintext http:// for controlled intranet/integration use only (the API key then transits unencrypted - not recommended for production).",
-    "version": "0.3.0"
+    "version": "0.6.0"
   },
   "servers": [
     {
@@ -15,6 +15,18 @@
     {
       "name": "ai-diagnosis",
       "description": "Structured, read-only monitoring diagnosis for administrators"
+    },
+    {
+      "name": "ai-qa",
+      "description": "Tool-assisted read-only operations Q&A for administrators (F2)"
+    },
+    {
+      "name": "ai-provider-config",
+      "description": "Per-admin AI provider configuration (personal endpoint/key/model; AES-256-GCM encrypted at rest)"
+    },
+    {
+      "name": "ai-health-report",
+      "description": "AI scheduled daily health reports: paginated history, detail review and admin manual generation (F3)"
     }
   ],
   "security": [
@@ -112,6 +124,492 @@
                       "currency": "USD"
                     }
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/AiRateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/AiInternalError"
+          },
+          "502": {
+            "$ref": "#/components/responses/AiProviderUnavailable"
+          },
+          "503": {
+            "$ref": "#/components/responses/AiDisabledOrRedactionFailed"
+          },
+          "504": {
+            "$ref": "#/components/responses/AiProviderTimeout"
+          }
+        }
+      }
+    },
+    "/api/ai/qa": {
+      "post": {
+        "tags": [
+          "ai-qa"
+        ],
+        "summary": "Ask an operations question with read-only tools",
+        "description": "Admin-only operations Q&A (F2, Java module ai, controller AiQaController). Assembly is gated by susumonitor.ai.enabled (404 while off) and the service additionally short-circuits with 50304 while susumonitor.ai.qa.enabled=false. The model may only call platform-registered read-only tools (server status, latest metrics, metrics history, alert records, command template whitelist, pending-approval command proposals); tool calls are bounded per request (susumonitor.ai.qa.max-tool-iterations, default 6) and every call is audited to ai_qa_runs.tool_calls_json. propose_command_run only creates pending_approval proposals rendered from the server-side template whitelist; nothing executes on any host until a human administrator approves. Per-admin fixed-window rate limit and a daily token budget (susumonitor.ai.qa.daily-token-budget, 0=unlimited) reject with 42906 before any provider call. Provider failures degrade: tool-assisted mode falls back to a no-tools single call, then to a deterministic server-aggregated summary (HTTP 200, model_used=false, degraded=true); the original error code is recorded in ai_qa_runs.error_code.",
+        "operationId": "askAiQuestion",
+        "x-contract-status": "implemented-code-level-pending-acceptance",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiQaRequest"
+              },
+              "example": {
+                "server_id": 123,
+                "question": "What is the current CPU and memory situation of this server, and are there any unresolved alerts?"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Answer returned (possibly degraded with model_used=false)",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiQaResponse"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "answer": "CPU is at 23% and memory at 61%; the only unresolved alert is a warning-level disk alert triggered at 08:12 UTC.",
+                    "tool_calls": [
+                      {
+                        "tool": "get_latest_metrics",
+                        "args": "{\"server_id\":123}"
+                      },
+                      {
+                        "tool": "list_alert_records",
+                        "args": "{\"server_id\":123,\"status\":\"unread\",\"page\":1,\"page_size\":10}"
+                      }
+                    ],
+                    "model_used": true,
+                    "degraded": false,
+                    "provider": "openai-compatible",
+                    "model": "approved-model",
+                    "prompt_version": "ai-qa-v1",
+                    "usage": {
+                      "input_tokens": 640,
+                      "output_tokens": 120,
+                      "total_tokens": 760,
+                      "estimated_cost": 0.0015,
+                      "currency": "USD"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/AiRateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/AiInternalError"
+          },
+          "502": {
+            "$ref": "#/components/responses/AiProviderUnavailable"
+          },
+          "503": {
+            "$ref": "#/components/responses/AiDisabledOrRedactionFailed"
+          },
+          "504": {
+            "$ref": "#/components/responses/AiProviderTimeout"
+          }
+        }
+      }
+    },
+    "/api/ai/provider-config": {
+      "get": {
+        "tags": [
+          "ai-provider-config"
+        ],
+        "summary": "Get my AI provider configuration",
+        "description": "Returns the caller's personal provider config; the API key is masked (first 3 / last 4). Admin-only.",
+        "operationId": "getAiProviderConfig",
+        "x-required-role": "admin",
+        "responses": {
+          "200": {
+            "description": "Personal provider configuration (configured=false when absent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProviderConfigViewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ai-provider-config"
+        ],
+        "summary": "Save my AI provider configuration",
+        "description": "Upserts the caller's personal provider config. api_key is stored AES-256-GCM encrypted (AAD bound to the user id) and never returned; a blank api_key keeps the stored key. Endpoints must be HTTPS unless susumonitor.ai.allow-insecure-http=true. Personal config takes precedence over the global susumonitor.ai.* config for the caller's sync AI calls (diagnosis / QA / command suggestions).",
+        "operationId": "saveAiProviderConfig",
+        "x-required-role": "admin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertAiProviderConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved configuration (masked)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProviderConfigViewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ai-provider-config"
+        ],
+        "summary": "Delete my AI provider configuration",
+        "description": "Removes the caller's personal provider config; subsequent AI calls fall back to the global config. data indicates whether a config existed.",
+        "operationId": "deleteAiProviderConfig",
+        "x-required-role": "admin",
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProviderConfigDeleteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/ai/provider-config/test": {
+      "post": {
+        "tags": [
+          "ai-provider-config"
+        ],
+        "summary": "Test an AI provider configuration",
+        "description": "Performs one minimal chat completion call with the given endpoint/key/model (blank api_key reuses the stored key). The test is not audited and does not consume rate limit or budget.",
+        "operationId": "testAiProviderConfig",
+        "x-required-role": "admin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestAiProviderConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test result (ok=false with a stable error code when the provider call fails)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProviderConfigTestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/ai/health-reports": {
+      "get": {
+        "tags": [
+          "ai-health-report"
+        ],
+        "summary": "List scheduled health reports",
+        "description": "Admin-only paginated history of generated daily health reports, newest first. Assembly is gated by susumonitor.ai.report.enabled (404 while off). Each item carries report_date (unique per day), status (succeeded/degraded), LLM summary (null when degraded), top_concerns, limitations and the aggregated facts snapshot (metrics_json). Degraded reports additionally expose error_code (e.g. 42906 when the daily token budget was exhausted on the scheduler path).",
+        "operationId": "listHealthReports",
+        "x-contract-status": "implemented-code-level-pending-acceptance",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "example": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated report history (newest first)",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiHealthReportPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/AiInternalError"
+          },
+          "502": {
+            "$ref": "#/components/responses/AiProviderUnavailable"
+          },
+          "503": {
+            "$ref": "#/components/responses/AiDisabledOrRedactionFailed"
+          },
+          "504": {
+            "$ref": "#/components/responses/AiProviderTimeout"
+          }
+        }
+      }
+    },
+    "/api/ai/health-reports/{id}": {
+      "get": {
+        "tags": [
+          "ai-health-report"
+        ],
+        "summary": "Get a scheduled health report",
+        "description": "Admin-only full report view: summary, top_concerns (\"worth-attention three things\"), limitations, the aggregated facts snapshot and provider usage. 404 when the report does not exist. The facts snapshot is authoritative (server-side SQL aggregation); model text is interpretation only.",
+        "operationId": "getHealthReport",
+        "x-contract-status": "implemented-code-level-pending-acceptance",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report detail",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiHealthReportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequestParameter"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/AiInternalError"
+          },
+          "502": {
+            "$ref": "#/components/responses/AiProviderUnavailable"
+          },
+          "503": {
+            "$ref": "#/components/responses/AiDisabledOrRedactionFailed"
+          },
+          "504": {
+            "$ref": "#/components/responses/AiProviderTimeout"
+          }
+        }
+      }
+    },
+    "/api/ai/health-reports/generate": {
+      "post": {
+        "tags": [
+          "ai-health-report"
+        ],
+        "summary": "Generate a health report on demand",
+        "description": "Admin-only manual trigger (idempotent regeneration). report_date defaults to yesterday and must not be in the future; regeneration for the same report_date overwrites the stored row via UPSERT (uk_ai_health_reports_date). The pipeline: read-only aggregation -> daily token budget check -> single provider call -> persist -> best-effort notification. Provider absence/failure degrades to a facts-only report with status=degraded and never blocks the main flow; per-admin fixed-window rate limit and the daily token budget reject manual triggers with 42906.",
+        "operationId": "generateHealthReport",
+        "x-contract-status": "implemented-code-level-pending-acceptance",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XRequestId"
+          },
+          {
+            "$ref": "#/components/parameters/XCorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateHealthReportRequest"
+              },
+              "example": {
+                "report_date": "2026-09-10"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Generated (or regenerated) report; status=degraded when the model summary was unavailable",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/XRequestId"
+              },
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/XCorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiHealthReportResponse"
                 }
               }
             }
@@ -339,6 +837,120 @@
       }
     },
     "schemas": {
+      "AiQaRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question"
+        ],
+        "properties": {
+          "server_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "nullable": true,
+            "description": "Optional target server for the question; omit for global questions."
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Administrator question, treated as untrusted text; effective max length is tightened by susumonitor.ai.qa.max-question-length (default 2000)."
+          }
+        }
+      },
+      "AiQaResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AiQa"
+          }
+        }
+      },
+      "AiQa": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "answer",
+          "tool_calls",
+          "model_used",
+          "degraded",
+          "provider",
+          "model",
+          "prompt_version",
+          "usage"
+        ],
+        "properties": {
+          "answer": {
+            "type": "string",
+            "maxLength": 8000,
+            "description": "Model answer; deterministic server-aggregated summary when degraded."
+          },
+          "tool_calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiToolCall"
+            },
+            "description": "Read-only tools actually called by the model in this turn (call audit)."
+          },
+          "model_used": {
+            "type": "boolean",
+            "description": "false for the deterministic fallback summary."
+          },
+          "degraded": {
+            "type": "boolean",
+            "description": "true when the tool-assisted call fell back to no-tools mode or deterministic summary."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Server-selected provider identifier."
+          },
+          "model": {
+            "type": "string",
+            "description": "Server-selected model identifier."
+          },
+          "prompt_version": {
+            "type": "string",
+            "description": "Server-controlled QA prompt version (ai-qa-v1)."
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AiUsage"
+          }
+        }
+      },
+      "AiToolCall": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tool",
+          "args"
+        ],
+        "properties": {
+          "tool": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Whitelisted tool name (get_server_status / get_latest_metrics / get_metrics_history / list_alert_records / list_command_templates / propose_command_run)."
+          },
+          "args": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Controlled parameter summary; no credentials or sensitive data."
+          }
+        }
+      },
       "AiDiagnosisRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -569,6 +1181,194 @@
           }
         }
       },
+      "AiProviderConfigView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configured"
+        ],
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "description": "Whether the caller has a personal provider config."
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true,
+            "description": "Provider identifier; currently fixed to openai-compatible."
+          },
+          "base_url": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 512
+          },
+          "model": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 128
+          },
+          "api_key_masked": {
+            "type": "string",
+            "nullable": true,
+            "description": "Masked API key (first 3 / last 4); the plaintext never leaves the server."
+          },
+          "enabled": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "false disables the personal config so global config applies."
+          },
+          "updated_at": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "AiProviderConfigViewResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AiProviderConfigView"
+          }
+        }
+      },
+      "AiProviderConfigDeleteResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "type": "boolean",
+            "description": "true when a stored config was removed; false when none existed."
+          }
+        }
+      },
+      "UpsertAiProviderConfigRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "base_url",
+          "model"
+        ],
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "description": "OpenAI-compatible endpoint; must be HTTPS unless susumonitor.ai.allow-insecure-http=true."
+          },
+          "api_key": {
+            "type": "string",
+            "maxLength": 256,
+            "nullable": true,
+            "description": "Plaintext API key; blank keeps the stored key. Stored AES-256-GCM encrypted."
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "TestAiProviderConfigRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "base_url",
+          "model"
+        ],
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "api_key": {
+            "type": "string",
+            "maxLength": 256,
+            "nullable": true,
+            "description": "Blank reuses the stored key."
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "AiProviderConfigTestResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "latency_ms"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "type": "integer"
+          },
+          "error_code": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Stable business error code when ok=false."
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "AiProviderConfigTestResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AiProviderConfigTestResult"
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "required": [
@@ -586,6 +1386,184 @@
           },
           "data": {
             "nullable": true
+          }
+        }
+      },
+      "GenerateHealthReportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "report_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Natural day the report covers (defaults to yesterday; must not be in the future)."
+          }
+        }
+      },
+      "AiHealthReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "report_date",
+          "status",
+          "provider",
+          "model",
+          "prompt_version",
+          "summary",
+          "top_concerns",
+          "limitations",
+          "facts",
+          "error_code",
+          "usage",
+          "duration_ms",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Stored report id."
+          },
+          "report_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Natural day the report covers; unique per day."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "degraded"
+            ],
+            "description": "degraded = facts-only report (no model summary)."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Configured provider identifier."
+          },
+          "model": {
+            "type": "string",
+            "description": "Configured model identifier; empty when degraded."
+          },
+          "prompt_version": {
+            "type": "string",
+            "description": "Server-controlled report prompt version (ai-health-report-v1)."
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 4000,
+            "description": "One-page model narrative; null when degraded."
+          },
+          "top_concerns": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "string"
+            },
+            "description": "\"Worth-attention three things\"; empty when degraded."
+          },
+          "limitations": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string"
+            },
+            "description": "What the report cannot determine (e.g. offline list is a snapshot, not a disconnect event log)."
+          },
+          "facts": {
+            "type": "object",
+            "description": "Aggregated facts snapshot (server inventory, metric peaks, alert statistics, offline servers); authoritative data.",
+            "additionalProperties": true
+          },
+          "error_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Degradation reason as business code (e.g. 42906); null when succeeded."
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AiUsage"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "description": "Aggregation + provider call + persistence total duration in ms."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Generation (or last regeneration) timestamp."
+          }
+        }
+      },
+      "AiHealthReportResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AiHealthReport"
+          }
+        }
+      },
+      "AiHealthReportPageResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "items",
+              "total",
+              "page",
+              "page_size"
+            ],
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AiHealthReport"
+                }
+              },
+              "total": {
+                "type": "integer",
+                "example": 30
+              },
+              "page": {
+                "type": "integer",
+                "example": 1
+              },
+              "page_size": {
+                "type": "integer",
+                "example": 20
+              }
+            }
           }
         }
       }

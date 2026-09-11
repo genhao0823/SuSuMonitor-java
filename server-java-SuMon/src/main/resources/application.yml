@@ -74,11 +74,9 @@ susumonitor:
   alert:
     notification-enabled: ${ALERT_NOTIFICATION_ENABLED:false}
     mail-from: ${ALERT_MAIL_FROM:noreply@susumonitor.local}
-    # 通知发送可靠性加固（2026-08-30）：重试上限/退避/批量/调度频率与 HTTP/SMTP 超时。
-    notification-retry-max-attempts: ${ALERT_NOTIFICATION_RETRY_MAX_ATTEMPTS:5}
-    notification-retry-max-backoff-seconds: ${ALERT_NOTIFICATION_RETRY_MAX_BACKOFF_SECONDS:60}
-    notification-retry-batch-limit: ${ALERT_NOTIFICATION_RETRY_BATCH_LIMIT:50}
-    notification-retry-poll-interval-ms: ${ALERT_NOTIFICATION_RETRY_POLL_INTERVAL_MS:30000}
+    # 通知发送可靠性加固（2026-08-30）：HTTP/SMTP 超时（SMTP 超时经 mail.smtp.* 占位符生效，
+    # HTTP 超时由 AsyncConfig 应用于通知出站 RestTemplate）。重试上限/退避/批量/调度频率
+    # 为实现内常量（AlertNotificationServiceImpl / NotificationRetryScheduler），不提供配置键。
     notification-http-connect-timeout-ms: ${ALERT_NOTIFICATION_HTTP_CONNECT_TIMEOUT_MS:5000}
     notification-http-read-timeout-ms: ${ALERT_NOTIFICATION_HTTP_READ_TIMEOUT_MS:10000}
     notification-smtp-timeout-ms: ${ALERT_NOTIFICATION_SMTP_TIMEOUT_MS:10000}
@@ -134,6 +132,12 @@ susumonitor:
       audit-cleanup-batch-size: ${AI_COMMAND_AUDIT_CLEANUP_BATCH_SIZE:1000}
       audit-cleanup-max-batches-per-run: ${AI_COMMAND_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
       sweep-interval-seconds: ${AI_COMMAND_SWEEP_INTERVAL_SECONDS:30}
+      # 策略自动审批事后通知（M2 收口）：尽力而为推送，独立开关，默认关闭。
+      auto-approval:
+        notify-enabled: ${AI_COMMAND_AUTO_APPROVAL_NOTIFY_ENABLED:false}
+        notify-email: ${AI_COMMAND_AUTO_APPROVAL_NOTIFY_EMAIL:}
+        notify-dingtalk: ${AI_COMMAND_AUTO_APPROVAL_NOTIFY_DINGTALK:}
+        notify-webhook: ${AI_COMMAND_AUTO_APPROVAL_NOTIFY_WEBHOOK:}
     # 告警智能解释（F1）：事件驱动，独立 kill switch，默认关闭。
     explanation:
       enabled: ${AI_EXPLANATION_ENABLED:false}
@@ -143,6 +147,37 @@ susumonitor:
       audit-cleanup-enabled: ${AI_EXPLANATION_AUDIT_CLEANUP_ENABLED:true}
       audit-cleanup-batch-size: ${AI_EXPLANATION_AUDIT_CLEANUP_BATCH_SIZE:1000}
       audit-cleanup-max-batches-per-run: ${AI_EXPLANATION_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    # 运维问答（F2）：只读工具化问答，独立 kill switch，默认关闭；工具白名单见 module/ai/tools/AiReadOnlyTools。
+    qa:
+      enabled: ${AI_QA_ENABLED:false}
+      prompt-version: ${AI_QA_PROMPT_VERSION:ai-qa-v1}
+      max-tool-iterations: ${AI_QA_MAX_TOOL_ITERATIONS:6}
+      max-question-length: ${AI_QA_MAX_QUESTION_LENGTH:2000}
+      rate-limit-max-requests: ${AI_QA_RATE_LIMIT_MAX_REQUESTS:10}
+      rate-limit-window-seconds: ${AI_QA_RATE_LIMIT_WINDOW_SECONDS:3600}
+      daily-token-budget: ${AI_QA_DAILY_TOKEN_BUDGET:0}
+      audit-retention-days: ${AI_QA_AUDIT_RETENTION_DAYS:30}
+      audit-cleanup-cron: ${AI_QA_AUDIT_CLEANUP_CRON:0 15 4 * * ?}
+      audit-cleanup-enabled: ${AI_QA_AUDIT_CLEANUP_ENABLED:true}
+      audit-cleanup-batch-size: ${AI_QA_AUDIT_CLEANUP_BATCH_SIZE:1000}
+      audit-cleanup-max-batches-per-run: ${AI_QA_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    # 定时健康报告（F3）：调度生成，独立 kill switch，默认关闭。
+    report:
+      enabled: ${AI_REPORT_ENABLED:false}
+      prompt-version: ${AI_REPORT_PROMPT_VERSION:ai-health-report-v1}
+      generate-cron: ${AI_REPORT_GENERATE_CRON:0 30 7 * * ?}
+      rate-limit-max-requests: ${AI_REPORT_RATE_LIMIT_MAX_REQUESTS:10}
+      rate-limit-window-seconds: ${AI_REPORT_RATE_LIMIT_WINDOW_SECONDS:3600}
+      daily-token-budget: ${AI_REPORT_DAILY_TOKEN_BUDGET:0}
+      audit-retention-days: ${AI_REPORT_AUDIT_RETENTION_DAYS:90}
+      audit-cleanup-cron: ${AI_REPORT_AUDIT_CLEANUP_CRON:0 30 4 * * ?}
+      audit-cleanup-enabled: ${AI_REPORT_AUDIT_CLEANUP_ENABLED:true}
+      audit-cleanup-batch-size: ${AI_REPORT_AUDIT_CLEANUP_BATCH_SIZE:1000}
+      audit-cleanup-max-batches-per-run: ${AI_REPORT_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+      notify-enabled: ${AI_REPORT_NOTIFY_ENABLED:false}
+      notify-email: ${AI_REPORT_NOTIFY_EMAIL:}
+      notify-dingtalk: ${AI_REPORT_NOTIFY_DINGTALK:}
+      notify-webhook: ${AI_REPORT_NOTIFY_WEBHOOK:}
   ssh-test-history:
     retention-days: ${SSH_TEST_HISTORY_RETENTION_DAYS:90}
     cleanup-cron: ${SSH_TEST_HISTORY_CLEANUP_CRON:0 0 3 * * ?}
