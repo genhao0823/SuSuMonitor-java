@@ -32,8 +32,6 @@ import com.susumonitor.ui.ai.AutoApprovalPolicyScreen
 import com.susumonitor.ui.ai.CommandCreateScreen
 import com.susumonitor.ui.ai.CommandRunDetailScreen
 import com.susumonitor.ui.ai.CommandRunsScreen
-import com.susumonitor.ui.ai.HealthReportDetailScreen
-import com.susumonitor.ui.ai.HealthReportsScreen
 import com.susumonitor.ui.admin.AdminUsersScreen
 import com.susumonitor.ui.alerts.AlertListScreen
 import com.susumonitor.ui.alerts.AlertNotificationsScreen
@@ -107,8 +105,6 @@ fun AppNavHost(
                 "commandRunDetail/{runId}",
                 "commandCreate?serverId={serverId}",
                 "commandPolicy",
-                "healthReports",
-                "healthReportDetail/{reportId}",
                 "aiAlertExplanation/{recordId}",
                 "alertNotifications/{recordId}",
                 "systemMonitor",
@@ -185,7 +181,6 @@ fun AppNavHost(
             composable(BottomTab.AI.route) {
                 AiQaScreen(
                     onOpenCommands = { navController.navigate("commandRuns") },
-                    onOpenHealthReports = { navController.navigate("healthReports") },
                 )
             }
             composable(BottomTab.SETTINGS.route) {
@@ -285,24 +280,6 @@ fun AppNavHost(
                 val runId = backStackEntry.arguments?.getLong("runId") ?: 0L
                 CommandRunDetailScreen(
                     runId = runId,
-                    onBack = { navController.popBackStack() },
-                )
-            }
-            composable("healthReports") {
-                HealthReportsScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenDetail = { reportId ->
-                        navController.navigate("healthReportDetail/$reportId")
-                    },
-                )
-            }
-            composable(
-                route = "healthReportDetail/{reportId}",
-                arguments = listOf(navArgument("reportId") { type = NavType.LongType }),
-            ) { backStackEntry ->
-                val reportId = backStackEntry.arguments?.getLong("reportId") ?: 0L
-                HealthReportDetailScreen(
-                    reportId = reportId,
                     onBack = { navController.popBackStack() },
                 )
             }

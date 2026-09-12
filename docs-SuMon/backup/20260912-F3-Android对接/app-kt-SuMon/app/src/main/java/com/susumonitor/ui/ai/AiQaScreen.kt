@@ -61,7 +61,6 @@ import com.susumonitor.ui.theme.StatusWarning
 @Composable
 fun AiQaScreen(
     onOpenCommands: () -> Unit = {},
-    onOpenHealthReports: () -> Unit = {},
     viewModel: AiQaViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -80,7 +79,6 @@ fun AiQaScreen(
                 title = { Text("AI 运维助手") },
                 actions = {
                     TextButton(onClick = onOpenCommands) { Text("命令审批") }
-                    TextButton(onClick = onOpenHealthReports) { Text("健康报告") }
                     IconButton(onClick = { viewModel.clearConversation() }) {
                         Icon(Icons.Filled.DeleteSweep, contentDescription = "清空会话")
                     }

@@ -114,3 +114,99 @@ data class AiAlertExplanation(
     @SerialName("prompt_version") val promptVersion: String = "",
     @SerialName("created_at") val createdAt: String? = null,
 )
+
+/** 定时健康报告生成状态（与 OpenAPI `AiHealthReport.status` 枚举对齐）。 */
+object AiHealthReportStatusValues {
+    const val SUCCEEDED = "succeeded"
+    const val DEGRADED = "degraded"
+}
+
+/** 报告覆盖窗口内的服务器清单快照（与 OpenAPI `AiHealthReportFacts.server_inventory` 对齐）。 */
+@Serializable
+data class AiHealthReportServerInventory(
+    @SerialName("total_count") val totalCount: Int,
+    @SerialName("online_count") val onlineCount: Int,
+    @SerialName("offline_count") val offlineCount: Int,
+    @SerialName("online_rate") val onlineRate: Double,
+)
+
+/** 报告窗口内指标均值与峰值（与 OpenAPI `AiHealthReportFacts.metric_peaks` 对齐；窗口无采样时为 null）。 */
+@Serializable
+data class AiHealthReportMetricPeaks(
+    @SerialName("avg_cpu_percent") val avgCpuPercent: Double? = null,
+    @SerialName("max_cpu_percent") val maxCpuPercent: Double? = null,
+    @SerialName("max_cpu_server_id") val maxCpuServerId: Long? = null,
+    @SerialName("avg_memory_percent") val avgMemoryPercent: Double? = null,
+    @SerialName("max_memory_percent") val maxMemoryPercent: Double? = null,
+    @SerialName("max_memory_server_id") val maxMemoryServerId: Long? = null,
+    @SerialName("avg_disk_percent") val avgDiskPercent: Double? = null,
+    @SerialName("max_disk_percent") val maxDiskPercent: Double? = null,
+    @SerialName("max_disk_server_id") val maxDiskServerId: Long? = null,
+)
+
+/** 报告窗口内告警最多的服务器（与 OpenAPI `AiHealthReportFacts.top_servers` items 对齐）。 */
+@Serializable
+data class AiHealthReportTopAlertServer(
+    @SerialName("server_id") val serverId: Long,
+    @SerialName("server_name") val serverName: String,
+    @SerialName("alert_count") val alertCount: Int,
+    @SerialName("critical_count") val criticalCount: Int,
+)
+
+/** 报告窗口内的告警统计（与 OpenAPI `AiHealthReportFacts.alert_statistics` 对齐）。 */
+@Serializable
+data class AiHealthReportAlertStatistics(
+    @SerialName("total_triggered") val totalTriggered: Int,
+    @SerialName("critical_count") val criticalCount: Int,
+    @SerialName("warning_count") val warningCount: Int,
+    @SerialName("resolved_count") val resolvedCount: Int,
+    @SerialName("unresolved_count") val unresolvedCount: Int,
+    @SerialName("top_servers") val topServers: List<AiHealthReportTopAlertServer> = emptyList(),
+)
+
+/** 当前离线服务器快照行（与 OpenAPI `AiHealthReportFacts.offline_servers` items 对齐）。 */
+@Serializable
+data class AiHealthReportOfflineServer(
+    @SerialName("server_id") val serverId: Long,
+    @SerialName("server_name") val serverName: String,
+    @SerialName("agent_status") val agentStatus: String,
+    @SerialName("last_heartbeat_at") val lastHeartbeatAt: String? = null,
+)
+
+/** 服务端聚合的白名单事实快照（与 OpenAPI `AiHealthReportFacts` 对齐，事实以此为准）。 */
+@Serializable
+data class AiHealthReportFacts(
+    @SerialName("report_date") val reportDate: String,
+    @SerialName("server_inventory") val serverInventory: AiHealthReportServerInventory,
+    @SerialName("metric_peaks") val metricPeaks: AiHealthReportMetricPeaks,
+    @SerialName("alert_statistics") val alertStatistics: AiHealthReportAlertStatistics,
+    @SerialName("offline_servers") val offlineServers: List<AiHealthReportOfflineServer> = emptyList(),
+)
+
+/**
+ * 定时健康报告，与 OpenAPI `AiHealthReport` 对齐（F3/V34，admin 专用）。
+ * status=degraded 时 summary 为 null 且 errorCode 记录降级原因（如 42906）。
+ */
+@Serializable
+data class AiHealthReport(
+    val id: Long,
+    @SerialName("report_date") val reportDate: String,
+    val status: String,
+    val provider: String = "",
+    val model: String = "",
+    @SerialName("prompt_version") val promptVersion: String = "",
+    val summary: String? = null,
+    @SerialName("top_concerns") val topConcerns: List<String> = emptyList(),
+    val limitations: List<String> = emptyList(),
+    val facts: AiHealthReportFacts? = null,
+    @SerialName("error_code") val errorCode: Int? = null,
+    val usage: AiUsage? = null,
+    @SerialName("duration_ms") val durationMs: Long = 0,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+/** 手动触发健康报告生成请求（与 OpenAPI `GenerateHealthReportRequest` 对齐）；日期缺省由后端取昨日。 */
+@Serializable
+data class GenerateHealthReportRequest(
+    @SerialName("report_date") val reportDate: String? = null,
+)

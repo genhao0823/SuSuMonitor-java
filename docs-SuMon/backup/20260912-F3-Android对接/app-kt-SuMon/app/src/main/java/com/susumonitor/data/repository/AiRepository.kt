@@ -6,11 +6,8 @@ import com.susumonitor.data.ApiException
 import com.susumonitor.data.model.AiAlertExplanation
 import com.susumonitor.data.model.AiDiagnosis
 import com.susumonitor.data.model.AiDiagnosisRequest
-import com.susumonitor.data.model.AiHealthReport
 import com.susumonitor.data.model.AiQa
 import com.susumonitor.data.model.AiQaRequest
-import com.susumonitor.data.model.GenerateHealthReportRequest
-import com.susumonitor.data.model.PageResult
 import com.susumonitor.util.ErrorCodes
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,28 +45,6 @@ class AiRepository @Inject constructor(
     /** 告警智能解释回看；未生成时后端 404，同样归为未启用语义。 */
     suspend fun alertExplanation(recordId: Long): AiAlertExplanation = aiCall {
         val response = alertApi.explanation(recordId)
-        response.data ?: throw mapError(response.code, response.message)
-    }
-
-    /** 分页查询定时健康报告（F3，按 report_date 倒序）。 */
-    suspend fun listHealthReports(page: Int, pageSize: Int): PageResult<AiHealthReport> = aiCall {
-        val response = aiApi.listHealthReports(page = page, pageSize = pageSize)
-        response.data ?: throw mapError(response.code, response.message)
-    }
-
-    /** 单份健康报告完整视图（含聚合事实快照）。 */
-    suspend fun healthReport(reportId: Long): AiHealthReport = aiCall {
-        val response = aiApi.getHealthReport(reportId)
-        response.data ?: throw mapError(response.code, response.message)
-    }
-
-    /**
-     * 手动触发生成（或重生成）一份报告；reportDate 为 null 时由后端取昨日。
-     * 同一 report_date 重复生成走 UPSERT 覆盖；provider 失败时后端降级为
-     * degraded 态报告（HTTP 200），仅在限流/未开启等场景抛错。
-     */
-    suspend fun generateHealthReport(reportDate: String?): AiHealthReport = aiCall {
-        val response = aiApi.generateHealthReport(GenerateHealthReportRequest(reportDate))
         response.data ?: throw mapError(response.code, response.message)
     }
 
