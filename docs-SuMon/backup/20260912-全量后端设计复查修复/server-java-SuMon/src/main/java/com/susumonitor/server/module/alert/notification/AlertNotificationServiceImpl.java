@@ -41,12 +41,6 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
     static final int MAX_BACKOFF_SECONDS = 60;
     /** 与 V21 last_error 列长度一致。 */
     static final int MAX_ERROR_LENGTH = 500;
-    /**
-     * 首试保护窗（秒）：pending 行创建时把 next_attempt_at 推后该时长，
-     * 使重试调度器（30s 一轮）在首次 @Async 发送进行期间不并发拉取同一行，
-     * 消除重复外发；若异步任务被执行器丢弃，窗口到期后由重试调度自愈。
-     */
-    static final int FIRST_ATTEMPT_GUARD_SECONDS = 60;
 
     private final AppProperties appProperties;
     private final AlertRecordMapper recordMapper;
@@ -74,9 +68,7 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
     }
 
     /** 异步尝试发送已排程的通知：逐渠道首次尝试，至少一个渠道送达后回写通知时间。 */
-    // 限定有界执行器：饱和时任务被丢弃（记日志），pending 行由重试调度在保护窗后自愈，
-    // 绝不退化为无界线程（默认 SimpleAsyncTaskExecutor）。
-    @Async("notificationExecutor")
+    @Async
     @Override
     public void sendScheduled(Long recordId, List<AlertNotificationEntity> notifications,
             AlertRuleEntity rule, AlertRecordVo record) {
@@ -118,14 +110,13 @@ public class AlertNotificationServiceImpl implements AlertNotificationService {
         return channels;
     }
 
-    /** 插入一条 pending 状态的通知记录；next_attempt_at 推后首试保护窗，防重试调度并发抢占。 */
+    /** 插入一条 pending 状态的通知记录。 */
     private AlertNotificationEntity insertPending(Long recordId, String channel) {
         AlertNotificationEntity entity = new AlertNotificationEntity();
         entity.setAlertRecordId(recordId);
         entity.setChannel(channel);
         entity.setStatus("pending");
         entity.setAttempts(0);
-        entity.setNextAttemptAt(LocalDateTime.now(clock).plusSeconds(FIRST_ATTEMPT_GUARD_SECONDS));
         notificationMapper.insert(entity);
         return entity;
     }

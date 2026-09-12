@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,9 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 评估结果与消费幂等记录同事务提交；失败由消费者重试，不在此处吞异常。</p>
  *
  * <p>状态迁移通过 AlertStateMachine 纯逻辑判断，数据库操作通过 Mapper
- * 执行。乐观锁冲突抛 {@link org.springframework.dao.ConcurrencyFailureException}
- * 使消费事务整体回滚，由容器有限重试以最新状态重评——冲突若只记日志跳过，
- * 会留下孤儿告警记录/僵尸状态行并丢失越界计数（2026-09-12 复查修复）。</p>
+ * 执行。乐观锁冲突时记录 warn 日志并跳过本轮，不重试。</p>
  */
 @Slf4j
 @Component
@@ -132,11 +129,8 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
             // 逃逸窗口计数行达到 confirm_count，升级为活跃并绑定 record。
             int updated = stateMapper.activateOnBreachThreshold(state.getId(), record.getId(), now, state.getVersion());
             if (updated == 0) {
-                // 冲突说明状态行已被并发方流转（如已触发/已恢复/计数重置）：
-                // 抛出使整个消费事务回滚（含上方已插入的 record，避免孤儿记录与幽灵通知），
-                // 容器重试以最新状态重评。
-                throw new ConcurrencyFailureException(
-                        "alert state optimistic lock conflict during activation, stateId=" + state.getId());
+                log.warn("alert state optimistic lock conflict during activation, stateId={}, version={}",
+                        state.getId(), state.getVersion());
             }
         }
 
@@ -171,9 +165,8 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
     private void handleCountingProgress(AlertStateEntity state) {
         int updated = stateMapper.incrementBreachCount(state.getId(), LocalDateTime.now(clock), state.getVersion());
         if (updated == 0) {
-            // 冲突吞掉会静默丢失越界计数并照常 ACK，确认窗口语义失真：回滚重评。
-            throw new ConcurrencyFailureException(
-                    "alert state optimistic lock conflict during counting, stateId=" + state.getId());
+            log.warn("alert state optimistic lock conflict during counting, stateId={}, version={}",
+                    state.getId(), state.getVersion());
         }
     }
 
@@ -181,9 +174,8 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
     private void handleCountingReset(AlertStateEntity state) {
         int deleted = stateMapper.deleteState(state.getId(), state.getVersion());
         if (deleted == 0) {
-            // 冲突吞掉会让计数行残留，后续触发判定失真：回滚重评。
-            throw new ConcurrencyFailureException(
-                    "alert state optimistic lock conflict during counting reset, stateId=" + state.getId());
+            log.warn("alert state optimistic lock conflict during counting reset, stateId={}, version={}",
+                    state.getId(), state.getVersion());
         }
     }
 
@@ -195,8 +187,8 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
                 state.getId(), state.getAlertRecordId(),
                 LocalDateTime.now(clock), state.getVersion());
         if (updated == 0) {
-            throw new ConcurrencyFailureException(
-                    "alert state optimistic lock conflict, stateId=" + state.getId());
+            log.warn("alert state optimistic lock conflict, stateId={}, version={}",
+                    state.getId(), state.getVersion());
         }
     }
 
@@ -217,10 +209,8 @@ public class AlertEvaluationServiceImpl implements AlertEvaluationService {
         }
         int deleted = stateMapper.deleteState(state.getId(), state.getVersion());
         if (deleted == 0) {
-            // 冲突吞掉会留下 active 状态行指向已 resolved 的记录（僵尸状态），
-            // 该规则后续告警将永久静默：回滚使 record 置态与 state 删除保持原子。
-            throw new ConcurrencyFailureException(
-                    "alert state optimistic lock conflict during resolve, stateId=" + state.getId());
+            log.warn("alert state optimistic lock conflict during resolve, stateId={}, version={}",
+                    state.getId(), state.getVersion());
         }
         AlertRecordEntity record = recordMapper.selectRecordById(state.getAlertRecordId());
         if (record == null) {

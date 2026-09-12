@@ -246,6 +246,19 @@ class AlertNotificationServiceTests {
         verify(recordMapper, never()).updateNotifiedInfo(any(), any(), anyString());
     }
 
+    /** pending 行携带首试保护窗：next_attempt_at 推后 60s，防重试调度与首次发送并发抢占。 */
+    @Test
+    void scheduleNotificationsSetsFirstAttemptGuardWindow() {
+        service.scheduleNotifications(rule("ops@example.com", null, null), record());
+
+        ArgumentCaptor<AlertNotificationEntity> captor = ArgumentCaptor.forClass(AlertNotificationEntity.class);
+        verify(notificationMapper).insert(captor.capture());
+        AlertNotificationEntity inserted = captor.getValue();
+        assertEquals(AlertNotificationServiceImpl.FIRST_ATTEMPT_GUARD_SECONDS,
+                java.time.Duration.between(java.time.LocalDateTime.now(CLOCK), inserted.getNextAttemptAt())
+                        .getSeconds());
+    }
+
     /** sendScheduled 对已排程行逐渠道发送并回写成功渠道（消息驱动链路分离可再用性）。 */
     @Test
     void sendScheduledSendsScheduledRowsAndWritesBack() {

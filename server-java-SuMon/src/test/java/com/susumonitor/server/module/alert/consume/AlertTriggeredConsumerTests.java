@@ -169,6 +169,22 @@ class AlertTriggeredConsumerTests {
         verify(consumeRecordMapper).upsertConsumed(any());
     }
 
+    /** 记录已被恢复消费置 resolved（队列乱序）：迟到的触发消息不再排程通知，仅幂等记录。 */
+    @Test
+    void resolvedRecordSkipsDispatchButConsumes() {
+        stubRule(activeRuleWithChannel());
+        AlertRecordEntity resolved = record();
+        resolved.setStatus("resolved");
+        when(recordMapper.selectRecordById(RECORD_ID)).thenReturn(resolved);
+        when(consumeRecordMapper.existsConsumed(AlertTriggeredConsumer.CONSUMER_NAME, EVENT_ID)).thenReturn(false);
+
+        consumer.onMessage(envelopeMessage(EVENT_ID, 1));
+
+        verify(notificationService, never()).scheduleNotifications(any(), any());
+        verify(notificationService, never()).sendScheduled(any(), any(), any(), any());
+        verify(consumeRecordMapper).upsertConsumed(any());
+    }
+
     /** 非法 JSON：不可重试直接拒绝，无任何业务交互。 */
     @Test
     void unparseableBodyRejectsWithoutRequeue() {

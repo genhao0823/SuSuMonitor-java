@@ -147,12 +147,6 @@ public class AlertTriggeredConsumer {
             log.warn("alert notification skipped: record missing, recordId={}", payload.recordId());
             return null;
         }
-        if ("resolved".equals(record.getStatus())) {
-            // triggered/resolved 分属独立队列可能乱序：记录已被恢复消费置 resolved 时，
-            // 迟到的触发消息不再排程通知（避免"已恢复后又收到触发"），解释请求同样跳过。
-            log.info("alert notification skipped: record already resolved, recordId={}", payload.recordId());
-            return null;
-        }
         AlertRecordVo recordVo = toVo(record);
         List<AlertNotificationEntity> notifications = hasAnyChannel(rule)
                 ? notificationService.scheduleNotifications(rule, recordVo)

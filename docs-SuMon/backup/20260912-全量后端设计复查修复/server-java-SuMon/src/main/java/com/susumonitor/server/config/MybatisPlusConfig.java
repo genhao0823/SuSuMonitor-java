@@ -14,14 +14,11 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class MybatisPlusConfig {
 
-    /** 分页拦截器按 MySQL 方言生成分页语句；maxLimit 为全局单页兜底上限（各 Service 仍有 ≤100 校验）。 */
+    /** 分页拦截器按 MySQL 方言生成分页语句。 */
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        PaginationInnerInterceptor pagination = new PaginationInnerInterceptor(DbType.MYSQL);
-        // 防御性兜底：入参校验缺失时限制单页行数，避免超大 size 拉全表导致内存放大。
-        pagination.setMaxLimit(500L);
-        interceptor.addInnerInterceptor(pagination);
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
         return interceptor;
     }
 }

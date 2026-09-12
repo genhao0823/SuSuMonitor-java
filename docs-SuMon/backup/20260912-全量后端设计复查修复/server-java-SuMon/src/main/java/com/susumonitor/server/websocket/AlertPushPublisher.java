@@ -65,12 +65,6 @@ public class AlertPushPublisher {
                 terminationService.terminateForBackpressure(subscriber);
             } catch (IOException exception) {
                 terminationService.terminateNormally(subscriber);
-            } catch (RuntimeException exception) {
-                // 容器并发关闭会话等未预期运行时异常：只终止该订阅者，保证循环对
-                // 其余订阅者继续（单会话故障不得打断整批推送）。
-                log.warn("alert push failed unexpectedly, serverId={}, subscriber terminated",
-                        serverId, exception);
-                terminationService.terminateNormally(subscriber);
             }
         }
     }

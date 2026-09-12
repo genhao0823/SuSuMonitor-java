@@ -35,6 +35,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.ConcurrencyFailureException;
 
 /**
  * 验证告警评估器的首次越界、持续越界、恢复和并发场景。
@@ -193,9 +194,9 @@ class AlertEvaluationServiceTests {
                 eq(AlertTriggeredEnvelopeFactory.ROUTING_KEY), any(), any());
     }
 
-    /** 乐观锁冲突应跳过不抛异常。 */
+    /** 持续越界的乐观锁冲突应抛出并发异常（消费事务回滚、容器重试重评），不再吞掉。 */
     @Test
-    void optimisticLockConflictShouldNotThrow() {
+    void optimisticLockConflictShouldPropagate() {
         setupService();
         AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
         MetricsLatestVo metrics = metrics(bd("95"));
@@ -204,10 +205,78 @@ class AlertEvaluationServiceTests {
         when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
         when(stateMapper.updateStateActive(anyLong(), anyLong(), any(LocalDateTime.class), eq(0))).thenReturn(0);
 
-        service.evaluate(metrics);
+        assertThrows(ConcurrencyFailureException.class, () -> service.evaluate(metrics));
 
         verify(stateMapper).updateStateActive(eq(1L), eq(1L), any(LocalDateTime.class), eq(0));
         verify(recordMapper, never()).insertRecord(any());
+    }
+
+    /** 触发路径的状态激活冲突：抛异常且不发布事件/不登记 Outbox（防幽灵通知与孤儿记录）。 */
+    @Test
+    void triggerActivationConflictShouldPropagateWithoutEvents() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        MetricsLatestVo metrics = metrics(bd("95"));
+        AlertStateEntity countingState = countingState(1L, 1L);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(countingState));
+        when(recordMapper.insertRecord(any())).thenAnswer(invocation -> {
+            invocation.getArgument(0, AlertRecordEntity.class).setId(501L);
+            return 1;
+        });
+        when(stateMapper.activateOnBreachThreshold(eq(1L), anyLong(), any(LocalDateTime.class), eq(0)))
+                .thenReturn(0);
+
+        assertThrows(ConcurrencyFailureException.class, () -> service.evaluate(metrics));
+
+        verify(eventPublisher, never()).publishEvent(any(AlertTriggeredEvent.class));
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
+    }
+
+    /** 计数递增冲突：抛并发异常（防止越界计数静默丢失后照常 ACK）。 */
+    @Test
+    void countingProgressConflictShouldPropagate() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        rule.setConfirmCount(3);
+        MetricsLatestVo metrics = metrics(bd("95"));
+        AlertStateEntity countingState = countingState(1L, 1L);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(countingState));
+        when(stateMapper.incrementBreachCount(eq(1L), any(LocalDateTime.class), eq(0))).thenReturn(0);
+
+        assertThrows(ConcurrencyFailureException.class, () -> service.evaluate(metrics));
+    }
+
+    /** 恢复路径的状态行删除冲突：抛并发异常（防僵尸状态行导致该规则告警永久静默）。 */
+    @Test
+    void resolveStateDeleteConflictShouldPropagate() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        MetricsLatestVo metrics = metrics(bd("50"));
+        AlertStateEntity state = activeState(1L, 1L, 1L);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(state));
+        when(recordMapper.updateStatusToResolved(eq(1L), any(LocalDateTime.class))).thenReturn(1);
+        when(stateMapper.deleteState(eq(1L), eq(0))).thenReturn(0);
+
+        assertThrows(ConcurrencyFailureException.class, () -> service.evaluate(metrics));
+
+        verify(eventPublisher, never()).publishEvent(any(AlertResolvedEvent.class));
+    }
+
+    /** 计数重置冲突：抛并发异常（防止计数行残留使后续触发判定失真）。 */
+    @Test
+    void countingResetConflictShouldPropagate() {
+        setupService();
+        AlertRuleEntity rule = rule(1L, "cpu", ">", bd("80"));
+        MetricsLatestVo metrics = metrics(bd("50"));
+        AlertStateEntity countingState = countingState(1L, 1L);
+        when(ruleMapper.selectEnabledRulesForServer(1L)).thenReturn(List.of(rule));
+        when(stateMapper.selectByServerId(1L)).thenReturn(List.of(countingState));
+        when(stateMapper.deleteState(eq(1L), eq(0))).thenReturn(0);
+
+        assertThrows(ConcurrencyFailureException.class, () -> service.evaluate(metrics));
     }
 
     /** 批量状态查询失败应向上传播（由消息消费者重试整条消息），不再逐规则吞异常。 */
@@ -378,6 +447,21 @@ class AlertEvaluationServiceTests {
         state.setServerId(1L);
         state.setActive(true);
         state.setAlertRecordId(recordId);
+        state.setFirstTriggeredAt(LocalDateTime.now(CLOCK));
+        state.setLastTriggeredAt(LocalDateTime.now(CLOCK));
+        state.setVersion(0);
+        return state;
+    }
+
+    /** 逃逸窗口计数状态行（active=false，已达阈值前）；confirmCount 语义由状态机判定。 */
+    private AlertStateEntity countingState(Long id, Long ruleId) {
+        AlertStateEntity state = new AlertStateEntity();
+        state.setId(id);
+        state.setRuleId(ruleId);
+        state.setServerId(1L);
+        state.setActive(false);
+        state.setBreachCount(1);
+        state.setAlertRecordId(null);
         state.setFirstTriggeredAt(LocalDateTime.now(CLOCK));
         state.setLastTriggeredAt(LocalDateTime.now(CLOCK));
         state.setVersion(0);
