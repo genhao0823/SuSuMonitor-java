@@ -224,12 +224,13 @@ class AiHealthReportControllerTests {
         verify(reportService).generate(date, 2L);
     }
 
-    /** report_date 缺省时由服务端取昨日。 */
+    /** report_date 缺省时由服务端取昨日（以 stub 时钟为基准，避免真实日期滚动导致 flaky）。 */
     @Test
     void generateShouldDefaultToYesterday() throws Exception {
         authenticateAdmin();
         stubClock();
-        LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
+        // stubClock 固定 instant=2026-09-11T00:00:00Z，控制器取的昨日恒为 09-10。
+        LocalDate yesterday = LocalDate.of(2026, 9, 10);
         when(reportService.generate(yesterday, 2L)).thenReturn(report(9L, yesterday));
 
         mockMvc.perform(post("/api/ai/health-reports/generate")

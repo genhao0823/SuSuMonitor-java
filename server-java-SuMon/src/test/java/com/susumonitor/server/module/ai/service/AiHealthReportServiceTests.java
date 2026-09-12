@@ -77,7 +77,7 @@ class AiHealthReportServiceTests {
         lenient().when(aiProviderProvider.getIfAvailable()).thenReturn(aiProvider);
         lenient().when(notifierProvider.getIfAvailable()).thenReturn(notifier);
         service = new AiHealthReportService(aiProviderProvider, reportMapper, notifierProvider,
-                appProperties, objectMapper, CLOCK);
+                appProperties, objectMapper, CLOCK, Runnable::run);
     }
 
     /** 成功路径：聚合事实 + provider 摘要 → succeeded 落库（UPSERT）→ 尽力而为通知。 */
@@ -191,7 +191,7 @@ class AiHealthReportServiceTests {
         when(reportMapper.upsertReport(any())).thenReturn(1);
         appProperties.getAi().getReport().setRateLimitMaxRequests(1);
         AiHealthReportService tightService = new AiHealthReportService(aiProviderProvider, reportMapper,
-                notifierProvider, appProperties, objectMapper, CLOCK);
+                notifierProvider, appProperties, objectMapper, CLOCK, Runnable::run);
 
         tightService.generate(REPORT_DATE, 9L);
         BusinessException exception = assertThrows(BusinessException.class,

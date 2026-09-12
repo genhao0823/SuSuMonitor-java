@@ -78,7 +78,7 @@ class AiAlertExplanationConsumerTests {
         consumer = new AiAlertExplanationConsumer(objectMapper, explanationService, explanationNotifier,
                 consumeRecordMapper, transactionTemplate,
                 Clock.fixed(Instant.parse("2026-09-04T12:00:10Z"), ZoneOffset.UTC),
-                new AiAlertExplanationMessageValidator());
+                new AiAlertExplanationMessageValidator(), Runnable::run);
     }
 
     /** 幂等命中：不解释、不落库、不推送。 */

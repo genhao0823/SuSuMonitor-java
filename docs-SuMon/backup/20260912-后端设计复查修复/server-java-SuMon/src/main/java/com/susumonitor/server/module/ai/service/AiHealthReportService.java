@@ -27,10 +27,7 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.task.AsyncTaskExecutor;
-import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -62,20 +59,17 @@ public class AiHealthReportService {
     private final Clock clock;
     private final FixedWindowRateLimiter rateLimiter;
     private final Semaphore permits;
-    private final AsyncTaskExecutor notificationExecutor;
 
-    /** 注入模型端口（可缺席）、报告存储、通知器（可缺席）、治理组件与通知执行器。 */
+    /** 注入模型端口（可缺席）、报告存储、通知器（可缺席）与治理组件。 */
     public AiHealthReportService(ObjectProvider<AiProvider> aiProvider,
             AiHealthReportMapper reportMapper, ObjectProvider<AiHealthReportNotifier> notifier,
-            AppProperties appProperties, ObjectMapper objectMapper, Clock clock,
-            @Qualifier("notificationExecutor") AsyncTaskExecutor notificationExecutor) {
+            AppProperties appProperties, ObjectMapper objectMapper, Clock clock) {
         this.aiProvider = aiProvider;
         this.reportMapper = reportMapper;
         this.notifier = notifier;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
         this.clock = clock;
-        this.notificationExecutor = notificationExecutor;
         AppProperties.Ai.Report config = appProperties.getAi().getReport();
         this.rateLimiter = new FixedWindowRateLimiter(config.getRateLimitMaxRequests(),
                 Duration.ofSeconds(config.getRateLimitWindowSeconds()), clock);
@@ -306,34 +300,22 @@ public class AiHealthReportService {
             log.warn("AI health report resultJson serialization failed, reportDate={}", vo.getReportDate());
             entity.setResultJson(null);
         }
-        // ODKU 影响行数语义随驱动 useAffectedRows 配置而异（found-rows 下 insert/update 均 1，
-        // affected 语义下 update 为 2），故仅以 <=0 判定真失败，不依赖驱动默认值。
-        if (reportMapper.upsertReport(entity) <= 0) {
+        if (reportMapper.upsertReport(entity) != 1) {
             throw new BusinessException(ErrorCode.DATABASE_ERROR);
         }
     }
 
-    /**
-     * 尽力而为通知：在专用有界线程池异步发送，不阻塞调度/请求线程；
-     * 执行器饱和或发送异常都只记日志，绝不拖垮生成主链路。
-     */
+    /** 尽力而为通知：通知器缺席或实现自身异常都只记日志，绝不拖垮生成主链路。 */
     private void dispatchNotification(AiHealthReportVo vo) {
         AiHealthReportNotifier notification = notifier.getIfAvailable();
         if (notification == null) {
             return;
         }
         try {
-            notificationExecutor.execute(() -> {
-                try {
-                    notification.dispatch(vo);
-                } catch (RuntimeException exception) {
-                    log.warn("AI health report notification failed unexpectedly, reportDate={}",
-                            vo.getReportDate(), exception);
-                }
-            });
-        } catch (TaskRejectedException exception) {
-            log.warn("AI health report notification discarded (executor saturated), reportDate={}",
-                    vo.getReportDate());
+            notification.dispatch(vo);
+        } catch (RuntimeException exception) {
+            log.warn("AI health report notification failed unexpectedly, reportDate={}",
+                    vo.getReportDate(), exception);
         }
     }
 

@@ -77,9 +77,26 @@ public interface CommandRunMapper {
     /** 按 id 批量查询运行记录（超时扫描中筛选 auto 审批行供事后通知）。 */
     List<CommandRunEntity> selectRunsByIds(@Param("ids") List<Long> ids);
 
-    /** 按 id 批量更新状态（供过期/超时扫描使用）。 */
-    int updateStatusByIds(@Param("ids") List<Long> ids, @Param("finalStatus") String finalStatus,
-            @Param("errorCode") Integer errorCode, @Param("now") LocalDateTime now);
+    /**
+     * 批量过期 CAS：仅仍处于 pending_approval 的行置 expired。
+     *
+     * <p>与审批/结果回填并发时，CAS 保证不覆盖已流转的行
+     * （select 到 update 之间行可能已被 approve/reject/complete）。</p>
+     *
+     * @return 实际被置为 expired 的行数
+     */
+    int markExpiredByIds(@Param("ids") List<Long> ids, @Param("now") LocalDateTime now);
+
+    /**
+     * 批量超时 CAS：仅仍处于 executing 的行置 timeout。
+     *
+     * <p>与 command.result 回填并发时，CAS 保证不覆盖 succeeded/failed
+     * 等真实终态（select 到 update 之间结果可能已到达）。</p>
+     *
+     * @return 实际被置为 timeout 的行数
+     */
+    int markTimeoutByIds(@Param("ids") List<Long> ids, @Param("errorCode") Integer errorCode,
+            @Param("now") LocalDateTime now);
 
     /** 按保留期分批删除审计行。 */
     int deleteExpiredBatch(@Param("cutoffTime") LocalDateTime cutoffTime, @Param("batchSize") int batchSize);

@@ -148,23 +148,10 @@
         ORDER BY id
     </select>
 
-    <!-- 过期 CAS：仅 pending_approval 可置 expired，防止覆盖并发审批/回填已流转的行。 -->
-    <update id="markExpiredByIds">
+    <update id="updateStatusByIds">
         UPDATE ai_command_runs
-        SET status = 'expired', completed_at = #{now}
-        WHERE status = 'pending_approval'
-          AND id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
-        </foreach>
-    </update>
-
-    <!-- 超时 CAS：仅 executing 可置 timeout，防止覆盖并发结果回填写入的真实终态。 -->
-    <update id="markTimeoutByIds">
-        UPDATE ai_command_runs
-        SET status = 'timeout', error_code = #{errorCode}, completed_at = #{now}
-        WHERE status = 'executing'
-          AND id IN
+        SET status = #{finalStatus}, error_code = #{errorCode}, completed_at = #{now}
+        WHERE id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">
             #{id}
         </foreach>

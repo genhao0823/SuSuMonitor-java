@@ -60,7 +60,7 @@ class CommandRunServiceTests {
     private CommandRunService service;
     private CommandTemplateRegistry registry;
 
-    /** 构造被测服务与默认配置（启用命令域、模板白名单合法、事后通知器可用）。 */
+    /** 构造被测服务与默认配置（启用命令域、模板白名单合法、事后通知器可用、同步执行器）。 */
     @BeforeEach
     void setUp() {
         appProperties = new AppProperties();
@@ -69,7 +69,7 @@ class CommandRunServiceTests {
         registry = new CommandTemplateRegistry();
         org.mockito.Mockito.when(notifierProvider.getIfAvailable()).thenReturn(notifier);
         service = new CommandRunService(runMapper, registry, transport, serverService,
-                appProperties, objectMapper, CLOCK, notifierProvider);
+                appProperties, objectMapper, CLOCK, notifierProvider, Runnable::run);
     }
 
     /** 创建 pending 运行：渲染预览、过期时间、参数 hash 均正确落审计。 */
@@ -230,18 +230,18 @@ class CommandRunServiceTests {
                 any(), anyLong(), any(), any());
     }
 
-    /** 扫描：过期 pending 置 expired；超时 executing 置 timeout(50402)。 */
+    /** 扫描：过期 pending 经 CAS 置 expired；超时 executing 经 CAS 置 timeout(50402)。 */
     @Test
     void sweepShouldExpireAndTimeout() {
         when(runMapper.selectExpiredIds(any(), anyInt())).thenReturn(List.of(1L));
         when(runMapper.selectTimeoutIds(any(), anyInt())).thenReturn(List.of(2L));
+        when(runMapper.selectRunsByIds(List.of(2L))).thenReturn(List.of());
 
         service.sweep();
 
-        verify(runMapper).updateStatusByIds(eq(List.of(1L)), eq(CommandRunService.STATUS_EXPIRED),
-                eq(null), any());
-        verify(runMapper).updateStatusByIds(eq(List.of(2L)), eq(CommandRunService.STATUS_TIMEOUT),
-                eq(50402), any());
+        verify(runMapper).markExpiredByIds(eq(List.of(1L)), any());
+        verify(runMapper).markTimeoutByIds(eq(List.of(2L)), eq(50402), any());
+        verify(notifier, never()).notifyCompletion(any(), anyString());
     }
 
     /** 结果回填后，auto 审批的运行触发事后通知并携带回填的执行摘要。 */
@@ -306,25 +306,42 @@ class CommandRunServiceTests {
                 any(), anyInt(), any(), anyLong(), eq(null), any());
     }
 
-    /** 超时扫描：批量置 timeout 后仅 auto 审批的运行收到事后通知。 */
+    /** 超时扫描：CAS 后按重查终态通知——仅仍为 timeout 的 auto 行收到通知。 */
     @Test
     void sweepShouldNotifyOnlyAutoApprovalTimeouts() {
         when(runMapper.selectExpiredIds(any(), anyInt())).thenReturn(List.of());
         when(runMapper.selectTimeoutIds(any(), anyInt())).thenReturn(List.of(2L, 3L));
         CommandRunEntity autoRun = pendingRun();
         autoRun.setId(2L);
+        autoRun.setStatus(CommandRunService.STATUS_TIMEOUT);
         autoRun.setApprovalMode(CommandRunService.APPROVAL_MODE_AUTO);
         CommandRunEntity manualRun = pendingRun();
         manualRun.setId(3L);
+        manualRun.setStatus(CommandRunService.STATUS_TIMEOUT);
         manualRun.setApprovalMode(CommandRunService.APPROVAL_MODE_MANUAL);
         when(runMapper.selectRunsByIds(List.of(2L, 3L))).thenReturn(List.of(autoRun, manualRun));
 
         service.sweep();
 
-        verify(runMapper).updateStatusByIds(eq(List.of(2L, 3L)), eq(CommandRunService.STATUS_TIMEOUT),
-                eq(50402), any());
+        verify(runMapper).markTimeoutByIds(eq(List.of(2L, 3L)), eq(50402), any());
         verify(notifier).notifyCompletion(autoRun, CommandRunService.STATUS_TIMEOUT);
         verify(notifier, never()).notifyCompletion(eq(manualRun), anyString());
+    }
+
+    /** 竞态回归：结果在 CAS 前已回填（重查为 succeeded）时不发 timeout 通知，通知与落库终态一致。 */
+    @Test
+    void sweepShouldNotNotifyRunsCompletedBeforeTimeoutCas() {
+        when(runMapper.selectExpiredIds(any(), anyInt())).thenReturn(List.of());
+        when(runMapper.selectTimeoutIds(any(), anyInt())).thenReturn(List.of(4L));
+        CommandRunEntity completed = pendingRun();
+        completed.setId(4L);
+        completed.setStatus(CommandRunService.STATUS_SUCCEEDED);
+        when(runMapper.selectRunsByIds(List.of(4L))).thenReturn(List.of(completed));
+
+        service.sweep();
+
+        verify(runMapper).markTimeoutByIds(eq(List.of(4L)), eq(50402), any());
+        verify(notifier, never()).notifyCompletion(any(), anyString());
     }
 
     /** 拒绝仅对 pending 有效；重复拒绝或对已执行行拒绝返回状态冲突。 */

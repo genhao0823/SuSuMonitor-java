@@ -65,11 +65,15 @@ public class AiAlertExplanationConsumer {
 
     private final AiAlertExplanationMessageValidator messageValidator;
 
-    /** 注入反序列化器、解释服务、补充通知器、消费幂等访问与事务模板。 */
+    private final org.springframework.core.task.AsyncTaskExecutor notificationExecutor;
+
+    /** 注入反序列化器、解释服务、补充通知器、消费幂等访问、事务模板与通知执行器。 */
     public AiAlertExplanationConsumer(ObjectMapper objectMapper, AiAlertExplanationService explanationService,
             AiAlertExplanationNotifier explanationNotifier, ConsumeRecordMapper consumeRecordMapper,
             TransactionTemplate transactionTemplate, Clock clock,
-            AiAlertExplanationMessageValidator messageValidator) {
+            AiAlertExplanationMessageValidator messageValidator,
+            @org.springframework.beans.factory.annotation.Qualifier("notificationExecutor")
+            org.springframework.core.task.AsyncTaskExecutor notificationExecutor) {
         this.objectMapper = objectMapper;
         this.explanationService = explanationService;
         this.explanationNotifier = explanationNotifier;
@@ -77,6 +81,7 @@ public class AiAlertExplanationConsumer {
         this.transactionTemplate = transactionTemplate;
         this.clock = clock;
         this.messageValidator = messageValidator;
+        this.notificationExecutor = notificationExecutor;
     }
 
     /**
@@ -115,8 +120,21 @@ public class AiAlertExplanationConsumer {
             explanationService.save(envelope.eventId(), facts, explanation, durationMs);
             insertConsumeRecord(envelope);
         });
-        // 事务已提交：解释已可回看，补充通知为尽力而为（失败只记日志）。
-        explanationNotifier.dispatchSupplement(facts, explanation);
+        // 事务已提交：解释已可回看，补充通知为尽力而为——在专用有界线程池异步发送，
+        // 不阻塞消费线程；饱和/失败只记日志（与命令事后通知同一执行器与语义）。
+        try {
+            notificationExecutor.execute(() -> {
+                try {
+                    explanationNotifier.dispatchSupplement(facts, explanation);
+                } catch (RuntimeException exception) {
+                    log.warn("AI explanation supplement notification failed unexpectedly, recordId={}",
+                            facts.recordId(), exception);
+                }
+            });
+        } catch (org.springframework.core.task.TaskRejectedException exception) {
+            log.warn("AI explanation supplement notification discarded (executor saturated), recordId={}",
+                    facts.recordId());
+        }
     }
 
     /** 将契约载荷转换为解释事实（字段语义一一对应，值不改动）。 */

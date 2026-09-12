@@ -204,7 +204,7 @@ class AiCommandRunMySqlValidationIT {
                 "SELECT status FROM ai_command_runs WHERE id = ?", String.class, run.getId()));
     }
 
-    /** 过期与超时扫描命中对应行，updateStatusByIds 按 id 批量置终态。 */
+    /** 过期与超时扫描命中对应行，markExpired/markTimeout CAS 按 id 批量置终态。 */
     @Test
     void sweepSelectAndStatusUpdate() {
         LocalDateTime now = LocalDateTime.of(2026, 9, 1, 12, 0, 0);
@@ -221,10 +221,9 @@ class AiCommandRunMySqlValidationIT {
         assertTrue(expiredIds.contains(expiredPending.getId()));
         assertTrue(timeoutIds.contains(staleExecuting.getId()));
 
-        assertEquals(1, commandRunMapper.updateStatusByIds(
-                List.of(expiredPending.getId()), "expired", null, now));
-        assertEquals(1, commandRunMapper.updateStatusByIds(
-                List.of(staleExecuting.getId()), "timeout", 50402, now));
+        assertEquals(1, commandRunMapper.markExpiredByIds(List.of(expiredPending.getId()), now));
+        assertEquals(1, commandRunMapper.markTimeoutByIds(
+                List.of(staleExecuting.getId()), 50402, now));
 
         assertEquals("expired", jdbcTemplate.queryForObject(
                 "SELECT status FROM ai_command_runs WHERE id = ?", String.class, expiredPending.getId()));

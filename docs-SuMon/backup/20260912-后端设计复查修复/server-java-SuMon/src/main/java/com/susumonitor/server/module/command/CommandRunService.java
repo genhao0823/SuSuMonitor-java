@@ -18,7 +18,6 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -26,10 +25,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.task.AsyncTaskExecutor;
-import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -72,14 +68,12 @@ public class CommandRunService implements CommandResultHandler {
     private final Clock clock;
     private final FixedWindowRateLimiter rateLimiter;
     private final ObjectProvider<CommandAutoApprovalNotifier> autoApprovalNotifier;
-    private final AsyncTaskExecutor notificationExecutor;
 
-    /** 注入审计 Mapper、模板注册表、出站端口、治理组件与通知执行器。 */
+    /** 注入审计 Mapper、模板注册表、出站端口与治理组件。 */
     public CommandRunService(CommandRunMapper runMapper, CommandTemplateRegistry templateRegistry,
             CommandTransport transport, ServerService serverService, AppProperties appProperties,
             ObjectMapper objectMapper, Clock clock,
-            ObjectProvider<CommandAutoApprovalNotifier> autoApprovalNotifier,
-            @Qualifier("notificationExecutor") AsyncTaskExecutor notificationExecutor) {
+            ObjectProvider<CommandAutoApprovalNotifier> autoApprovalNotifier) {
         this.runMapper = runMapper;
         this.templateRegistry = templateRegistry;
         this.transport = transport;
@@ -88,7 +82,6 @@ public class CommandRunService implements CommandResultHandler {
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.autoApprovalNotifier = autoApprovalNotifier;
-        this.notificationExecutor = notificationExecutor;
         this.rateLimiter = new FixedWindowRateLimiter(
                 appProperties.getAi().getCommand().getRateLimitMaxRequests(),
                 Duration.ofSeconds(appProperties.getAi().getCommand().getRateLimitWindowSeconds()), clock);
@@ -215,43 +208,27 @@ public class CommandRunService implements CommandResultHandler {
         notifyAutoApprovals(List.of(run), finalStatus);
     }
 
-    /**
-     * 过期/超时双扫描：把到期 pending 置 expired、超过执行时限的 executing 置 timeout。
-     *
-     * <p>两次置态均为 CAS（仅原始状态可流转），与审批/结果回填并发时不覆盖真实终态；
-     * timeout 的事后通知基于 CAS 后的重查结果，确保通知内容与落库终态一致。</p>
-     */
+    /** 过期/超时双扫描：把到期 pending 置 expired、超过执行时限的 executing 置 timeout。 */
     public void sweep() {
         LocalDateTime now = LocalDateTime.now(clock);
         List<Long> expired = runMapper.selectExpiredIds(now, 500);
         if (!expired.isEmpty()) {
-            int expiredCount = runMapper.markExpiredByIds(expired, now);
-            log.info("command runs expired, count={}", expiredCount);
+            runMapper.updateStatusByIds(expired, STATUS_EXPIRED, null, now);
+            log.info("command runs expired, count={}", expired.size());
         }
-        LocalDateTime threshold = now.minusSeconds(
-                appProperties.getAi().getCommand().getExecutionTimeoutSeconds() + 30);
+        LocalDateTime threshold = now.minusSeconds(appProperties.getAi().getCommand().getExecutionTimeoutSeconds() + 30);
         List<Long> timedOut = runMapper.selectTimeoutIds(threshold, 500);
         if (!timedOut.isEmpty()) {
-            runMapper.markTimeoutByIds(timedOut, ErrorCode.COMMAND_EXECUTION_TIMEOUT.getCode(), now);
-            // CAS 后重查：仅对真正被置为 timeout 的行通知（结果已回填的行保持真实终态，不通知）。
-            List<CommandRunEntity> timeouted = new ArrayList<>();
-            for (CommandRunEntity run : runMapper.selectRunsByIds(timedOut)) {
-                if (STATUS_TIMEOUT.equals(run.getStatus())) {
-                    timeouted.add(run);
-                }
-            }
-            if (!timeouted.isEmpty()) {
-                log.info("command runs timed out, count={}", timeouted.size());
-                notifyAutoApprovals(timeouted, STATUS_TIMEOUT);
-            }
+            // 置 timeout 前先取行：自动审批运行需要事后通知，人工运行不推送。
+            List<CommandRunEntity> timedOutRuns = runMapper.selectRunsByIds(timedOut);
+            runMapper.updateStatusByIds(timedOut, STATUS_TIMEOUT,
+                    ErrorCode.COMMAND_EXECUTION_TIMEOUT.getCode(), now);
+            log.info("command runs timed out, count={}", timedOut.size());
+            notifyAutoApprovals(timedOutRuns, STATUS_TIMEOUT);
         }
     }
 
-    /**
-     * 对 auto 审批的运行逐条投递结果通知；通知在专用有界线程池异步发送，
-     * 不阻塞 WS 消息处理线程；执行器饱和时丢弃并记日志（best-effort 语义，
-     * 运行记录本身已落库可审计）。
-     */
+    /** 对 auto 审批的运行逐条推送结果通知；通知器缺席（理论上不可能，同开关装配）时静默跳过。 */
     private void notifyAutoApprovals(List<CommandRunEntity> runs, String finalStatus) {
         CommandAutoApprovalNotifier notification = autoApprovalNotifier.getIfAvailable();
         if (notification == null) {
@@ -262,17 +239,10 @@ public class CommandRunService implements CommandResultHandler {
                 continue;
             }
             try {
-                notificationExecutor.execute(() -> {
-                    try {
-                        notification.notifyCompletion(run, finalStatus);
-                    } catch (RuntimeException exception) {
-                        log.warn("command auto-approval notification failed unexpectedly, runId={}",
-                                run.getId(), exception);
-                    }
-                });
-            } catch (TaskRejectedException exception) {
-                log.warn("command auto-approval notification discarded (executor saturated), runId={}",
-                        run.getId());
+                notification.notifyCompletion(run, finalStatus);
+            } catch (RuntimeException exception) {
+                log.warn("command auto-approval notification failed unexpectedly, runId={}", run.getId(),
+                        exception);
             }
         }
     }    /** 查询单条运行记录；不存在返回 40404。 */
@@ -325,11 +295,11 @@ public class CommandRunService implements CommandResultHandler {
         return transport.send(run.getServerId(), body);
     }
 
-    /** 懒过期：pending 且已过期的运行先 CAS 置 expired（供 approve/reject 拒绝路径；不覆盖并发已流转的行）。 */
+    /** 懒过期：pending 且已过期的运行先 CAS 置 expired（供 approve/reject 拒绝路径）。 */
     private void expireIfNeeded(CommandRunEntity run, LocalDateTime now) {
         if (STATUS_PENDING.equals(run.getStatus()) && run.getExpiresAt() != null
                 && !run.getExpiresAt().isAfter(now)) {
-            runMapper.markExpiredByIds(List.of(run.getId()), now);
+            runMapper.updateStatusByIds(List.of(run.getId()), STATUS_EXPIRED, null, now);
         }
     }
 

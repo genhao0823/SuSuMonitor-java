@@ -3,6 +3,7 @@ package com.susumonitor.server.module.ai.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.susumonitor.server.module.ai.entity.AiHealthReportEntity;
 import java.time.LocalDate;
@@ -72,8 +73,10 @@ class AiHealthReportMySqlValidationIT {
     /** UPSERT：同日二次生成覆盖旧行而不产生重复行，读取回全部结构化列。 */
     @Test
     void upsertShouldOverwriteSameDateWithoutDuplicates() {
-        assertEquals(1, reportMapper.upsertReport(newEntity("succeeded", "first summary", null)));
-        assertEquals(1, reportMapper.upsertReport(newEntity("degraded", null, 50304)));
+        // ODKU 返回值随驱动 useAffectedRows 语义而异（found-rows=1 / affected 下 update=2），
+        // 故断言 >=1（真失败为 0），行数不变与内容覆盖由唯一键 + 读取断言保证。
+        assertTrue(reportMapper.upsertReport(newEntity("succeeded", "first summary", null)) >= 1);
+        assertTrue(reportMapper.upsertReport(newEntity("degraded", null, 50304)) >= 1);
 
         Integer rowCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM ai_health_reports WHERE report_date = ?",
