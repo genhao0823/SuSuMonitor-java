@@ -858,7 +858,8 @@ export interface AiHealthReportFacts {
 
 /**
  * 定时健康报告(与 OpenAPI AiHealthReport schema 字段一致,F3/V34)。
- * status=degraded 时 summary 为 null 且 error_code 记录降级原因(如 42906)。
+ * status=degraded 时 summary 为 null 且 error_code 记录降级原因(如 42906);
+ * result_json 损坏的降级回退路径下 facts 也可能为 null(回看仅剩结构化列)。
  */
 export interface AiHealthReport {
   id: number
@@ -870,7 +871,7 @@ export interface AiHealthReport {
   summary: string | null
   top_concerns: string[]
   limitations: string[]
-  facts: AiHealthReportFacts
+  facts: AiHealthReportFacts | null
   error_code: number | null
   usage: AiUsage
   duration_ms: number
