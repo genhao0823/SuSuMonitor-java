@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.server.mapper.ServerMapper">
+
+    <resultMap id="ServerResultMap" type="com.susumonitor.server.module.server.entity.ServerEntity">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="host" property="host"/>
+        <result column="description" property="description"/>
+        <result column="status" property="status"/>
+        <result column="ssh_host" property="sshHost"/>
+        <result column="ssh_port" property="sshPort"/>
+        <result column="ssh_user" property="sshUser"/>
+        <result column="ssh_auth_type" property="sshAuthType"/>
+        <result column="ssh_password_encrypted" property="sshPasswordEncrypted"/>
+        <result column="ssh_private_key_encrypted" property="sshPrivateKeyEncrypted"/>
+        <result column="ssh_private_key_passphrase_encrypted" property="sshPrivateKeyPassphraseEncrypted"/>
+        <result column="ssh_host_key_algorithm" property="sshHostKeyAlgorithm"/>
+        <result column="ssh_host_key_fingerprint" property="sshHostKeyFingerprint"/>
+        <result column="ssh_host_key_verified_by" property="sshHostKeyVerifiedBy"/>
+        <result column="ssh_host_key_verified_at" property="sshHostKeyVerifiedAt"/>
+        <result column="agent_id" property="agentId"/>
+        <result column="agent_token_hash" property="agentTokenHash"/>
+        <result column="agent_token_created_at" property="agentTokenCreatedAt"/>
+        <result column="agent_token_rotated_at" property="agentTokenRotatedAt"/>
+        <result column="agent_token_revoked_at" property="agentTokenRevokedAt"/>
+        <result column="agent_status" property="agentStatus"/>
+        <result column="last_heartbeat_at" property="lastHeartbeatAt"/>
+        <result column="deleted" property="deleted"/>
+        <result column="deleted_at" property="deletedAt"/>
+        <result column="delete_token" property="deleteToken"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="PublicServerColumns">
+        id,
+        name,
+        host,
+        description,
+        status,
+        ssh_host,
+        ssh_port,
+        ssh_user,
+        ssh_auth_type,
+        agent_id,
+        agent_status,
+        last_heartbeat_at,
+        created_at,
+        updated_at
+    </sql>
+
+    <sql id="CredentialColumns">
+        ssh_password_encrypted,
+        ssh_private_key_encrypted,
+        ssh_private_key_passphrase_encrypted
+    </sql>
+
+    <sql id="KeywordCondition">
+        <if test="keyword != null and keyword != ''">
+            AND (
+                name LIKE CONCAT('%', #{keyword}, '%')
+                OR host LIKE CONCAT('%', #{keyword}, '%')
+                OR description LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+    </sql>
+
+    <insert id="insertServerBase"
+            useGeneratedKeys="true"
+            keyProperty="server.id"
+            keyColumn="id">
+        INSERT INTO servers (
+            name,
+            host,
+            description,
+            ssh_host,
+            ssh_port,
+            ssh_user,
+            ssh_auth_type
+        ) VALUES (
+            #{server.name},
+            #{server.host},
+            #{server.description},
+            #{server.sshHost},
+            #{server.sshPort},
+            #{server.sshUser},
+            #{server.sshAuthType}
+        )
+    </insert>
+
+    <update id="updateCredentialCiphertexts">
+        UPDATE servers
+        SET
+            ssh_password_encrypted = #{sshPasswordEncrypted},
+            ssh_private_key_encrypted = #{sshPrivateKeyEncrypted},
+            ssh_private_key_passphrase_encrypted = #{sshPrivateKeyPassphraseEncrypted}
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </update>
+
+    <select id="selectActiveServers" resultMap="ServerResultMap">
+        SELECT
+        <include refid="PublicServerColumns"/>
+        FROM servers
+        WHERE deleted = 0
+        <include refid="KeywordCondition"/>
+        ORDER BY
+        <choose>
+            <when test="sortBy == 'name'">name</when>
+            <when test="sortBy == 'host'">host</when>
+            <when test="sortBy == 'status'">status</when>
+            <when test="sortBy == 'createdAt' or sortBy == 'created_at'">created_at</when>
+            <when test="sortBy == 'updatedAt' or sortBy == 'updated_at'">updated_at</when>
+            <otherwise>id</otherwise>
+        </choose>
+        <choose>
+            <when test="sortOrder == 'asc' or sortOrder == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+        , id
+        <choose>
+            <when test="sortOrder == 'asc' or sortOrder == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+
+    <select id="selectActiveServerById" resultMap="ServerResultMap">
+        SELECT
+        <include refid="PublicServerColumns"/>
+        FROM servers
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </select>
+
+    <select id="selectActiveServerForUpdateById" resultMap="ServerResultMap">
+        SELECT id, deleted
+        FROM servers
+        WHERE id = #{serverId}
+          AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <select id="selectActiveServerWithCredentialsById" resultMap="ServerResultMap">
+        SELECT
+            id,
+            name,
+            host,
+            description,
+            ssh_host,
+            ssh_port,
+            ssh_user,
+            ssh_auth_type,
+        <include refid="CredentialColumns"/>
+        FROM servers
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </select>
+
+    <update id="updateActiveServer">
+        UPDATE servers
+        SET
+            name = #{server.name},
+            host = #{server.host},
+            description = #{server.description},
+            ssh_host_key_algorithm = CASE
+                WHEN ssh_host = #{server.sshHost} AND ssh_port = #{server.sshPort}
+                THEN ssh_host_key_algorithm ELSE NULL END,
+            ssh_host_key_fingerprint = CASE
+                WHEN ssh_host = #{server.sshHost} AND ssh_port = #{server.sshPort}
+                THEN ssh_host_key_fingerprint ELSE NULL END,
+            ssh_host_key_verified_by = CASE
+                WHEN ssh_host = #{server.sshHost} AND ssh_port = #{server.sshPort}
+                THEN ssh_host_key_verified_by ELSE NULL END,
+            ssh_host_key_verified_at = CASE
+                WHEN ssh_host = #{server.sshHost} AND ssh_port = #{server.sshPort}
+                THEN ssh_host_key_verified_at ELSE NULL END,
+            ssh_host = #{server.sshHost},
+            ssh_port = #{server.sshPort},
+            ssh_user = #{server.sshUser},
+            ssh_auth_type = #{server.sshAuthType},
+            ssh_password_encrypted = #{server.sshPasswordEncrypted},
+            ssh_private_key_encrypted = #{server.sshPrivateKeyEncrypted},
+            ssh_private_key_passphrase_encrypted = #{server.sshPrivateKeyPassphraseEncrypted}
+        WHERE id = #{server.id}
+          AND deleted = 0
+    </update>
+
+    <update id="softDeleteActiveServer">
+        UPDATE servers
+        SET
+            deleted = 1,
+            deleted_at = #{deletedAt},
+            delete_token = #{deleteToken}
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </update>
+
+    <select id="selectActiveServerStatusById" resultMap="ServerResultMap">
+        SELECT
+            id,
+            status,
+            agent_status,
+            last_heartbeat_at,
+            delivery_pending_count,
+            delivery_pending_bytes,
+            delivery_oldest_collected_at,
+            delivery_drop_count,
+            delivery_dead_letter_count,
+            delivery_dead_letter_bytes
+        FROM servers
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </select>
+
+    <select id="selectActiveServerHostKeyById" resultMap="ServerResultMap">
+        SELECT
+            id,
+            ssh_host,
+            ssh_port,
+            ssh_host_key_algorithm,
+            ssh_host_key_fingerprint,
+            ssh_host_key_verified_by,
+            ssh_host_key_verified_at
+        FROM servers
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </select>
+
+    <select id="selectActiveServerSshById" resultMap="ServerResultMap">
+        SELECT
+            id,
+            ssh_host,
+            ssh_port,
+            ssh_user,
+            ssh_auth_type,
+            ssh_password_encrypted,
+            ssh_private_key_encrypted,
+            ssh_private_key_passphrase_encrypted,
+            ssh_host_key_algorithm,
+            ssh_host_key_fingerprint
+        FROM servers
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </select>
+
+    <update id="compareAndSetSshHostKey">
+        UPDATE servers
+        SET
+            ssh_host_key_algorithm = #{hostKeyAlgorithm},
+            ssh_host_key_fingerprint = #{newFingerprint},
+            ssh_host_key_verified_by = #{operatorId},
+            ssh_host_key_verified_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{serverId}
+          AND deleted = 0
+          AND ssh_host = #{expectedSshHost}
+          AND ssh_port = #{expectedSshPort}
+          AND ssh_host_key_fingerprint &lt;=&gt; #{previousFingerprint}
+    </update>
+
+    <select id="selectActiveServerAgentTokenById" resultMap="ServerResultMap">
+        SELECT
+            id,
+            agent_id,
+            agent_token_hash,
+            agent_token_created_at,
+            agent_token_rotated_at,
+            agent_token_revoked_at,
+            agent_status,
+            last_heartbeat_at
+        FROM servers
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </select>
+
+    <update id="registerAgentToken">
+        UPDATE servers
+        SET agent_id = #{agentId},
+            agent_token_hash = #{tokenHash},
+            agent_token_created_at = #{createdAt},
+            agent_token_rotated_at = NULL,
+            agent_token_revoked_at = NULL,
+            agent_status = 'offline',
+            last_heartbeat_at = NULL
+        WHERE id = #{serverId}
+          AND deleted = 0
+          AND agent_token_hash IS NULL
+    </update>
+
+    <update id="rotateAgentToken">
+        UPDATE servers
+        SET agent_token_hash = #{tokenHash},
+            agent_token_rotated_at = #{rotatedAt},
+            agent_token_revoked_at = NULL,
+            agent_status = 'offline',
+            last_heartbeat_at = NULL
+        WHERE id = #{serverId}
+          AND deleted = 0
+          AND agent_token_hash IS NOT NULL
+    </update>
+
+    <update id="revokeAgentToken">
+        UPDATE servers
+        SET agent_token_revoked_at = #{revokedAt},
+            agent_status = 'offline',
+            status = 'offline'
+        WHERE id = #{serverId}
+          AND deleted = 0
+          AND agent_token_hash IS NOT NULL
+          AND agent_token_revoked_at IS NULL
+    </update>
+
+    <!-- 仅在离线状态转为在线时更新，用受影响行数决定是否发布状态事件。 -->
+    <update id="markAgentOnlineAndHeartbeat">
+        UPDATE servers
+        SET agent_status = 'online',
+            status = 'online',
+            last_heartbeat_at = #{heartbeatAt}
+        WHERE id = #{serverId}
+          AND deleted = 0
+          AND agent_token_hash IS NOT NULL
+          AND agent_token_revoked_at IS NULL
+          AND (agent_status &lt;&gt; 'online' OR status &lt;&gt; 'online')
+    </update>
+
+    <!-- 心跳/鉴权成功时把 status 同步置为 online,使前端"状态"列与 Agent 在线状态一致。 -->
+    <update id="updateAgentHeartbeat">
+        UPDATE servers
+        SET agent_status = 'online',
+            status = 'online',
+            last_heartbeat_at = #{heartbeatAt}
+        WHERE id = #{serverId}
+          AND deleted = 0
+          AND agent_token_hash IS NOT NULL
+          AND agent_token_revoked_at IS NULL
+    </update>
+
+    <!-- 心跳携带的投递遥测统计；null 字段保持原值，不参与在线状态转换。 -->
+    <update id="updateDeliveryStats">
+        UPDATE servers
+        SET delivery_pending_count = #{pendingCount},
+            delivery_pending_bytes = #{pendingBytes},
+            delivery_oldest_collected_at = #{oldestCollectedAt},
+            delivery_drop_count = #{dropCount},
+            delivery_dead_letter_count = #{deadLetterCount},
+            delivery_dead_letter_bytes = #{deadLetterBytes}
+        WHERE id = #{serverId}
+          AND deleted = 0
+    </update>
+
+    <!-- 心跳超时或主动离线时把 status 同步置为 offline。 -->
+    <update id="markAgentOffline">
+        UPDATE servers
+        SET agent_status = 'offline',
+            status = 'offline'
+        WHERE id = #{serverId}
+          AND deleted = 0
+          AND agent_status = 'online'
+          AND last_heartbeat_at = #{expectedHeartbeatAt}
+    </update>
+</mapper>

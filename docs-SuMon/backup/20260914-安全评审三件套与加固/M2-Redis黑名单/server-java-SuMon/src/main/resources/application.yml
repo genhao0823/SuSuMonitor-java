@@ -1,0 +1,276 @@
+spring:
+  application:
+    name: ${APP_NAME:susumonitor}
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  profiles:
+    active: ${APP_ENV:local}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:susumonitor}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=${DB_TIMEZONE:Asia/Shanghai}&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:susumonitor}
+    password: ${DB_PASSWORD:}
+    hikari:
+      pool-name: SuSuMonitorHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      # SMTP 连接/读写超时（2026-08-30 通知加固）：防止 SMTP 挂起拖死通知线程。
+      mail.smtp.connectiontimeout: ${ALERT_NOTIFICATION_SMTP_TIMEOUT_MS:10000}
+      mail.smtp.timeout: ${ALERT_NOTIFICATION_SMTP_TIMEOUT_MS:10000}
+      mail.smtp.writetimeout: ${ALERT_NOTIFICATION_SMTP_TIMEOUT_MS:10000}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  data:
+    redis:
+      # 多实例化阶段一（2026-08-17）：ticket 共享存储；REDIS_ENABLED=false 时本段不生效。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2s}
+  rabbitmq:
+    listener:
+      simple:
+        retry:
+          enabled: true
+          max-attempts: ${ALERT_CONSUME_MAX_ATTEMPTS:3}
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 10000ms
+        # 告警消费并发：>1 启用多消费者（幂等由 V15 唯一键 + 业务事务保障）
+        concurrency: ${ALERT_CONSUMER_CONCURRENCY:1}
+        prefetch: ${ALERT_CONSUMER_PREFETCH:1}
+
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${SERVER_PORT:18080}
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  global-config:
+    banner: false
+  configuration:
+    map-underscore-to-camel-case: true
+
+susumonitor:
+  jwt:
+    secret: ${JWT_SECRET:}
+    expire-hours: ${JWT_EXPIRE_HOURS:72}
+  redis:
+    # 多实例化阶段一（2026-08-17）：默认关闭，现有 systemd/本机/compose 部署零影响；
+    # 多实例部署时显式开启（REDIS_ENABLED=true）。
+    enabled: ${REDIS_ENABLED:false}
+    ticket-ttl-seconds: ${REDIS_TICKET_TTL_SECONDS:30}
+  alert:
+    notification-enabled: ${ALERT_NOTIFICATION_ENABLED:false}
+    mail-from: ${ALERT_MAIL_FROM:noreply@susumonitor.local}
+    # 通知发送可靠性加固（2026-08-30）：HTTP/SMTP 超时（SMTP 超时经 mail.smtp.* 占位符生效，
+    # HTTP 超时由 AsyncConfig 应用于通知出站 RestTemplate）。重试上限/退避/批量/调度频率
+    # 为实现内常量（AlertNotificationServiceImpl / NotificationRetryScheduler），不提供配置键。
+    notification-http-connect-timeout-ms: ${ALERT_NOTIFICATION_HTTP_CONNECT_TIMEOUT_MS:5000}
+    notification-http-read-timeout-ms: ${ALERT_NOTIFICATION_HTTP_READ_TIMEOUT_MS:10000}
+    notification-smtp-timeout-ms: ${ALERT_NOTIFICATION_SMTP_TIMEOUT_MS:10000}
+    record-retention-days: ${ALERT_RECORD_RETENTION_DAYS:90}
+    record-cleanup-cron: ${ALERT_RECORD_CLEANUP_CRON:0 0 3 * * ?}
+    record-cleanup-enabled: ${ALERT_RECORD_CLEANUP_ENABLED:true}
+    notification-cleanup-enabled: ${ALERT_NOTIFICATION_CLEANUP_ENABLED:true}
+    notification-retention-days: ${ALERT_NOTIFICATION_RETENTION_DAYS:90}
+    notification-cleanup-cron: ${ALERT_NOTIFICATION_CLEANUP_CRON:0 0 3 * * ?}
+    notification-cleanup-batch-size: ${ALERT_NOTIFICATION_CLEANUP_BATCH_SIZE:1000}
+    notification-cleanup-max-batches-per-run: ${ALERT_NOTIFICATION_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    record-cleanup-batch-size: ${ALERT_RECORD_CLEANUP_BATCH_SIZE:1000}
+    record-cleanup-max-batches-per-run: ${ALERT_RECORD_CLEANUP_MAX_BATCHES_PER_RUN:100}
+  ai:
+    # 只读诊断默认关闭；启用时必须显式提供固定 provider、endpoint、model 和 API key。
+    enabled: ${AI_ENABLED:false}
+    provider: ${AI_PROVIDER:openai-compatible}
+    base-url: ${AI_BASE_URL:}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:}
+    prompt-version: ${AI_PROMPT_VERSION:ai-diagnosis-v1}
+    connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${AI_READ_TIMEOUT_MS:30000}
+    max-response-bytes: ${AI_MAX_RESPONSE_BYTES:1048576}
+    max-history-minutes: ${AI_MAX_HISTORY_MINUTES:1440}
+    max-question-length: ${AI_MAX_QUESTION_LENGTH:4000}
+    max-concurrent-requests: ${AI_MAX_CONCURRENT_REQUESTS:2}
+    audit-retention-days: ${AI_AUDIT_RETENTION_DAYS:30}
+    audit-cleanup-cron: ${AI_AUDIT_CLEANUP_CRON:0 30 3 * * ?}
+    audit-cleanup-enabled: ${AI_AUDIT_CLEANUP_ENABLED:true}
+    audit-cleanup-batch-size: ${AI_AUDIT_CLEANUP_BATCH_SIZE:1000}
+    audit-cleanup-max-batches-per-run: ${AI_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    # 按管理员固定窗口限流与按天 token 预算（0=不限预算）。
+    rate-limit-max-requests: ${AI_RATE_LIMIT_MAX_REQUESTS:10}
+    rate-limit-window-seconds: ${AI_RATE_LIMIT_WINDOW_SECONDS:3600}
+    daily-token-budget: ${AI_DAILY_TOKEN_BUDGET:0}
+    # provider 进程内有界重试：仅 429 与瞬时网络错误，指数短退避。
+    retry-max-attempts: ${AI_RETRY_MAX_ATTEMPTS:2}
+    retry-backoff-base-ms: ${AI_RETRY_BACKOFF_BASE_MS:500}
+    # 显式放宽 HTTP 明文 provider 端点（默认 false，仅内网/联调；明文会暴露 API key）。
+    allow-insecure-http: ${AI_ALLOW_INSECURE_HTTP:false}
+    # 命令域 M1（审批制）：独立 kill switch，默认关闭；模板白名单见 command-protocol-v1.md。
+    command:
+      enabled: ${AI_COMMAND_ENABLED:false}
+      approval-expire-minutes: ${AI_COMMAND_APPROVAL_EXPIRE_MINUTES:15}
+      execution-timeout-seconds: ${AI_COMMAND_EXECUTION_TIMEOUT_SECONDS:60}
+      result-max-bytes: ${AI_COMMAND_RESULT_MAX_BYTES:65536}
+      rate-limit-max-requests: ${AI_COMMAND_RATE_LIMIT_MAX_REQUESTS:10}
+      rate-limit-window-seconds: ${AI_COMMAND_RATE_LIMIT_WINDOW_SECONDS:3600}
+      audit-retention-days: ${AI_COMMAND_AUDIT_RETENTION_DAYS:30}
+      audit-cleanup-cron: ${AI_COMMAND_AUDIT_CLEANUP_CRON:0 45 3 * * ?}
+      audit-cleanup-enabled: ${AI_COMMAND_AUDIT_CLEANUP_ENABLED:true}
+      audit-cleanup-batch-size: ${AI_COMMAND_AUDIT_CLEANUP_BATCH_SIZE:1000}
+      audit-cleanup-max-batches-per-run: ${AI_COMMAND_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+      sweep-interval-seconds: ${AI_COMMAND_SWEEP_INTERVAL_SECONDS:30}
+      # 策略自动审批事后通知（M2 收口）：尽力而为推送，独立开关，默认关闭。
+      auto-approval:
+        notify-enabled: ${AI_COMMAND_AUTO_APPROVAL_NOTIFY_ENABLED:false}
+        notify-email: ${AI_COMMAND_AUTO_APPROVAL_NOTIFY_EMAIL:}
+        notify-dingtalk: ${AI_COMMAND_AUTO_APPROVAL_NOTIFY_DINGTALK:}
+        notify-webhook: ${AI_COMMAND_AUTO_APPROVAL_NOTIFY_WEBHOOK:}
+    # 告警智能解释（F1）：事件驱动，独立 kill switch，默认关闭。
+    explanation:
+      enabled: ${AI_EXPLANATION_ENABLED:false}
+      daily-token-budget: ${AI_EXPLANATION_DAILY_TOKEN_BUDGET:0}
+      audit-retention-days: ${AI_EXPLANATION_AUDIT_RETENTION_DAYS:30}
+      audit-cleanup-cron: ${AI_EXPLANATION_AUDIT_CLEANUP_CRON:0 0 4 * * ?}
+      audit-cleanup-enabled: ${AI_EXPLANATION_AUDIT_CLEANUP_ENABLED:true}
+      audit-cleanup-batch-size: ${AI_EXPLANATION_AUDIT_CLEANUP_BATCH_SIZE:1000}
+      audit-cleanup-max-batches-per-run: ${AI_EXPLANATION_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    # 运维问答（F2）：只读工具化问答，独立 kill switch，默认关闭；工具白名单见 module/ai/tools/AiReadOnlyTools。
+    qa:
+      enabled: ${AI_QA_ENABLED:false}
+      prompt-version: ${AI_QA_PROMPT_VERSION:ai-qa-v1}
+      max-tool-iterations: ${AI_QA_MAX_TOOL_ITERATIONS:6}
+      max-question-length: ${AI_QA_MAX_QUESTION_LENGTH:2000}
+      rate-limit-max-requests: ${AI_QA_RATE_LIMIT_MAX_REQUESTS:10}
+      rate-limit-window-seconds: ${AI_QA_RATE_LIMIT_WINDOW_SECONDS:3600}
+      daily-token-budget: ${AI_QA_DAILY_TOKEN_BUDGET:0}
+      audit-retention-days: ${AI_QA_AUDIT_RETENTION_DAYS:30}
+      audit-cleanup-cron: ${AI_QA_AUDIT_CLEANUP_CRON:0 15 4 * * ?}
+      audit-cleanup-enabled: ${AI_QA_AUDIT_CLEANUP_ENABLED:true}
+      audit-cleanup-batch-size: ${AI_QA_AUDIT_CLEANUP_BATCH_SIZE:1000}
+      audit-cleanup-max-batches-per-run: ${AI_QA_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    # 定时健康报告（F3）：调度生成，独立 kill switch，默认关闭。
+    report:
+      enabled: ${AI_REPORT_ENABLED:false}
+      prompt-version: ${AI_REPORT_PROMPT_VERSION:ai-health-report-v1}
+      generate-cron: ${AI_REPORT_GENERATE_CRON:0 30 7 * * ?}
+      rate-limit-max-requests: ${AI_REPORT_RATE_LIMIT_MAX_REQUESTS:10}
+      rate-limit-window-seconds: ${AI_REPORT_RATE_LIMIT_WINDOW_SECONDS:3600}
+      daily-token-budget: ${AI_REPORT_DAILY_TOKEN_BUDGET:0}
+      audit-retention-days: ${AI_REPORT_AUDIT_RETENTION_DAYS:90}
+      audit-cleanup-cron: ${AI_REPORT_AUDIT_CLEANUP_CRON:0 30 4 * * ?}
+      audit-cleanup-enabled: ${AI_REPORT_AUDIT_CLEANUP_ENABLED:true}
+      audit-cleanup-batch-size: ${AI_REPORT_AUDIT_CLEANUP_BATCH_SIZE:1000}
+      audit-cleanup-max-batches-per-run: ${AI_REPORT_AUDIT_CLEANUP_MAX_BATCHES_PER_RUN:100}
+      notify-enabled: ${AI_REPORT_NOTIFY_ENABLED:false}
+      notify-email: ${AI_REPORT_NOTIFY_EMAIL:}
+      notify-dingtalk: ${AI_REPORT_NOTIFY_DINGTALK:}
+      notify-webhook: ${AI_REPORT_NOTIFY_WEBHOOK:}
+  ssh-test-history:
+    retention-days: ${SSH_TEST_HISTORY_RETENTION_DAYS:90}
+    cleanup-cron: ${SSH_TEST_HISTORY_CLEANUP_CRON:0 0 3 * * ?}
+    cleanup-enabled: ${SSH_TEST_HISTORY_CLEANUP_ENABLED:true}
+    cleanup-batch-size: ${SSH_TEST_HISTORY_CLEANUP_BATCH_SIZE:1000}
+    cleanup-max-batches-per-run: ${SSH_TEST_HISTORY_CLEANUP_MAX_BATCHES_PER_RUN:100}
+  security:
+    aes-gcm-key: ${AES_GCM_KEY:}
+    # 登录防爆破（Redis 安全加固一期，2026-08-18）：窗口内每 IP 最大尝试次数与窗口秒数。
+    login-limit-max-attempts: ${LOGIN_LIMIT_MAX_ATTEMPTS:10}
+    login-limit-window-seconds: ${LOGIN_LIMIT_WINDOW_SECONDS:60}
+    # 注册防滥用（2026-08-29）：与登录独立计数，阈值更高以兼容首管理员并发验收（上限 20 并发）。
+    register-limit-max-attempts: ${REGISTER_LIMIT_MAX_ATTEMPTS:60}
+    register-limit-window-seconds: ${REGISTER_LIMIT_WINDOW_SECONDS:60}
+  agent:
+    register-key: ${AGENT_REGISTER_KEY:}
+    max-connections: ${AGENT_MAX_CONNECTIONS:128}
+    max-unauthenticated-connections: ${AGENT_MAX_UNAUTHENTICATED_CONNECTIONS:32}
+    max-tracked-client-ips: ${AGENT_MAX_TRACKED_CLIENT_IPS:4096}
+    handshake-rate-per-minute: ${AGENT_HANDSHAKE_RATE_PER_MINUTE:10}
+    heartbeat-rate-per-minute: ${AGENT_HEARTBEAT_RATE_PER_MINUTE:12}
+    heartbeat-burst: ${AGENT_HEARTBEAT_BURST:3}
+    heartbeat-timeout-seconds: ${AGENT_HEARTBEAT_TIMEOUT_SECONDS:90}
+    metrics-rate-per-minute: ${AGENT_METRICS_RATE_PER_MINUTE:24}
+    metrics-burst: ${AGENT_METRICS_BURST:6}
+    trusted-proxy-cidrs: ${AGENT_TRUSTED_PROXY_CIDRS:}
+  ssh:
+    connect-timeout-seconds: ${SSH_CONNECT_TIMEOUT_SECONDS:10}
+    socket-timeout-seconds: ${SSH_SOCKET_TIMEOUT_SECONDS:15}
+    total-timeout-seconds: ${SSH_TOTAL_TIMEOUT_SECONDS:30}
+    max-concurrent-connections: ${SSH_MAX_CONCURRENT_CONNECTIONS:8}
+    max-resolved-addresses: ${SSH_MAX_RESOLVED_ADDRESSES:8}
+    allowed-ports: ${SSH_ALLOWED_PORTS:22}
+    allowed-cidrs: ${SSH_ALLOWED_CIDRS:}
+    idle-timeout-minutes: ${SSH_IDLE_TIMEOUT_MINUTES:20}
+  metrics:
+    retention-days: ${METRICS_RETENTION_DAYS:10}
+    cleanup-cron: ${METRICS_CLEANUP_CRON:0 0 3 * * ?}
+    cleanup-batch-size: ${METRICS_CLEANUP_BATCH_SIZE:1000}
+    cleanup-max-batches-per-run: ${METRICS_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    ingestion-retention-days: ${METRICS_INGESTION_RETENTION_DAYS:7}
+    ingestion-cleanup-cron: ${METRICS_INGESTION_CLEANUP_CRON:0 0 3 * * ?}
+    ingestion-cleanup-batch-size: ${METRICS_INGESTION_CLEANUP_BATCH_SIZE:1000}
+    ingestion-cleanup-max-batches-per-run: ${METRICS_INGESTION_CLEANUP_MAX_BATCHES_PER_RUN:100}
+  terminal:
+    cleanup-cron: ${TERMINAL_CLEANUP_CRON:0 0 * * * ?}
+    max-sessions-per-user: ${TERMINAL_MAX_SESSIONS_PER_USER:2}
+    max-sessions-per-server: ${TERMINAL_MAX_SESSIONS_PER_SERVER:4}
+    max-operating-users: ${TERMINAL_MAX_OPERATING_USERS:5}
+    max-sessions: ${TERMINAL_MAX_SESSIONS:16}
+    idle-timeout-minutes: ${TERMINAL_IDLE_TIMEOUT_MINUTES:20}
+    max-session-hours: ${TERMINAL_MAX_SESSION_HOURS:8}
+    open-rate-per-minute: ${TERMINAL_OPEN_RATE_PER_MINUTE:6}
+    open-burst: ${TERMINAL_OPEN_BURST:2}
+    input-rate-per-minute: ${TERMINAL_INPUT_RATE_PER_MINUTE:600}
+    input-burst: ${TERMINAL_INPUT_BURST:120}
+    resize-rate-per-minute: ${TERMINAL_RESIZE_RATE_PER_MINUTE:60}
+    resize-burst: ${TERMINAL_RESIZE_BURST:20}
+    close-rate-per-minute: ${TERMINAL_CLOSE_RATE_PER_MINUTE:30}
+    close-burst: ${TERMINAL_CLOSE_BURST:10}
+    output-rate-bytes-per-second: ${TERMINAL_OUTPUT_RATE_BYTES_PER_SECOND:262144}
+    output-burst-bytes: ${TERMINAL_OUTPUT_BURST_BYTES:524288}
+    monitor-send-time-limit-millis: ${TERMINAL_MONITOR_SEND_TIME_LIMIT_MILLIS:5000}
+    monitor-buffer-size-bytes: ${TERMINAL_MONITOR_BUFFER_SIZE_BYTES:262144}
+  rabbitmq:
+    enabled: ${OUTBOX_ENABLED:true}
+    exchange: ${OUTBOX_EXCHANGE:susumonitor.events}
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:200}
+    batch-size: ${OUTBOX_BATCH_SIZE:100}
+    publish-timeout-ms: ${OUTBOX_PUBLISH_TIMEOUT_MS:5000}
+    max-backoff-seconds: ${OUTBOX_MAX_BACKOFF_SECONDS:300}
+    outbox-cleanup-enabled: ${OUTBOX_CLEANUP_ENABLED:true}
+    consume-stats-window-minutes: ${ALERT_CONSUME_STATS_WINDOW_MINUTES:60}
+    queue-monitor-enabled: ${ALERT_QUEUE_MONITOR_ENABLED:true}
+    queue-monitor-interval-ms: ${ALERT_QUEUE_MONITOR_INTERVAL_MS:60000}
+    queue-backlog-warn-threshold: ${ALERT_QUEUE_BACKLOG_WARN_THRESHOLD:10000}
+    outbox-retention-days: ${OUTBOX_RETENTION_DAYS:30}
+    outbox-cleanup-cron: ${OUTBOX_CLEANUP_CRON:0 30 3 * * ?}
+    outbox-cleanup-batch-size: ${OUTBOX_CLEANUP_BATCH_SIZE:1000}
+    outbox-cleanup-max-batches-per-run: ${OUTBOX_CLEANUP_MAX_BATCHES_PER_RUN:100}
+    consume-record-retention-days: ${CONSUME_RECORD_RETENTION_DAYS:30}
+    consume-record-cleanup-cron: ${CONSUME_RECORD_CLEANUP_CRON:0 0 3 * * ?}
+    consume-record-cleanup-enabled: ${CONSUME_RECORD_CLEANUP_ENABLED:true}
+    consume-record-cleanup-batch-size: ${CONSUME_RECORD_CLEANUP_BATCH_SIZE:1000}
+    consume-record-cleanup-max-batches-per-run: ${CONSUME_RECORD_CLEANUP_MAX_BATCHES_PER_RUN:100}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+    allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    allowed-headers: ${CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Correlation-ID}
+    max-age-seconds: ${CORS_MAX_AGE_SECONDS:3600}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
