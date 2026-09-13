@@ -68,6 +68,61 @@ class SshOutboundPolicyTests {
         assertThrows(IllegalArgumentException.class, () -> new SshOutboundPolicy(properties));
     }
 
+    /**
+     * 防御性回归（2026-09-14 安全评审复核）：默认空 CIDR 为 deny-all，
+     * 任何主机名/IP 在未显式配置允许网段时都必须被拒。
+     */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void emptyAllowedCidrsShouldDenyByDefault() {
+        SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of());
+
+        assertCategory(SshConnectionException.Category.TARGET_FORBIDDEN,
+                () -> policy.resolveAndValidate("192.0.2.10", ALLOWED_PORT));
+    }
+
+    /**
+     * 防御性回归：localhost 域名解析到环回地址，即使落在宽放 CIDR 内也因环回语义被拒，
+     * 证明解析后逐地址特殊语义校验与 CIDR 判定独立生效。
+     */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void localhostHostnameShouldBeRejectedEvenWithAllowAllCidr() {
+        SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("0.0.0.0/0"));
+
+        assertCategory(SshConnectionException.Category.TARGET_FORBIDDEN,
+                () -> policy.resolveAndValidate("localhost", ALLOWED_PORT));
+    }
+
+    /**
+     * 防御性回归：链路本地（非 metadata）、组播与未指定地址在宽放 CIDR 下仍被拒。
+     */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void specialUseAddressesShouldBeRejectedUnderAllowAllCidr() {
+        SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("0.0.0.0/0"));
+
+        assertCategory(SshConnectionException.Category.TARGET_FORBIDDEN,
+                () -> policy.resolveAndValidate("169.254.1.1", ALLOWED_PORT));
+        assertCategory(SshConnectionException.Category.TARGET_FORBIDDEN,
+                () -> policy.resolveAndValidate("224.0.0.1", ALLOWED_PORT));
+        assertCategory(SshConnectionException.Category.TARGET_FORBIDDEN,
+                () -> policy.resolveAndValidate("0.0.0.0", ALLOWED_PORT));
+    }
+
+    /**
+     * 防御性回归：IPv6 云 metadata 地址在 IPv6 宽放 CIDR 下仍被拒绝，
+     * 覆盖 normalize 后的 metadata 名单匹配路径。
+     */
+    // 将当前方法注册为 JUnit 5 测试用例。
+    @Test
+    void ipv6CloudMetadataShouldBeRejectedUnderIpv6AllowAllCidr() {
+        SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("::/0"));
+
+        assertCategory(SshConnectionException.Category.TARGET_FORBIDDEN,
+                () -> policy.resolveAndValidate("fd00:ec2::254", ALLOWED_PORT));
+    }
+
     /** 使用指定端口和 CIDR 创建不依赖 Spring 上下文的出站策略。 */
     private SshOutboundPolicy policy(List<Integer> ports, List<String> cidrs) {
         AppProperties properties = new AppProperties();
