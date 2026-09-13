@@ -5,6 +5,7 @@ import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.ai.entity.AiUserProviderConfigEntity;
 import com.susumonitor.server.module.ai.mapper.AiUserProviderConfigMapper;
+import com.susumonitor.server.module.ai.provider.AiEgressPolicy;
 import com.susumonitor.server.module.ai.provider.AiProviderException;
 import com.susumonitor.server.module.ai.provider.OpenAiCompatibleProvider;
 import com.susumonitor.server.module.ai.vo.AiProviderConfigTestVo;
@@ -23,7 +24,9 @@ import org.springframework.web.client.RestClient;
  * <p>安全契约：api_key 仅以 AES-256-GCM 密文落库（AAD 绑定 user_id）；明文只在
  * 本服务内解密后交给 {@link AiProviderResolver} 构造 provider 或执行连通性测试，
  * 绝不进入日志、审计表或 VO（对外仅暴露掩码）。endpoint 默认强制 HTTPS，仅当全局
- * {@code allow-insecure-http=true} 时放宽 http://（与既有全局 provider 同一口径）。</p>
+ * {@code allow-insecure-http=true} 时放宽 http://（与既有全局 provider 同一口径）。
+ * 保存与连通性测试前执行 {@link AiEgressPolicy} 出站地址校验（SSRF 防护，
+ * deny-private 默认拒绝环回/私网/metadata，allow-private 放行内网网关）。</p>
  */
 @Slf4j
 @Service
@@ -46,18 +49,21 @@ public class AiUserProviderConfigService {
     private final ObjectProvider<RestClient.Builder> restClientBuilder;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final AppProperties appProperties;
+    /** 个人 Provider 出站地址策略：保存/测试期预检 + 传入测试用 provider 做调用期校验。 */
+    private final AiEgressPolicy egressPolicy;
 
-    /** 注入 Mapper、凭据密码器、原型 RestClient Builder 与全局配置。 */
+    /** 注入 Mapper、凭据密码器、原型 RestClient Builder、全局配置与出站地址策略。 */
     public AiUserProviderConfigService(AiUserProviderConfigMapper mapper,
             com.susumonitor.server.security.CredentialCipher cipher,
             ObjectProvider<RestClient.Builder> restClientBuilder,
             com.fasterxml.jackson.databind.ObjectMapper objectMapper,
-            AppProperties appProperties) {
+            AppProperties appProperties, AiEgressPolicy egressPolicy) {
         this.mapper = mapper;
         this.cipher = cipher;
         this.restClientBuilder = restClientBuilder;
         this.objectMapper = objectMapper;
         this.appProperties = appProperties;
+        this.egressPolicy = egressPolicy;
     }
 
     /** 解密后的个人配置（仅内存传递，禁止日志/序列化）。 */
@@ -164,15 +170,20 @@ public class AiUserProviderConfigService {
         long started = System.nanoTime();
         try {
             OpenAiCompatibleProvider provider = new OpenAiCompatibleProvider(
-                    restClientBuilder.getObject(), objectMapper, effective);
+                    restClientBuilder.getObject(), objectMapper, effective, egressPolicy);
             provider.askWithoutTools("ping", "{}");
             vo.setOk(true);
         } catch (AiProviderException exception) {
             vo.setOk(false);
             vo.setErrorCode(exception.getErrorCode().getCode());
-            vo.setMessage(exception.getErrorCode() == ErrorCode.AI_DISABLED_OR_REDACTION_FAILED
-                    ? "endpoint 或 key 不满足服务端校验要求（HTTPS/非空）"
-                    : "AI 服务商调用失败");
+            vo.setMessage(switch (exception.getErrorCode()) {
+                // 配置校验失败单独给可读原因；出站策略拦截提示改用公网可达地址。
+                case AI_DISABLED_OR_REDACTION_FAILED ->
+                        "endpoint 或 key 不满足服务端校验要求（HTTPS/非空）";
+                case AI_PROVIDER_ENDPOINT_BLOCKED ->
+                        "endpoint 被出站策略拒绝（解析到环回/私网/云 metadata 地址）";
+                default -> "AI 服务商调用失败";
+            });
         } finally {
             vo.setLatencyMs((System.nanoTime() - started) / 1_000_000);
         }
@@ -191,7 +202,10 @@ public class AiUserProviderConfigService {
         return copy;
     }
 
-    /** endpoint 校验：scheme 白名单（HTTPS 默认，HTTP 需全局显式放宽）、长度与可解析性。 */
+    /**
+     * endpoint 校验：scheme 白名单（HTTPS 默认，HTTP 需全局显式放宽）、长度、可解析性
+     * 与出站地址策略（deny-private 时拒绝解析到环回/私网/metadata 的 endpoint，SSRF 防护）。
+     */
     private void validateEndpoint(String baseUrl) {
         if (baseUrl == null || baseUrl.isBlank() || baseUrl.length() > MAX_URL_LENGTH
                 || baseUrl.chars().anyMatch(Character::isWhitespace)) {
@@ -209,6 +223,10 @@ public class AiUserProviderConfigService {
                 throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
             }
         } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
+        }
+        // 出站地址校验放在 scheme/格式校验之后；allow-private 策略下策略内部直接放行。
+        if (!egressPolicy.check(baseUrl).allowed()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER);
         }
     }

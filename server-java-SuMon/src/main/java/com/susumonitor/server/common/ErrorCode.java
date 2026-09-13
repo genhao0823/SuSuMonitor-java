@@ -41,6 +41,7 @@ public enum ErrorCode {
     AI_PROVIDER_UNAVAILABLE(50303, "AI provider unavailable", HttpStatus.BAD_GATEWAY),
     AI_DISABLED_OR_REDACTION_FAILED(50304, "AI diagnosis unavailable", HttpStatus.SERVICE_UNAVAILABLE),
     AI_RESPONSE_INVALID(50305, "AI provider response invalid", HttpStatus.BAD_GATEWAY),
+    AI_PROVIDER_ENDPOINT_BLOCKED(50306, "AI provider endpoint blocked", HttpStatus.BAD_GATEWAY),
     AI_PROVIDER_TIMEOUT(50401, "AI provider timeout", HttpStatus.GATEWAY_TIMEOUT),
     COMMAND_PARAM_INVALID(40004, "command param invalid", HttpStatus.BAD_REQUEST),
     COMMAND_RUN_NOT_FOUND(40404, "command run not found", HttpStatus.NOT_FOUND),

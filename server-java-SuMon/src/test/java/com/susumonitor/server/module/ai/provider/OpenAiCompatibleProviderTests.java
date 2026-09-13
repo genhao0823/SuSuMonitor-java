@@ -113,6 +113,20 @@ class OpenAiCompatibleProviderTests {
         mockServer.verify();
     }
 
+    /** deny-private 下个人 Provider 指向环回地址：出站前以 50306 拦截，不发出任何 HTTP 请求。 */
+    @Test
+    void shouldBlockPrivateEndpointBeforeRequestForUserProvider() {
+        appProperties.getAi().setBaseUrl("https://127.0.0.1:9/v1");
+        provider = new OpenAiCompatibleProvider(restClientBuilder, objectMapper, appProperties.getAi(),
+                new AiEgressPolicy(appProperties));
+
+        AiProviderException exception = assertThrows(AiProviderException.class,
+                () -> provider.diagnose("why high?", context()));
+
+        assertEquals(ErrorCode.AI_PROVIDER_ENDPOINT_BLOCKED, exception.getErrorCode());
+        mockServer.verify();
+    }
+
     /** provider 429 响应映射为 AI 限流错误。 */
     @Test
     void shouldMapRateLimitResponse() {

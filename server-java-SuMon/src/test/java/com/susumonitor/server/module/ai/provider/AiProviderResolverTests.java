@@ -35,6 +35,7 @@ class AiProviderResolverTests {
     @Mock private ObjectProvider<SpringAiChatClient> globalToolClient;
     @Mock private ObjectProvider<AiReadOnlyTools> qaTools;
     @Mock private ObjectProvider<RestClient.Builder> restClientBuilder;
+    @Mock private AiEgressPolicy egressPolicy;
 
     private AppProperties appProperties;
     private AiProviderResolver resolver;
@@ -49,7 +50,7 @@ class AiProviderResolverTests {
         ai.setApiKey("global-key");
         ai.setModel("global-model");
         resolver = new AiProviderResolver(configService, globalProvider, globalToolClient, qaTools,
-                restClientBuilder, new com.fasterxml.jackson.databind.ObjectMapper(), appProperties);
+                restClientBuilder, new com.fasterxml.jackson.databind.ObjectMapper(), appProperties, egressPolicy);
         when(restClientBuilder.getObject()).thenReturn(RestClient.builder());
     }
 

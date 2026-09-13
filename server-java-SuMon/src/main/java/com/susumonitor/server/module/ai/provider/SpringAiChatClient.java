@@ -40,11 +40,14 @@ public class SpringAiChatClient {
     private final AiReadOnlyTools tools;
     private final ChatClient chatClient;
 
+    /** 个人 Provider 出站地址策略；全局实例为 null（运维配置的 endpoint 不做地址限制）。 */
+    private final AiEgressPolicy egressPolicy;
+
     /** 手动装配 OpenAI 兼容模型与 ChatClient；超时与诊断 provider 共用同一配置。 */
     // 类中另有按用户配置的公共构造器；必须显式指定 Spring 装配入口，避免多构造器歧义。
     @org.springframework.beans.factory.annotation.Autowired
     public SpringAiChatClient(AppProperties appProperties, AiReadOnlyTools tools) {
-        this(appProperties, tools, appProperties.getAi());
+        this(appProperties, tools, appProperties.getAi(), null);
     }
 
     /**
@@ -58,8 +61,25 @@ public class SpringAiChatClient {
      * @param effectiveAi 解析后的生效配置
      */
     public SpringAiChatClient(AppProperties appProperties, AiReadOnlyTools tools, AppProperties.Ai effectiveAi) {
+        this(appProperties, tools, effectiveAi, null);
+    }
+
+    /**
+     * 按用户自定义配置构造独立实例并挂接出站地址策略（SSRF 防护）。
+     *
+     * <p>与三参重载的唯一差异：非空 {@code egressPolicy} 使每次出站前执行
+     * {@link AiEgressPolicy} 地址校验（deny-private 时拒绝环回/私网/metadata）。</p>
+     *
+     * @param appProperties 应用配置（提供超时等全局参数）
+     * @param tools 只读工具注册表（全局单例）
+     * @param effectiveAi 解析后的生效配置
+     * @param egressPolicy 个人 Provider 出站地址策略（非 null 启用调用前校验）
+     */
+    public SpringAiChatClient(AppProperties appProperties, AiReadOnlyTools tools, AppProperties.Ai effectiveAi,
+            AiEgressPolicy egressPolicy) {
         this.ai = effectiveAi;
         this.tools = tools;
+        this.egressPolicy = egressPolicy;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(ai.getConnectTimeoutMs());
         requestFactory.setReadTimeout(ai.getReadTimeoutMs());
@@ -91,6 +111,7 @@ public class SpringAiChatClient {
      */
     public AiQaAnswer ask(String question) {
         validateConfiguration(ai);
+        validateEgress();
         ChatResponse response;
         try {
             response = chatClient.prompt()
@@ -143,6 +164,20 @@ public class SpringAiChatClient {
         if (blank(ai.getBaseUrl()) || blank(ai.getApiKey()) || blank(ai.getModel())
                 || (!https && !insecureHttp)) {
             throw new AiProviderException(ErrorCode.AI_DISABLED_OR_REDACTION_FAILED);
+        }
+    }
+
+    /**
+     * 个人 Provider 出站前地址校验（SSRF 防护的调用期闸门）：仅按用户配置构造的实例
+     * （egressPolicy 非空）执行；拦截以 50306 专用错误码直达调用方，不与网络错误混同。
+     */
+    private void validateEgress() {
+        if (egressPolicy == null) {
+            return;
+        }
+        AiEgressPolicy.Verdict verdict = egressPolicy.check(ai.getBaseUrl());
+        if (!verdict.allowed()) {
+            throw new AiProviderException(ErrorCode.AI_PROVIDER_ENDPOINT_BLOCKED);
         }
     }
 

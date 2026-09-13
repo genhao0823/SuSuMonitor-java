@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.util.ArrayList;
 import java.util.List;
@@ -2199,6 +2200,13 @@ public class AppProperties {
         // 开启后允许 http:// 但其他 scheme 始终拒绝。明文传输会暴露 API key。
         private boolean allowInsecureHttp = false;
 
+        // 个人 Provider 出站地址策略（SSRF 防护，2026-09-14 安全评审）：deny-private（默认）拒绝
+        // 解析结果为环回/私网/链路本地/组播/云 metadata/ULA 的 endpoint；allow-private 放行内网
+        // 网关场景（与 allow-insecure-http 配套）。仅约束按个人配置构造的 provider；全局 Provider 不受限。
+        @Pattern(regexp = "deny-private|allow-private",
+                message = "AI user provider egress policy must be deny-private or allow-private")
+        private String userProviderEgressPolicy = "deny-private";
+
         public int getRateLimitMaxRequests() { return rateLimitMaxRequests; }
         public void setRateLimitMaxRequests(int value) { rateLimitMaxRequests = value; }
         public int getRateLimitWindowSeconds() { return rateLimitWindowSeconds; }
@@ -2211,6 +2219,8 @@ public class AppProperties {
         public void setRetryBackoffBaseMs(int value) { retryBackoffBaseMs = value; }
         public boolean isAllowInsecureHttp() { return allowInsecureHttp; }
         public void setAllowInsecureHttp(boolean value) { allowInsecureHttp = value; }
+        public String getUserProviderEgressPolicy() { return userProviderEgressPolicy; }
+        public void setUserProviderEgressPolicy(String value) { userProviderEgressPolicy = value; }
 
         // 命令域 M1（审批制）子配置：独立于只读诊断的 kill switch 与治理参数。
         @Valid

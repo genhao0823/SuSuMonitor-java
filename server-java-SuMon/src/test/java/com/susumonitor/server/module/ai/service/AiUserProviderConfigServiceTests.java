@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +16,7 @@ import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.ai.entity.AiUserProviderConfigEntity;
 import com.susumonitor.server.module.ai.mapper.AiUserProviderConfigMapper;
+import com.susumonitor.server.module.ai.provider.AiEgressPolicy;
 import com.susumonitor.server.module.ai.vo.AiProviderConfigVo;
 import com.susumonitor.server.security.CredentialCipher;
 import java.util.List;
@@ -39,6 +41,7 @@ class AiUserProviderConfigServiceTests {
 
     @Mock private AiUserProviderConfigMapper mapper;
     @Mock private ObjectProvider<RestClient.Builder> restClientBuilder;
+    @Mock private AiEgressPolicy egressPolicy;
 
     private CredentialCipher cipher;
     private AppProperties appProperties;
@@ -58,8 +61,10 @@ class AiUserProviderConfigServiceTests {
         appProperties = new AppProperties();
         appProperties.getAi().setEnabled(true);
         appProperties.getAi().setAllowInsecureHttp(false);
+        // egress 策略默认放行：本类聚焦 scheme/掩码/密文语义，出站拦截用例单独覆盖。
+        when(egressPolicy.check(any())).thenReturn(new AiEgressPolicy.Verdict(true, null));
         service = new AiUserProviderConfigService(mapper, cipher, restClientBuilder,
-                new com.fasterxml.jackson.databind.ObjectMapper(), appProperties);
+                new com.fasterxml.jackson.databind.ObjectMapper(), appProperties, egressPolicy);
     }
 
     /** 保存时 api_key 以密文落库且可按用户解密回原文，绝不存明文。 */
@@ -113,8 +118,29 @@ class AiUserProviderConfigServiceTests {
 
         appProperties.getAi().setAllowInsecureHttp(true);
         when(mapper.upsert(any())).thenReturn(1);
-        service.upsert(USER_ID, "http://127.0.0.1:8045/v1", "sk-key-1234", "m", true);
+        // 放行分支改用公网字面量：本用例只验证 scheme 门，不与出站地址策略语义交叉。
+        service.upsert(USER_ID, "http://93.184.216.34:8045/v1", "sk-key-1234", "m", true);
         verify(mapper).upsert(any());
+    }
+
+    /** deny-private 出站策略拦截私网 endpoint：保存阶段即拒绝且不触达 Mapper。 */
+    @Test
+    void upsertShouldRejectEndpointBlockedByEgressPolicy() {
+        when(egressPolicy.check(any())).thenReturn(
+                new AiEgressPolicy.Verdict(false, "endpoint 解析到受限地址（环回/私网/链路本地/云 metadata）"));
+
+        assertThrows(BusinessException.class,
+                () -> service.upsert(USER_ID, "https://internal-gateway.example.test/v1", "sk-key-1234", "m", true));
+        verify(mapper, times(0)).upsert(any());
+    }
+
+    /** 连通性测试同样被出站策略预检拦截，不发起真实调用。 */
+    @Test
+    void testShouldRejectEndpointBlockedByEgressPolicy() {
+        when(egressPolicy.check(any())).thenReturn(new AiEgressPolicy.Verdict(false, "blocked"));
+
+        assertThrows(BusinessException.class,
+                () -> service.test(USER_ID, "https://169.254.169.254/v1", "sk-key-1234", "m"));
     }
 
     /** 配置视图只返回掩码，且能完整还原 provider/base_url/model 等非敏感字段。 */

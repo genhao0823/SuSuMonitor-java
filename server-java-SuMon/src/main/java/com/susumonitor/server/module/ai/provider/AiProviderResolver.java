@@ -51,6 +51,8 @@ public class AiProviderResolver {
     private final ObjectProvider<RestClient.Builder> restClientBuilder;
     private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
+    /** 个人 Provider 出站地址策略：传给按用户配置构造的实例，启用调用前 SSRF 校验。 */
+    private final AiEgressPolicy egressPolicy;
     private final ConcurrentHashMap<Long, ProviderCacheEntry> providerCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, ChatClientCacheEntry> chatClientCache = new ConcurrentHashMap<>();
 
@@ -60,7 +62,7 @@ public class AiProviderResolver {
             ObjectProvider<SpringAiChatClient> globalToolClient,
             ObjectProvider<AiReadOnlyTools> qaTools,
             ObjectProvider<RestClient.Builder> restClientBuilder,
-            ObjectMapper objectMapper, AppProperties appProperties) {
+            ObjectMapper objectMapper, AppProperties appProperties, AiEgressPolicy egressPolicy) {
         this.configService = configService;
         this.globalProvider = globalProvider;
         this.globalToolClient = globalToolClient;
@@ -68,6 +70,7 @@ public class AiProviderResolver {
         this.restClientBuilder = restClientBuilder;
         this.objectMapper = objectMapper;
         this.appProperties = appProperties;
+        this.egressPolicy = egressPolicy;
     }
 
     /**
@@ -137,7 +140,7 @@ public class AiProviderResolver {
             }
             evictIfNeeded(providerCache.size(), chatClientCache.size());
             return new ProviderCacheEntry(fingerprint, new OpenAiCompatibleProvider(
-                    restClientBuilder.getObject(), objectMapper, effective));
+                    restClientBuilder.getObject(), objectMapper, effective, egressPolicy));
         });
         return entry.provider();
     }
@@ -154,7 +157,7 @@ public class AiProviderResolver {
             }
             evictIfNeeded(providerCache.size(), chatClientCache.size());
             return new ChatClientCacheEntry(fingerprint,
-                    new SpringAiChatClient(appProperties, tools, effective));
+                    new SpringAiChatClient(appProperties, tools, effective, egressPolicy));
         });
         return entry.client();
     }
@@ -167,8 +170,11 @@ public class AiProviderResolver {
         }
     }
 
+    /** 指纹失配时重建并替换缓存条目；compute 保证同一用户并发解析只建一次。
+     *  指纹追加出站策略值：策略在 deny-private/allow-private 间切换后旧缓存立即失配重建。 */
     private String fingerprint(AiUserProviderConfigService.DecryptedUserAiConfig config) {
         return config.baseUrl() + "|" + config.model() + "|" + config.enabled()
-                + "|" + config.apiKey();
+                + "|" + config.apiKey()
+                + "|" + appProperties.getAi().getUserProviderEgressPolicy();
     }
 }

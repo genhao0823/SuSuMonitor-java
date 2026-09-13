@@ -120,11 +120,14 @@ public class OpenAiCompatibleProvider implements AiProvider {
     private final ObjectMapper objectMapper;
     private final OpenAiChatModel chatModel;
 
+    /** 个人 Provider 出站地址策略；全局实例为 null（运维配置的 endpoint 不做地址限制）。 */
+    private final AiEgressPolicy egressPolicy;
+
     /** 指定 Spring 使用本构造器注入；类中另有测试专用包级构造器。 */
     @Autowired
     public OpenAiCompatibleProvider(AppProperties appProperties, RestClient.Builder builder,
             ObjectMapper objectMapper) {
-        this(builder, objectMapper, appProperties.getAi(), false);
+        this(builder, objectMapper, appProperties.getAi(), false, null);
     }
 
     /**
@@ -139,7 +142,23 @@ public class OpenAiCompatibleProvider implements AiProvider {
      */
     public OpenAiCompatibleProvider(RestClient.Builder builder, ObjectMapper objectMapper,
             AppProperties.Ai effectiveAi) {
-        this(builder, objectMapper, effectiveAi, false);
+        this(builder, objectMapper, effectiveAi, false, null);
+    }
+
+    /**
+     * 按用户自定义配置构造独立实例并挂接出站地址策略（SSRF 防护）。
+     *
+     * <p>与三参重载的唯一差异：非空 {@code egressPolicy} 使每次出站前执行
+     * {@link AiEgressPolicy} 地址校验（deny-private 时拒绝环回/私网/metadata）。</p>
+     *
+     * @param builder 独立的 RestClient Builder（原型 Bean，可安全定制请求工厂）
+     * @param objectMapper 用于序列化上下文与解析响应的 JSON 映射器
+     * @param effectiveAi 解析后的生效配置
+     * @param egressPolicy 个人 Provider 出站地址策略（非 null 启用调用前校验）
+     */
+    public OpenAiCompatibleProvider(RestClient.Builder builder, ObjectMapper objectMapper,
+            AppProperties.Ai effectiveAi, AiEgressPolicy egressPolicy) {
+        this(builder, objectMapper, effectiveAi, false, egressPolicy);
     }
 
     /**
@@ -152,12 +171,13 @@ public class OpenAiCompatibleProvider implements AiProvider {
      */
     OpenAiCompatibleProvider(AppProperties appProperties, RestClient.Builder builder, ObjectMapper objectMapper,
             boolean preserveBuilderFactory) {
-        this(builder, objectMapper, appProperties.getAi(), preserveBuilderFactory);
+        this(builder, objectMapper, appProperties.getAi(), preserveBuilderFactory, null);
     }
 
     OpenAiCompatibleProvider(RestClient.Builder builder, ObjectMapper objectMapper,
-            AppProperties.Ai effectiveAi, boolean preserveBuilderFactory) {
+            AppProperties.Ai effectiveAi, boolean preserveBuilderFactory, AiEgressPolicy egressPolicy) {
         this.ai = effectiveAi;
+        this.egressPolicy = egressPolicy;
         this.objectMapper = objectMapper.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder()
                 // baseUrl 为空时仅作占位：validateConfiguration 在出站前 fail-closed 拒绝。
@@ -214,6 +234,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
      */
     private ChatResult chat(String systemPrompt, String userContent, boolean jsonObjectResponse) {
         validateConfiguration(ai);
+        validateEgress();
         OpenAiChatOptions.Builder options = OpenAiChatOptions.builder()
                 .model(ai.getModel())
                 .temperature(0.0);
@@ -530,6 +551,21 @@ public class OpenAiCompatibleProvider implements AiProvider {
                 || blank(ai.getBaseUrl()) || blank(ai.getApiKey()) || blank(ai.getModel())
                 || (!https && !insecureHttp)) {
             throw new AiProviderException(ErrorCode.AI_DISABLED_OR_REDACTION_FAILED);
+        }
+    }
+
+    /**
+     * 个人 Provider 出站前地址校验（SSRF 防护的调用期闸门）：仅按用户配置构造的实例
+     * （egressPolicy 非空）执行；放在 chat() 入口、重试模板之外，保证拦截以
+     * 50306 专用错误码直达调用方，不会进入 429/网络错误的退避重试路径。
+     */
+    private void validateEgress() {
+        if (egressPolicy == null) {
+            return;
+        }
+        AiEgressPolicy.Verdict verdict = egressPolicy.check(ai.getBaseUrl());
+        if (!verdict.allowed()) {
+            throw new AiProviderException(ErrorCode.AI_PROVIDER_ENDPOINT_BLOCKED);
         }
     }
 
