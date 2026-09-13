@@ -139,9 +139,9 @@ check('R3', updatedRule.status === 200 && updatedRule.body.code === 0,
   `PUT 规则成功（HTTP ${updatedRule.status} / code=${updatedRule.body.code}）`)
 
 // ---- R4 列表接口核对更新（后端无单详情路由：GET /{id} 返回 404/40400，见 Bug-fix/2026-09-14-unmapped-api-path-500.md）----
-const ruleList = await api('/api/alerts/rules', { token: adminToken })
-const ruleDetail = ruleList.body.data.find((rule) => rule.id === ruleId)
-check('R4', ruleList.status === 200 && ruleDetail && Number(ruleDetail.threshold_value) === 90
+const ruleListAfterUpdate = await api('/api/alerts/rules', { token: adminToken })
+const ruleDetail = ruleListAfterUpdate.body.data.find((rule) => rule.id === ruleId)
+check('R4', ruleListAfterUpdate.status === 200 && ruleDetail && Number(ruleDetail.threshold_value) === 90
   && ruleDetail.level === 'critical',
   `列表中显示更新后的 threshold_value=90 / level=critical（实际 ${ruleDetail?.threshold_value} / ${ruleDetail?.level}）`)
 
