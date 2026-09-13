@@ -89,7 +89,7 @@ public class AiEgressPolicy {
         }
         InetAddress[] resolved;
         try {
-            resolved = InetAddress.getAllByName(host);
+            resolved = resolveAllByName(host);
         } catch (UnknownHostException exception) {
             return Verdict.block("endpoint 主机名无法解析");
         }
@@ -103,6 +103,19 @@ public class AiEgressPolicy {
             }
         }
         return Verdict.allow();
+    }
+
+    /**
+     * DNS 解析钩子：默认走系统解析器；测试可覆写以注入确定性结果——
+     * 本机/内网 DNS 存在 NXDOMAIN 劫持（任意域名都可能返回地址），依赖真实解析
+     * 会使"解析失败被拒"的用例不可复现。
+     *
+     * @param host 主机名
+     * @return 解析结果数组
+     * @throws UnknownHostException 解析失败
+     */
+    InetAddress[] resolveAllByName(String host) throws UnknownHostException {
+        return InetAddress.getAllByName(host);
     }
 
     /**

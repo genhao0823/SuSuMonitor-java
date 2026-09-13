@@ -60,10 +60,16 @@ class AiEgressPolicyTests {
         assertFalse(policy.check("https://localhost/v1").allowed());
     }
 
-    /** 无法解析的域名按 fail-closed 拦截（不放过格式异常的输入）。 */
+    /** 无法解析的域名按 fail-closed 拦截（注入确定性失败解析器：本机 DNS 存在 NXDOMAIN 劫持）。 */
     @Test
     void unresolvableHostnameShouldBeBlocked() {
-        assertTrue(policy.check("https://nonexistent.invalid/v1").reason().contains("无法解析"));
+        AiEgressPolicy failingResolverPolicy = new AiEgressPolicy(appProperties) {
+            @Override
+            java.net.InetAddress[] resolveAllByName(String host) throws java.net.UnknownHostException {
+                throw new java.net.UnknownHostException(host);
+            }
+        };
+        assertTrue(failingResolverPolicy.check("https://nonexistent.invalid/v1").reason().contains("无法解析"));
     }
 
     /** allow-private 开关直接放行私网地址：内网网关场景由运维显式选择。 */

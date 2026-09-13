@@ -1,5 +1,6 @@
 package com.susumonitor.server.security;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -123,5 +124,28 @@ class CredentialCipherTests {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> credentialCipher.decrypt(SERVER_ID, CREDENTIAL_TYPE, " "));
+    }
+
+    /**
+     * 验证 char[] 直解路径：解密结果与明文一致（2026-09-14 安全评审加固，
+     * 全程不创建 String、中间字节缓冲就地清零——清零为内部行为，经代码评审确认）。
+     */
+    @Test
+    void decryptToCharArrayShouldRestorePlaintext() {
+        String envelope = credentialCipher.encrypt(SERVER_ID, CREDENTIAL_TYPE, PLAINTEXT);
+
+        char[] decrypted = credentialCipher.decryptToCharArray(SERVER_ID, CREDENTIAL_TYPE, envelope);
+
+        assertArrayEquals(PLAINTEXT.toCharArray(), decrypted);
+    }
+
+    /** 验证 char[] 直解路径同样受 AAD 上下文约束：换服务器 ID 无法解密。 */
+    @Test
+    void decryptToCharArrayWithWrongServerIdShouldFail() {
+        String envelope = credentialCipher.encrypt(SERVER_ID, CREDENTIAL_TYPE, PLAINTEXT);
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> credentialCipher.decryptToCharArray(SERVER_ID + 1, CREDENTIAL_TYPE, envelope));
     }
 }

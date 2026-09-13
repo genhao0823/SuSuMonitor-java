@@ -188,11 +188,12 @@ class ServerSshServiceTests {
     void passwordShouldBeDecryptedLazily() {
         ServerEntity server = passwordServer(true);
         when(serverMapper.selectActiveServerSshById(SERVER_ID)).thenReturn(server);
-        when(credentialCipher.decrypt(SERVER_ID, "ssh_password", "password-cipher"))
-                .thenReturn("test-password");
+        when(credentialCipher.decryptToCharArray(SERVER_ID, "ssh_password", "password-cipher"))
+                .thenReturn("test-password".toCharArray());
         when(connectionTester.testPassword(
                 eq(HOST), eq(PORT), eq("operator"), eq(ALGORITHM), eq(FIRST_FINGERPRINT), any()))
                 .thenAnswer(invocation -> {
+                    // 密码走 char[] 直解路径：不得触发返回 String 的 decrypt（避免中间 String 驻留）。
                     verify(credentialCipher, never()).decrypt(any(), anyString(), anyString());
                     Supplier<char[]> passwordSupplier = invocation.getArgument(5);
                     char[] password = passwordSupplier.get();
@@ -226,6 +227,7 @@ class ServerSshServiceTests {
 
         assertError(ErrorCode.RESOURCE_CONFLICT, () -> serverSshService.testConnection(SERVER_ID));
 
+        verify(credentialCipher, never()).decryptToCharArray(any(), anyString(), anyString());
         verify(credentialCipher, never()).decrypt(any(), anyString(), anyString());
     }
 
@@ -239,8 +241,8 @@ class ServerSshServiceTests {
         when(serverMapper.selectActiveServerSshById(SERVER_ID)).thenReturn(server);
         when(credentialCipher.decrypt(SERVER_ID, "ssh_private_key", "key-cipher"))
                 .thenReturn("test-private-key");
-        when(credentialCipher.decrypt(SERVER_ID, "ssh_private_key_passphrase", "passphrase-cipher"))
-                .thenReturn("test-passphrase");
+        when(credentialCipher.decryptToCharArray(SERVER_ID, "ssh_private_key_passphrase", "passphrase-cipher"))
+                .thenReturn("test-passphrase".toCharArray());
         when(connectionTester.testPrivateKey(
                 eq(HOST), eq(PORT), eq("operator"), eq(ALGORITHM), eq(FIRST_FINGERPRINT), any(), any()))
                 .thenAnswer(invocation -> {

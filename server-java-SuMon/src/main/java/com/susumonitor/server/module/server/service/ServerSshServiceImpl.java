@@ -117,21 +117,24 @@ public class ServerSshServiceImpl implements ServerSshService {
                         server.getSshHostKeyAlgorithm(), server.getSshHostKeyFingerprint(),
                         () -> {
                             assertSshSnapshotCurrent(server);
-                            return decrypt(server, PASSWORD_CREDENTIAL_TYPE,
-                                    server.getSshPasswordEncrypted()).toCharArray();
+                            // 密码走 char[] 直解路径：全程不创建 String，缩小凭据堆驻留面（2026-09-14 加固）。
+                            return credentialCipher.decryptToCharArray(server.getId(), PASSWORD_CREDENTIAL_TYPE,
+                                    server.getSshPasswordEncrypted());
                         });
             } else if (PRIVATE_KEY_AUTH_TYPE.equals(server.getSshAuthType())) {
                 result = connectionTester.testPrivateKey(server.getSshHost(), server.getSshPort(), server.getSshUser(),
                         server.getSshHostKeyAlgorithm(), server.getSshHostKeyFingerprint(),
                         () -> {
                             assertSshSnapshotCurrent(server);
+                            // 私钥受 SSHJ loadKeys(String,…) API 限制仍以 String 解密，为已知残留（见开发日志）。
                             return decrypt(server, PRIVATE_KEY_CREDENTIAL_TYPE, server.getSshPrivateKeyEncrypted());
                         },
                         () -> {
                             assertSshSnapshotCurrent(server);
                             return server.getSshPrivateKeyPassphraseEncrypted() == null ? null
-                                    : decrypt(server, PASSPHRASE_CREDENTIAL_TYPE,
-                                            server.getSshPrivateKeyPassphraseEncrypted()).toCharArray();
+                                    // 口令与密码同口径：char[] 直解，不产生中间 String。
+                                    : credentialCipher.decryptToCharArray(server.getId(), PASSPHRASE_CREDENTIAL_TYPE,
+                                            server.getSshPrivateKeyPassphraseEncrypted());
                         });
             } else {
                 throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);

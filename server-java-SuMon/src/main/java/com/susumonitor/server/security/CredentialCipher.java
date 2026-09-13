@@ -1,8 +1,11 @@
 package com.susumonitor.server.security;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Set;
 import javax.crypto.Cipher;
@@ -115,6 +118,59 @@ public class CredentialCipher {
         try {
             Cipher cipher = createCipher(Cipher.DECRYPT_MODE, serverId, credentialType, iv);
             return new String(cipher.doFinal(encryptedBytes), StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException exception) {
+            throw new IllegalStateException("Credential decryption failed", exception);
+        }
+    }
+
+    /**
+     * 校验 v1 信封和服务器凭据上下文后解密密文，直接以 char[] 返回明文。
+     *
+     * <p>与 {@link #decrypt} 的差异：全程不创建 String——UTF-8 字节经
+     * {@link java.nio.charset.CharBuffer} 直接解码为 char[]，并在返回前清零中间
+     * 明文字节缓冲，消除"凭据以 String 驻留堆"的暴露面（2026-09-14 安全评审）。
+     * 适用于密码/口令类短凭据；私钥因 SSHJ API 只接受 String 仍走 {@link #decrypt}。</p>
+     *
+     * @param serverId 正数服务器 ID
+     * @param credentialType 凭据类型
+     * @param envelope v1 格式密文信封
+     * @return 凭据明文字符数组（调用方负责用后清零）
+     */
+    public char[] decryptToCharArray(Long serverId, String credentialType, String envelope) {
+        validateContext(serverId, credentialType);
+        if (envelope == null || envelope.isBlank()) {
+            throw new IllegalArgumentException("Credential envelope must not be blank");
+        }
+        if (!envelope.startsWith(ENVELOPE_PREFIX)) {
+            throw new IllegalArgumentException("Credential envelope version is invalid");
+        }
+
+        byte[] envelopeBytes;
+        try {
+            envelopeBytes = Base64.getDecoder().decode(envelope.substring(ENVELOPE_PREFIX.length()));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Credential envelope payload must be valid Base64", exception);
+        }
+        if (envelopeBytes.length <= IV_BYTES) {
+            throw new IllegalArgumentException("Credential envelope payload is invalid");
+        }
+
+        byte[] iv = new byte[IV_BYTES];
+        byte[] encryptedBytes = new byte[envelopeBytes.length - IV_BYTES];
+        System.arraycopy(envelopeBytes, 0, iv, 0, iv.length);
+        System.arraycopy(envelopeBytes, iv.length, encryptedBytes, 0, encryptedBytes.length);
+        try {
+            Cipher cipher = createCipher(Cipher.DECRYPT_MODE, serverId, credentialType, iv);
+            byte[] plainBytes = cipher.doFinal(encryptedBytes);
+            try {
+                CharBuffer decoded = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(plainBytes));
+                char[] chars = new char[decoded.remaining()];
+                decoded.get(chars);
+                return chars;
+            } finally {
+                // 返回前清零明文字节缓冲：byte[] 不再被引用后可被 GC 回收，降低堆转储暴露窗口。
+                Arrays.fill(plainBytes, (byte) 0);
+            }
         } catch (GeneralSecurityException exception) {
             throw new IllegalStateException("Credential decryption failed", exception);
         }
