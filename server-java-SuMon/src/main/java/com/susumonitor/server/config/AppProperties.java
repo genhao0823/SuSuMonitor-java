@@ -319,6 +319,22 @@ public class AppProperties {
 
     public static class Agent {
 
+        // Agent Token 轮换宽限期（2026-09-14 安全评审"加固"项）：轮换后旧 Token 在该窗口内
+        // 仍可完成握手，避免在线 Agent 因轮换瞬断需人工重新注册；0 表示关闭宽限（轮换立即失效）。
+        @Min(value = 0, message = "Agent token grace seconds must not be negative")
+        @Max(value = 86400, message = "Agent token grace seconds must not exceed 86400 seconds")
+        private int tokenGraceSeconds = 300;
+
+        /** 获取 Agent Token 轮换宽限期（秒）。 */
+        public int getTokenGraceSeconds() {
+            return tokenGraceSeconds;
+        }
+
+        /** 设置 Agent Token 轮换宽限期（秒）。 */
+        public void setTokenGraceSeconds(int value) {
+            tokenGraceSeconds = value;
+        }
+
         private String registerKey;
 
         /** 限制单 JVM 已接纳的 Agent WebSocket 总连接数，防止异常建连耗尽内存。 */

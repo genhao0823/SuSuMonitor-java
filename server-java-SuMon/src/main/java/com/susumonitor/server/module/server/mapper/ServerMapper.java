@@ -181,11 +181,12 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
             @Param("tokenHash") String tokenHash,
             @Param("createdAt") LocalDateTime createdAt);
 
-    /** 显式轮换 Agent Token，并使旧 Token 立即失效。 */
+    /** 显式轮换 Agent Token：旧摘要移入宽限列并登记宽限截止，窗口过后旧 Token 不再被接受。 */
     int rotateAgentToken(
             @Param("serverId") Long serverId,
             @Param("tokenHash") String tokenHash,
-            @Param("rotatedAt") LocalDateTime rotatedAt);
+            @Param("rotatedAt") LocalDateTime rotatedAt,
+            @Param("graceUntil") LocalDateTime graceUntil);
 
     /** 撤销当前 Agent Token 并将 Agent 标记为离线。 */
     int revokeAgentToken(

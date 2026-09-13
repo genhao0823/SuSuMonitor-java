@@ -23,6 +23,8 @@
         <result column="ssh_host_key_verified_at" property="sshHostKeyVerifiedAt"/>
         <result column="agent_id" property="agentId"/>
         <result column="agent_token_hash" property="agentTokenHash"/>
+        <result column="agent_token_hash_prev" property="agentTokenHashPrev"/>
+        <result column="agent_token_grace_until" property="agentTokenGraceUntil"/>
         <result column="agent_token_created_at" property="agentTokenCreatedAt"/>
         <result column="agent_token_rotated_at" property="agentTokenRotatedAt"/>
         <result column="agent_token_revoked_at" property="agentTokenRevokedAt"/>
@@ -265,6 +267,8 @@
             id,
             agent_id,
             agent_token_hash,
+            agent_token_hash_prev,
+            agent_token_grace_until,
             agent_token_created_at,
             agent_token_rotated_at,
             agent_token_revoked_at,
@@ -292,6 +296,8 @@
     <update id="rotateAgentToken">
         UPDATE servers
         SET agent_token_hash = #{tokenHash},
+            agent_token_hash_prev = agent_token_hash,
+            agent_token_grace_until = #{graceUntil},
             agent_token_rotated_at = #{rotatedAt},
             agent_token_revoked_at = NULL,
             agent_status = 'offline',
@@ -304,6 +310,8 @@
     <update id="revokeAgentToken">
         UPDATE servers
         SET agent_token_revoked_at = #{revokedAt},
+            agent_token_hash_prev = NULL,
+            agent_token_grace_until = NULL,
             agent_status = 'offline',
             status = 'offline'
         WHERE id = #{serverId}

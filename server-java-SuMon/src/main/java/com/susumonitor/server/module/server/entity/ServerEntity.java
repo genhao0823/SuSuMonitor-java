@@ -116,6 +116,12 @@ public class ServerEntity {
     @EqualsAndHashCode.Exclude
     private String agentTokenHash;
 
+    /** 轮换宽限期内旧 Token SHA-256 摘要：轮换瞬间在线 Agent 可用旧 Token 完成重连。 */
+    private String agentTokenHashPrev;
+
+    /** 旧 Token 宽限期截止时间（UTC）；为空表示无宽限或已轮换清理。 */
+    private LocalDateTime agentTokenGraceUntil;
+
     /** Agent Token 首次创建时间。 */
     // 将 Java 属性映射到 servers.agent_token_created_at 字段，供 Token 生命周期审计使用。
     @TableField("agent_token_created_at")

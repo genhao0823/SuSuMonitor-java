@@ -61,7 +61,11 @@ public class AgentTokenController {
     // Token 管理仅管理员可访问，声明 Bearer JWT 认证。
     @Operation(
             summary = "Rotate Agent Token",
-            description = "Admin only. Replaces the existing Agent Token and immediately invalidates the old token.",
+            description = "Admin only. Replaces the existing Agent Token. The previous token keeps "
+                    + "authenticating handshakes for a short grace window "
+                    + "(susumonitor.agent.token-grace-seconds, default 300s) so online agents can "
+                    + "reconnect without manual re-registration; after the window the old token is "
+                    + "rejected. Revoking the token invalidates both immediately.",
             operationId = "rotateAgentToken",
             security = @SecurityRequirement(name = "bearerAuth"))
     // 声明轮换接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。

@@ -31,10 +31,14 @@ public class AgentTokenServiceImpl implements AgentTokenService {
 
     private final ServerMapper serverMapper;
     private final SecureRandom secureRandom = new SecureRandom();
+    /** 全局配置：读取轮换宽限窗口时长（susumonitor.agent.token-grace-seconds）。 */
+    private final com.susumonitor.server.config.AppProperties appProperties;
 
-    /** 注入服务器 Mapper。 */
-    public AgentTokenServiceImpl(ServerMapper serverMapper) {
+    /** 注入服务器 Mapper 与全局配置。 */
+    public AgentTokenServiceImpl(ServerMapper serverMapper,
+            com.susumonitor.server.config.AppProperties appProperties) {
         this.serverMapper = serverMapper;
+        this.appProperties = appProperties;
     }
 
     /** 首次生成服务器 Agent Token。 */
@@ -87,10 +91,16 @@ public class AgentTokenServiceImpl implements AgentTokenService {
             String token = generateToken();
             String hash = hashToken(token);
             LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-            int updated = rotation
-                    ? serverMapper.rotateAgentToken(serverId, hash, now)
-                    : serverMapper.registerAgentToken(serverId, server.getAgentId() == null
-                            ? generateAgentId() : server.getAgentId(), hash, now);
+            int updated;
+            if (rotation) {
+                // 轮换宽限（2026-09-14 加固）：旧摘要移入宽限列并登记截止时间，
+                // 在线 Agent 在窗口内可用旧 Token 完成重连；窗口为 0 时等价于立即失效。
+                LocalDateTime graceUntil = now.plusSeconds(appProperties.getAgent().getTokenGraceSeconds());
+                updated = serverMapper.rotateAgentToken(serverId, hash, now, graceUntil);
+            } else {
+                updated = serverMapper.registerAgentToken(serverId, server.getAgentId() == null
+                        ? generateAgentId() : server.getAgentId(), hash, now);
+            }
             if (updated != 1) {
                 throw new BusinessException(ErrorCode.RESOURCE_CONFLICT);
             }
