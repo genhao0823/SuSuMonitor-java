@@ -3,7 +3,7 @@
   "info": {
     "title": "SuSuMonitor Authentication API",
     "description": "SuSuMonitor authentication API for Apifox import and local testing.",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "servers": [
     {
@@ -322,7 +322,7 @@
           "auth"
         ],
         "summary": "Logout",
-        "description": "Bearer-authenticated logout. When Redis is enabled, the current JWT jti is added to the Redis blacklist with the token's remaining TTL and becomes invalid across instances; when Redis is disabled, logout is a stateless no-op and the client must delete its local JWT.",
+        "description": "Bearer-authenticated logout. When Redis is enabled, the current JWT jti is added to the Redis blacklist with the token's remaining TTL and becomes invalid across instances; when Redis is disabled, logout is a stateless no-op and the client must delete its local JWT (documented single-instance semantics, 2026-09-14 security review decision 2). If the blacklist write hits a Redis failure, the response follows susumonitor.security.token-blacklist-on-error: fail_closed (default) returns HTTP 503 with code 50302 and the client should retry; fail_open acknowledges logout and logs a warning (the token stays valid until natural expiry).",
         "operationId": "logoutUser",
         "security": [
           {
@@ -360,6 +360,18 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "Redis unavailable while failing closed (50302)",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": 50302,
+                  "message": "redis unavailable",
+                  "data": null
+                }
+              }
+            }
           }
         }
       }

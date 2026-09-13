@@ -1,5 +1,6 @@
 package com.susumonitor.server.security;
 
+import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.auth.entity.UserEntity;
 import com.susumonitor.server.module.auth.mapper.UserMapper;
 import io.jsonwebtoken.JwtException;
@@ -29,8 +30,11 @@ import org.springframework.http.HttpMethod;
 /**
  * 验证 Bearer JWT，并依据数据库最新用户状态建立无状态认证上下文。
  *
- * <p>Redis 启用时额外校验 JWT 黑名单（登出真实失效，跨实例生效）；
- * 认证成功后将 ParsedToken 放入 request attribute，供登出等端点读取 tokenId 与剩余有效期。</p>
+ * <p>Redis 启用时额外校验 JWT 黑名单（登出真实失效，跨实例生效）：黑名单查询遇
+ * Redis 故障时按 {@code susumonitor.security.token-blacklist-on-error} 分流——
+ * fail_closed（默认）以 503/50302 拒绝请求，fail_open 记 warn 后放行（2026-09-14
+ * 安全评审决策一）。认证成功后将 ParsedToken 放入 request attribute，供登出等端点
+ * 读取 tokenId 与剩余有效期。</p>
  */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -49,6 +53,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /** 认证成功后放置 ParsedToken 的 request attribute 名（登出端点读取）。 */
     public static final String JWT_PARSED_TOKEN_ATTRIBUTE = "jwt_parsed_token";
 
+    /** 黑名单查询故障信号：Redis 不可用时由 checkBlacklist 抛出，交由过滤器按策略分流。 */
+    private static final class TokenBlacklistUnavailableException extends RuntimeException {
+
+        /** 用 Redis 原始异常作为 cause，保留排查线索但不外泄到响应。 */
+        private TokenBlacklistUnavailableException(Throwable cause) {
+            super(cause);
+        }
+    }
+
     private static final ZoneId APPLICATION_ZONE = ZoneOffset.UTC;
 
     private final JwtTokenService jwtTokenService;
@@ -60,22 +73,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final ObjectProvider<RedisTokenBlacklist> tokenBlacklist;
 
     /**
+     * 应用配置的惰性引用：WebMvcTest 切片上下文不含 AppProperties Bean，
+     * 用 ObjectProvider 注入避免切片装配失败；缺席时按默认 fail_closed 处理。
+     */
+    private final ObjectProvider<AppProperties> appProperties;
+
+    /**
      * 创建 Bearer 过滤器并注入 Token、用户状态和错误响应依赖。
      *
      * @param jwtTokenService JWT 服务
      * @param userMapper 用户数据访问接口
      * @param securityErrorHandler 安全错误处理器
      * @param tokenBlacklist Redis 黑名单（可选，Redis 未启用时为空）
+     * @param appProperties 应用配置（读取黑名单故障语义开关；切片上下文可缺席）
      */
     public JwtAuthenticationFilter(
             JwtTokenService jwtTokenService,
             UserMapper userMapper,
             SecurityErrorHandler securityErrorHandler,
-            ObjectProvider<RedisTokenBlacklist> tokenBlacklist) {
+            ObjectProvider<RedisTokenBlacklist> tokenBlacklist,
+            ObjectProvider<AppProperties> appProperties) {
         this.jwtTokenService = jwtTokenService;
         this.userMapper = userMapper;
         this.securityErrorHandler = securityErrorHandler;
         this.tokenBlacklist = tokenBlacklist;
+        this.appProperties = appProperties;
     }
 
     /**
@@ -115,7 +137,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = extractBearerToken(authorization);
             JwtTokenService.ParsedToken parsedToken = jwtTokenService.parseToken(token);
             RedisTokenBlacklist blacklist = tokenBlacklist.getIfAvailable();
-            if (blacklist != null && blacklist.isRevoked(parsedToken.tokenId())) {
+            if (blacklist != null && checkBlacklist(blacklist, parsedToken.tokenId())) {
                 throw new BadCredentialsException("token has been revoked");
             }
             UserEntity userEntity = userMapper.selectAuthenticationUserById(parsedToken.userId());
@@ -124,6 +146,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
             request.setAttribute(JWT_PARSED_TOKEN_ATTRIBUTE, parsedToken);
             SecurityContextHolder.setContext(createSecurityContext(userEntity));
+        } catch (TokenBlacklistUnavailableException exception) {
+            // fail-closed 语义（2026-09-14 决策一）：Redis 故障时拒绝请求，返回 503/50302 专用错误面，
+            // 不与数据库故障混同；已登出 Token 在 Redis 故障窗口内必然无法复活。
+            LOGGER.error("JWT blacklist unavailable, failing closed (token-blacklist-on-error=fail_closed)",
+                    exception.getCause());
+            securityErrorHandler.writeTokenBlacklistUnavailable(response);
+            return;
         } catch (JwtException | BadCredentialsException exception) {
             LOGGER.debug("JWT authentication rejected");
             securityErrorHandler.commence(request, response, new BadCredentialsException("unauthorized"));
@@ -138,6 +167,43 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * 查询黑名单并应用故障语义（2026-09-14 安全评审决策一）。
+     *
+     * <p>查询正常时返回吊销与否；Redis 故障（DataAccessException）时按
+     * {@code susumonitor.security.token-blacklist-on-error} 分流——fail_closed 抛出
+     * {@link TokenBlacklistUnavailableException} 由外层转 503；fail_open 记 warn 后
+     * 按未吊销继续，已登出 Token 可能在故障窗口内复活至自然过期。</p>
+     *
+     * @param blacklist Redis 黑名单
+     * @param tokenId JWT jti
+     * @return 该 Token 是否已被吊销
+     */
+    private boolean checkBlacklist(RedisTokenBlacklist blacklist, String tokenId) {
+        try {
+            return blacklist.isRevoked(tokenId);
+        } catch (DataAccessException exception) {
+            if (shouldFailOpen()) {
+                LOGGER.warn("JWT blacklist unavailable, failing open; revoked tokens may pass "
+                        + "until Redis recovers (token-blacklist-on-error=fail_open)");
+                return false;
+            }
+            throw new TokenBlacklistUnavailableException(exception);
+        }
+    }
+
+    /**
+     * 判断是否按可用性优先放行（fail_open）；默认、配置缺席（切片上下文）与非法值
+     * 均按 fail_closed 处理（安全默认）。
+     *
+     * @return true 表示 fail_open
+     */
+    private boolean shouldFailOpen() {
+        AppProperties properties = appProperties.getIfAvailable();
+        return properties != null
+                && "fail_open".equals(properties.getSecurity().getTokenBlacklistOnError());
     }
 
     /**

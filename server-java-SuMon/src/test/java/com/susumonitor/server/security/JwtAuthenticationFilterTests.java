@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.susumonitor.server.config.AppProperties;
 import com.susumonitor.server.module.auth.entity.UserEntity;
 import com.susumonitor.server.module.auth.mapper.UserMapper;
 import io.jsonwebtoken.MalformedJwtException;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -35,6 +37,8 @@ class JwtAuthenticationFilterTests {
 
     private JwtAuthenticationFilter filter;
 
+    private AppProperties appProperties;
+
     /**
      * 为每个测试创建隔离的过滤器依赖。
      */
@@ -42,11 +46,15 @@ class JwtAuthenticationFilterTests {
     void setUp() {
         jwtTokenService = mock(JwtTokenService.class);
         userMapper = mock(UserMapper.class);
+        appProperties = new AppProperties();
         SecurityErrorHandler errorHandler = new SecurityErrorHandler(new ObjectMapper());
         // 默认无 Redis 黑名单（Redis 未启用场景）：ObjectProvider 返回空。
         ObjectProvider<RedisTokenBlacklist> emptyProvider = mock(ObjectProvider.class);
         when(emptyProvider.getIfAvailable()).thenReturn(null);
-        filter = new JwtAuthenticationFilter(jwtTokenService, userMapper, errorHandler, emptyProvider);
+        ObjectProvider<AppProperties> propertiesProvider = mock(ObjectProvider.class);
+        when(propertiesProvider.getIfAvailable()).thenReturn(appProperties);
+        filter = new JwtAuthenticationFilter(jwtTokenService, userMapper, errorHandler, emptyProvider,
+                propertiesProvider);
         SecurityContextHolder.clearContext();
     }
 
@@ -132,8 +140,10 @@ class JwtAuthenticationFilterTests {
         when(blacklist.isRevoked("token-id")).thenReturn(true);
         ObjectProvider<RedisTokenBlacklist> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(blacklist);
+        ObjectProvider<AppProperties> propertiesProvider = mock(ObjectProvider.class);
+        when(propertiesProvider.getIfAvailable()).thenReturn(appProperties);
         filter = new JwtAuthenticationFilter(jwtTokenService, userMapper,
-                new SecurityErrorHandler(new ObjectMapper()), provider);
+                new SecurityErrorHandler(new ObjectMapper()), provider, propertiesProvider);
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer valid-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -144,6 +154,65 @@ class JwtAuthenticationFilterTests {
 
         assertEquals(401, response.getStatus());
         verify(userMapper, never()).selectAuthenticationUserById(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /**
+     * 验证 fail_closed（默认）：Redis 黑名单查询故障时返回 503/50302 专用错误面，
+     * 不与数据库错误混同，且不回查数据库（2026-09-14 安全评审决策一）。
+     */
+    @Test
+    void blacklistFailureShouldFailClosedWith503() throws Exception {
+        RedisTokenBlacklist blacklist = mock(RedisTokenBlacklist.class);
+        when(blacklist.isRevoked("token-id"))
+                .thenThrow(new DataAccessResourceFailureException("redis down"));
+        ObjectProvider<RedisTokenBlacklist> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(blacklist);
+        ObjectProvider<AppProperties> propertiesProvider = mock(ObjectProvider.class);
+        when(propertiesProvider.getIfAvailable()).thenReturn(appProperties);
+        filter = new JwtAuthenticationFilter(jwtTokenService, userMapper,
+                new SecurityErrorHandler(new ObjectMapper()), provider, propertiesProvider);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer valid-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtTokenService.parseToken("valid-token"))
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id",
+                        Instant.parse("2026-08-18T00:00:00Z")));
+
+        filter.doFilter(request, response, (servletRequest, servletResponse) -> { });
+
+        assertEquals(503, response.getStatus());
+        assertEquals(50302, new ObjectMapper().readTree(response.getContentAsByteArray()).get("code").asInt());
+        verify(userMapper, never()).selectAuthenticationUserById(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /**
+     * 验证 fail_open：配置切换后 Redis 黑名单查询故障时放行（继续走数据库状态回查并建立认证）。
+     */
+    @Test
+    void blacklistFailureShouldFailOpenWhenConfigured() throws Exception {
+        appProperties.getSecurity().setTokenBlacklistOnError("fail_open");
+        RedisTokenBlacklist blacklist = mock(RedisTokenBlacklist.class);
+        when(blacklist.isRevoked("token-id"))
+                .thenThrow(new DataAccessResourceFailureException("redis down"));
+        ObjectProvider<RedisTokenBlacklist> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(blacklist);
+        ObjectProvider<AppProperties> propertiesProvider = mock(ObjectProvider.class);
+        when(propertiesProvider.getIfAvailable()).thenReturn(appProperties);
+        filter = new JwtAuthenticationFilter(jwtTokenService, userMapper,
+                new SecurityErrorHandler(new ObjectMapper()), provider, propertiesProvider);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer valid-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtTokenService.parseToken("valid-token"))
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id",
+                        Instant.parse("2026-08-18T00:00:00Z")));
+        when(userMapper.selectAuthenticationUserById(1L)).thenReturn(user("approved", "admin"));
+        AtomicReference<Authentication> authentication = new AtomicReference<>();
+
+        filter.doFilter(request, response, (servletRequest, servletResponse) ->
+                authentication.set(SecurityContextHolder.getContext().getAuthentication()));
+
+        assertEquals("ROLE_ADMIN", authentication.get().getAuthorities().iterator().next().getAuthority());
     }
 
     /**

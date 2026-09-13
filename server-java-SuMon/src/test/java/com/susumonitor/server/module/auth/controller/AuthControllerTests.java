@@ -397,6 +397,25 @@ class AuthControllerTests {
     }
 
     @Test
+    // fail_closed（默认）：logout 黑名单写入遇 Redis 故障时返回 503/50302，客户端应重试。
+    void logoutShouldReturn503WhenBlacklistWriteFailsClosed() throws Exception {
+        UserEntity authenticationUser = authenticationUser();
+        when(jwtTokenService.parseToken("valid-token"))
+                .thenReturn(new JwtTokenService.ParsedToken(1L, "admin", "token-id",
+                        java.time.Instant.now().plusSeconds(3600)));
+        when(userMapper.selectAuthenticationUserById(1L)).thenReturn(authenticationUser);
+        when(redisTokenBlacklist.isRevoked("token-id")).thenReturn(false);
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataAccessResourceFailureException("redis down"))
+                .when(redisTokenBlacklist)
+                .revoke(org.mockito.Mockito.eq("token-id"), org.mockito.ArgumentMatchers.any(java.time.Duration.class));
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .header("Authorization", "Bearer valid-token"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value(50302));
+    }
+
+    @Test
     // 验证公开登录接口忽略客户端携带的过期或非法 Token。
     void loginShouldIgnoreInvalidAuthorizationHeader() throws Exception {
         LoginRequest request = loginRequest("admin", "Password123");

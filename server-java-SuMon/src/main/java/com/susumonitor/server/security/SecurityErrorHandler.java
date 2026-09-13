@@ -67,6 +67,17 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
     }
 
     /**
+     * 为 JWT 黑名单查询的 Redis 故障返回 503/50302 专用错误面
+     * （fail-closed 语义，2026-09-14 安全评审决策一），不与数据库错误混同。
+     *
+     * @param response HTTP 响应
+     * @throws IOException 响应写入失败
+     */
+    public void writeTokenBlacklistUnavailable(HttpServletResponse response) throws IOException {
+        writeError(response, ErrorCode.REDIS_UNAVAILABLE);
+    }
+
+    /**
      * 为过滤器中的未知故障返回统一内部错误。
      *
      * @param response HTTP 响应

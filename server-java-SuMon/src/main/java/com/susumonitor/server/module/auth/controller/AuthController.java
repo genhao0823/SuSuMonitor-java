@@ -59,6 +59,9 @@ public class AuthController {
 
     private final Clock clock;
 
+    /** 应用配置：读取 token-blacklist-on-error 故障语义开关（2026-09-14 决策一）。 */
+    private final com.susumonitor.server.config.AppProperties appProperties;
+
     /**
      * 接收注册请求并委托 UserService 完成用户创建业务。
      *
@@ -169,7 +172,8 @@ public class AuthController {
     /**
      * 登出：Redis 启用时将当前 token 的 jti 写入黑名单（TTL=剩余有效期），
      * 此后任何实例携带该 token 请求均 401（真实失效）；Redis 未启用时保持
-     * 无状态空操作（客户端删除本地 JWT）。
+     * 无状态空操作（客户端删除本地 JWT，2026-09-14 决策二：文档化接受该语义）。
+     * 黑名单写入遇 Redis 故障时按 token-blacklist-on-error 策略分流（见 revokeWithPolicy）。
      *
      * @param request HTTP 请求（读取过滤器放置的 ParsedToken）
      * @return data 为 null 的统一成功响应
@@ -181,13 +185,17 @@ public class AuthController {
             description = "Bearer-authenticated logout. When Redis is enabled, the current JWT jti "
                     + "is added to the Redis blacklist with the token's remaining TTL and becomes invalid "
                     + "across instances; when Redis is disabled, logout is a stateless no-op and the client "
-                    + "must delete its local JWT.",
+                    + "must delete its local JWT. If the blacklist write hits a Redis failure, the response "
+                    + "follows susumonitor.security.token-blacklist-on-error: fail_closed (default) returns "
+                    + "HTTP 503 with code 50302 and the client should retry; fail_open acknowledges logout "
+                    + "and logs a warning (the token stays valid until natural expiry).",
             operationId = "logoutUser",
             security = @SecurityRequirement(name = "bearerAuth"))
     // 声明登出接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Logout acknowledged"),
-            @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)")
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)"),
+            @ApiResponse(responseCode = "503", description = "Redis unavailable while failing closed (50302)")
     })
     @PostMapping("/logout")
     public com.susumonitor.server.common.ApiResponse<Void> logout(HttpServletRequest request) {
@@ -198,12 +206,37 @@ public class AuthController {
             if (parsedToken != null) {
                 Duration ttl = Duration.between(Instant.now(clock), parsedToken.expiresAt());
                 if (!ttl.isNegative() && !ttl.isZero()) {
-                    blacklist.revoke(parsedToken.tokenId(), ttl);
+                    revokeWithPolicy(blacklist, parsedToken.tokenId(), ttl);
                 }
             } else {
                 log.warn("logout skipped: parsed token missing from request attribute");
             }
         }
         return com.susumonitor.server.common.ApiResponse.success(null);
+    }
+
+    /**
+     * 按故障语义写入黑名单（2026-09-14 安全评审决策一）。
+     *
+     * <p>写入成功即完成吊销；Redis 故障时 fail_closed 抛 50302 业务异常（客户端应重试，
+     * 否则 Token 未被吊销），fail_open 记 warn 后按登出成功应答（Token 存活至自然过期，
+     * 已在契约文档中标注该语义）。</p>
+     *
+     * @param blacklist Redis 黑名单
+     * @param tokenId JWT jti
+     * @param ttl 剩余有效期
+     */
+    private void revokeWithPolicy(RedisTokenBlacklist blacklist, String tokenId, Duration ttl) {
+        try {
+            blacklist.revoke(tokenId, ttl);
+        } catch (org.springframework.dao.DataAccessException exception) {
+            if ("fail_open".equals(appProperties.getSecurity().getTokenBlacklistOnError())) {
+                log.warn("logout blacklist write failed, failing open; token remains valid until expiry");
+                return;
+            }
+            log.error("logout blacklist write failed, failing closed (token-blacklist-on-error=fail_closed)");
+            throw new com.susumonitor.server.common.BusinessException(
+                    com.susumonitor.server.common.ErrorCode.REDIS_UNAVAILABLE);
+        }
     }
 }

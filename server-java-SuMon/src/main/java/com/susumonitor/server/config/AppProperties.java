@@ -239,6 +239,23 @@ public class AppProperties {
             this.aesGcmKey = aesGcmKey;
         }
 
+        // JWT 黑名单查询在 Redis 故障时的语义（2026-09-14 安全评审决策一）：
+        // fail_closed（默认）拒绝所有带 Token 的请求并返回 503/50302，保障已登出 Token 必然失效；
+        // fail_open 按可用性优先放行，已登出 Token 在 Redis 故障窗口内可能复活至自然过期（最长 72h）。
+        @Pattern(regexp = "fail_closed|fail_open",
+                message = "Token blacklist on-error policy must be fail_closed or fail_open")
+        private String tokenBlacklistOnError = "fail_closed";
+
+        /** 获取黑名单故障语义。 */
+        public String getTokenBlacklistOnError() {
+            return tokenBlacklistOnError;
+        }
+
+        /** 设置黑名单故障语义。 */
+        public void setTokenBlacklistOnError(String value) {
+            tokenBlacklistOnError = value;
+        }
+
         /** 登录防爆破（Redis 安全加固一期，2026-08-18）：窗口内每 IP 最大登录尝试次数。 */
         @Min(value = 1, message = "Login limit max attempts must be at least one")
         @Max(value = 10000, message = "Login limit max attempts must not exceed 10000")

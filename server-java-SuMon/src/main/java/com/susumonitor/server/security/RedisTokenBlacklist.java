@@ -10,7 +10,12 @@ import org.springframework.stereotype.Component;
  *
  * <p>登出时按 jti（tokenId）写入黑名单，TTL 精确到该 token 的剩余有效期；
  * 任意实例在过滤器阶段校验黑名单，实现"登出真实失效、跨实例生效"。
- * Redis 未启用（REDIS_ENABLED=false）时本组件不注册，logout 保持空操作（与现状一致）。</p>
+ * Redis 未启用（REDIS_ENABLED=false）时本组件不注册，logout 保持空操作（与现状一致，
+ * 2026-09-14 安全评审决策二：文档化接受该单实例语义）。</p>
+ *
+ * <p>故障语义（2026-09-14 安全评审决策一）：Redis 故障时本类抛出的 DataAccessException
+ * 由 {@link JwtAuthenticationFilter} 按 {@code susumonitor.security.token-blacklist-on-error}
+ * 分流——fail_closed（默认）返回 503/50302 拒绝请求，fail_open 放行。</p>
  */
 @Component
 @ConditionalOnProperty(name = "susumonitor.redis.enabled", havingValue = "true")

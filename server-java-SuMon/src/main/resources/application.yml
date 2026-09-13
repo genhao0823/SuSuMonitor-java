@@ -186,6 +186,10 @@ susumonitor:
     cleanup-max-batches-per-run: ${SSH_TEST_HISTORY_CLEANUP_MAX_BATCHES_PER_RUN:100}
   security:
     aes-gcm-key: ${AES_GCM_KEY:}
+    # JWT 黑名单故障语义（2026-09-14 安全评审决策一）：fail_closed（默认）在 Redis 故障时
+    # 拒绝带 Token 的请求并返回 503/50302；fail_open 按可用性优先放行（已登出 Token 在故障
+    # 窗口内可能复活至自然过期）。
+    token-blacklist-on-error: ${TOKEN_BLACKLIST_ON_ERROR:fail_closed}
     # 登录防爆破（Redis 安全加固一期，2026-08-18）：窗口内每 IP 最大尝试次数与窗口秒数。
     login-limit-max-attempts: ${LOGIN_LIMIT_MAX_ATTEMPTS:10}
     login-limit-window-seconds: ${LOGIN_LIMIT_WINDOW_SECONDS:60}

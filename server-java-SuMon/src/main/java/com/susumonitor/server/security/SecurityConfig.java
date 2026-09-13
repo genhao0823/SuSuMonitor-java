@@ -30,6 +30,7 @@ public class SecurityConfig {
      * @param userMapper 用户 Mapper
      * @param securityErrorHandler 安全错误处理器
      * @param tokenBlacklist Redis 黑名单（可选，Redis 未启用时为空）
+     * @param appProperties 应用配置（读取黑名单故障语义开关；WebMvcTest 切片可缺席）
      * @return JWT 认证过滤器
      */
     // 将 JWT 过滤器注册为 Spring Bean，供安全链引用。
@@ -38,8 +39,10 @@ public class SecurityConfig {
             JwtTokenService jwtTokenService,
             UserMapper userMapper,
             SecurityErrorHandler securityErrorHandler,
-            ObjectProvider<RedisTokenBlacklist> tokenBlacklist) {
-        return new JwtAuthenticationFilter(jwtTokenService, userMapper, securityErrorHandler, tokenBlacklist);
+            ObjectProvider<RedisTokenBlacklist> tokenBlacklist,
+            org.springframework.beans.factory.ObjectProvider<com.susumonitor.server.config.AppProperties> appProperties) {
+        return new JwtAuthenticationFilter(jwtTokenService, userMapper, securityErrorHandler, tokenBlacklist,
+                appProperties);
     }
 
     /**
