@@ -84,6 +84,50 @@ class ServerMapperMySqlValidationIT {
         });
     }
 
+    /**
+     * 验证轮换宽限期真实 SQL 语义（2026-09-14 联调缺陷回归，
+     * 见 Bug-fix/2026-09-14-agent-token-rotate-500-and-grace-column.md）：
+     * prev 列必须保存旧哈希（SET 求值顺序缺陷回归防线），grace_until 必须晚于轮换时间。
+     */
+    @Test
+    void rotateAgentTokenShouldPreservePreviousHashAndRegisterGraceWindow() {
+        withTestRows(() -> {
+            Long id = jdbcTemplate.queryForObject(
+                    "SELECT id FROM servers WHERE name = ?", Long.class, TEST_PREFIX + "-alpha");
+            String oldHash = "sha256:" + "a".repeat(64);
+            LocalDateTime registeredAt = LocalDateTime.of(2026, 7, 23, 10, 0);
+            jdbcTemplate.update(
+                    "UPDATE servers SET agent_token_hash = ?, agent_token_created_at = ? WHERE id = ?",
+                    oldHash, registeredAt, id);
+
+            LocalDateTime rotatedAt = LocalDateTime.of(2026, 7, 23, 11, 0);
+            String newHash = "sha256:" + "b".repeat(64);
+            LocalDateTime graceUntil = rotatedAt.plusSeconds(300);
+
+            assertEquals(1, serverMapper.rotateAgentToken(id, newHash, rotatedAt, graceUntil));
+
+            Map<String, Object> row = jdbcTemplate.queryForMap(
+                    "SELECT agent_token_hash, agent_token_hash_prev, agent_token_grace_until,"
+                            + " agent_token_rotated_at, agent_token_revoked_at FROM servers WHERE id = ?", id);
+            // 71 字符摘要必须完整落库（V36 列宽修复回归），且 prev 为旧哈希而非新哈希。
+            assertEquals(newHash, row.get("agent_token_hash"));
+            assertEquals(oldHash, row.get("agent_token_hash_prev"));
+            assertEquals(graceUntil, row.get("agent_token_grace_until"));
+            assertEquals(rotatedAt, row.get("agent_token_rotated_at"));
+            assertNull(row.get("agent_token_revoked_at"));
+
+            // revoke 必须同时清空宽限两列：撤销后旧 Token 立即失效。
+            LocalDateTime revokedAt = rotatedAt.plusMinutes(1);
+            assertEquals(1, serverMapper.revokeAgentToken(id, revokedAt));
+            row = jdbcTemplate.queryForMap(
+                    "SELECT agent_token_hash_prev, agent_token_grace_until, agent_token_revoked_at"
+                            + " FROM servers WHERE id = ?", id);
+            assertNull(row.get("agent_token_hash_prev"));
+            assertNull(row.get("agent_token_grace_until"));
+            assertEquals(revokedAt, row.get("agent_token_revoked_at"));
+        });
+    }
+
     /** 验证真实软删除会保留记录、写入删除字段，并在 active 条件下幂等失效。 */
     @Test
     void softDeleteShouldSetDeletionFieldsAndBeIdempotentForActiveCondition() {

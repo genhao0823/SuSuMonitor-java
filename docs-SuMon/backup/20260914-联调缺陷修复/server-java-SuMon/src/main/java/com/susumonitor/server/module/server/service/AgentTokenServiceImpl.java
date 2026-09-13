@@ -15,7 +15,6 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.HexFormat;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 管理服务器 Agent Token 的首次注册、显式轮换和撤销生命周期。
  */
-@Slf4j
 @Service
 public class AgentTokenServiceImpl implements AgentTokenService {
 
@@ -69,8 +67,6 @@ public class AgentTokenServiceImpl implements AgentTokenService {
                 throw new BusinessException(ErrorCode.RESOURCE_CONFLICT);
             }
         } catch (DataAccessException exception) {
-            // 数据库层失败必须留根因线索：2026-09-14 联调发现 V35 列宽缺陷时仅有 50001 无堆栈，排障困难。
-            log.warn("agent token write failed for server {}: {}", serverId, exception.toString());
             throw new BusinessException(ErrorCode.DATABASE_ERROR, exception);
         }
     }

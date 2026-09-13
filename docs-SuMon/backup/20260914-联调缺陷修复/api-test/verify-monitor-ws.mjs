@@ -130,10 +130,9 @@ const registeredUser = await api('/api/auth/register', {
 assert(registeredUser.status === 200, 'Monitor user registration failed')
 assert(registeredUser.body.data.reviewStatus === 'pending', 'Monitor user should start pending')
 
-// 2026-09-14 契约对齐：pending 列表走 GET /api/admin/users?status=pending（旧路由 /admin/users/pending 已不存在）
-const pending = await api('/api/admin/users?status=pending&page=1&page_size=50', { token: adminToken })
+const pending = await api('/api/admin/users/pending', { token: adminToken })
 assert(pending.status === 200, 'Pending user list failed')
-const pendingUser = pending.body.data.items.find((user) => user.username === userUsername)
+const pendingUser = pending.body.data.find((user) => user.username === userUsername)
 assert(pendingUser, 'Registered monitor user is missing from pending list')
 
 const approved = await api(`/api/admin/users/${pendingUser.id}/approve`, {

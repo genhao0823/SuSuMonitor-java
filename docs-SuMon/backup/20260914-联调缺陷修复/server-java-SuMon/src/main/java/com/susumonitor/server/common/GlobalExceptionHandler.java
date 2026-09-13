@@ -13,7 +13,6 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 将异常转换为统一的 API 响应格式。
@@ -133,21 +132,6 @@ public class GlobalExceptionHandler {
         LOGGER.warn("Request body could not be parsed");
         ErrorCode errorCode = ErrorCode.INVALID_REQUEST_PARAMETER;
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorCode));
-    }
-
-    /**
-     * 未映射的 API 路径由静态资源处理器抛出 NoResourceFoundException，必须在兜底之前
-     * 转 404/40400；否则会被 Exception.class 兜底误判为内部错误（2026-09-14 联调缺陷，
-     * 见 Bug-fix/2026-09-14-unmapped-api-path-500.md）。
-     *
-     * @param exception 无处理器/资源异常
-     * @return 统一资源不存在响应（404）
-     */
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException exception) {
-        LOGGER.warn("No handler for requested path: {}", exception.getResourcePath());
-        return ResponseEntity.status(ErrorCode.RESOURCE_NOT_FOUND.getHttpStatus())
-                .body(ApiResponse.error(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
     /**

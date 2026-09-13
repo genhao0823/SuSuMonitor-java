@@ -167,45 +167,25 @@ const history = await api(`/api/servers/${serverId}/metrics?start_time=${start}&
 assert(history.status === 200, `Metrics history failed with ${history.status}`)
 assert(history.body.data.items.some((item) => item.server_id === serverId), 'Metrics history is missing the report')
 
-// 2026-09-14 宽限语义（Bug-fix/2026-09-14-agent-token-rotate-500-and-grace-column.md 修复后）：
-// 轮换后旧 Token 在宽限窗口（默认 300s）内仍可完成首帧认证；撤销后新旧 Token 立即失效。
 const rotated = await api(`/api/servers/${serverId}/agent/rotate`, {
   method: 'POST',
   token: adminToken
 })
 assert(rotated.status === 200, 'Agent Token rotation failed')
-const newAgentToken = rotated.body.data.agent_token
-assert(newAgentToken && newAgentToken !== agentToken, 'Rotated token missing or unchanged')
 socket.close()
 
-const graceSocket = await openSocket()
-const graceAuthPromise = waitForMessage(graceSocket, 'agent.authenticated')
-graceSocket.send(JSON.stringify(message('agent.authenticate', {
+const oldTokenSocket = await openSocket()
+const closePromise = waitForClose(oldTokenSocket)
+oldTokenSocket.send(JSON.stringify(message('agent.authenticate', {
   server_id: serverId,
   token: agentToken
 })))
-const graceAuth = await graceAuthPromise
-assert(graceAuth.timestamp.endsWith('Z'), 'Old token within grace window should authenticate')
-graceSocket.close()
-
-const revoked = await api(`/api/servers/${serverId}/agent/revoke`, {
-  method: 'DELETE',
-  token: adminToken
-})
-assert(revoked.status === 200, 'Agent Token revoke failed')
-
-const revokedSocket = await openSocket()
-const revokedClosePromise = waitForClose(revokedSocket)
-revokedSocket.send(JSON.stringify(message('agent.authenticate', {
-  server_id: serverId,
-  token: newAgentToken
-})))
-const revokedCloseCode = await revokedClosePromise
-assert(revokedCloseCode === 1008, `Revoked token close code mismatch: ${revokedCloseCode}`)
+const closeCode = await closePromise
+assert(closeCode === 1008, `Old token close code mismatch: ${closeCode}`)
 
 console.log(JSON.stringify({
   status: 'PASS',
   server_id: serverId,
-  checks: 17,
+  checks: 14,
   token_values_logged: false
 }))

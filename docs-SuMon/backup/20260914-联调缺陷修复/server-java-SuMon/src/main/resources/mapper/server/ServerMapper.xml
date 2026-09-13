@@ -295,9 +295,9 @@
 
     <update id="rotateAgentToken">
         UPDATE servers
-        SET agent_token_hash_prev = agent_token_hash,
+        SET agent_token_hash = #{tokenHash},
+            agent_token_hash_prev = agent_token_hash,
             agent_token_grace_until = #{graceUntil},
-            agent_token_hash = #{tokenHash},
             agent_token_rotated_at = #{rotatedAt},
             agent_token_revoked_at = NULL,
             agent_status = 'offline',
