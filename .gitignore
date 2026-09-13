@@ -78,5 +78,8 @@ tmp/
 # 临时备份文件
 *.bak
 
+# 含真实 IP/密码/token 的内部手册（与仓库脱敏惯例冲突，仅本地留存）
+docs-SuMon/Handoff-SuMon/20260914-整体部署架构与主机连接手册.md
+
 # Go Agent 本地编译产物
 agent-go-SuMon/susumonitor-agent*
