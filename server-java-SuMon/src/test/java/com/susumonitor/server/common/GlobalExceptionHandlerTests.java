@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -13,12 +14,25 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  */
 class GlobalExceptionHandlerTests {
 
-    /** NoResourceFoundException 映射为 HTTP 404 + 40400，而非兜底 500。 */
+    /** NoResourceFoundException（静态资源缺失）映射为 HTTP 404 + 40400，而非兜底 500。 */
     @Test
     void noResourceFoundShouldMapToNotFound() {
         GlobalExceptionHandler handler = new GlobalExceptionHandler(60);
         NoResourceFoundException exception =
                 new NoResourceFoundException(null, "api/no-such-path");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleNoResourceFound(exception);
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertEquals(40400, response.getBody().getCode());
+    }
+
+    /** NoHandlerFoundException（DispatcherServlet 无处理器，内网实测的真实类型）同样映射 404/40400。 */
+    @Test
+    void noHandlerFoundShouldMapToNotFound() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler(60);
+        NoHandlerFoundException exception = new NoHandlerFoundException("GET", "/api/no-such-path",
+                org.springframework.http.HttpHeaders.EMPTY);
 
         ResponseEntity<ApiResponse<Void>> response = handler.handleNoResourceFound(exception);
 

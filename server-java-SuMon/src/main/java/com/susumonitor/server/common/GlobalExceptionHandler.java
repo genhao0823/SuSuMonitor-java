@@ -13,6 +13,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -136,16 +137,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 未映射的 API 路径由静态资源处理器抛出 NoResourceFoundException，必须在兜底之前
-     * 转 404/40400；否则会被 Exception.class 兜底误判为内部错误（2026-09-14 联调缺陷，
-     * 见 Bug-fix/2026-09-14-unmapped-api-path-500.md）。
+     * 未映射的 API 路径会以两类内建信号异常出现——DispatcherServlet 无处理器时抛
+     * NoHandlerFoundException，静态资源缺失时抛 NoResourceFoundException——必须在
+     * 兜底之前统一转 404/40400；否则会被 Exception.class 兜底误判为内部错误
+     * （2026-09-14 联调缺陷，见 Bug-fix/2026-09-14-unmapped-api-path-500.md）。
      *
      * @param exception 无处理器/资源异常
      * @return 统一资源不存在响应（404）
      */
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException exception) {
-        LOGGER.warn("No handler for requested path: {}", exception.getResourcePath());
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(Exception exception) {
+        LOGGER.warn("No handler for requested path: {}", exception.getMessage());
         return ResponseEntity.status(ErrorCode.RESOURCE_NOT_FOUND.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.RESOURCE_NOT_FOUND));
     }
