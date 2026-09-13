@@ -103,6 +103,16 @@ class AiUserProviderConfigServiceTests {
         assertEquals("new-model", captor.getValue().getModel());
     }
 
+    /** 更新既有配置（ON DUPLICATE KEY UPDATE 返回 2 行 matched）时必须成功——联调缺陷回归。 */
+    @Test
+    void upsertShouldSucceedWhenUpdatePathReturnsTwoRows() {
+        when(mapper.upsert(any())).thenReturn(2);
+
+        service.upsert(USER_ID, "https://api.example.test/v1", "sk-secret-abcdef", "test-model", true);
+
+        verify(mapper).upsert(any());
+    }
+
     /** api_key 空白且从未配置时拒绝保存。 */
     @Test
     void upsertWithBlankKeyAndNoExistingShouldFail() {

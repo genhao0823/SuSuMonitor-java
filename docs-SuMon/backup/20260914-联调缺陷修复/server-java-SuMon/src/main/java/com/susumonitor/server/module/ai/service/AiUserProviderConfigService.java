@@ -137,9 +137,7 @@ public class AiUserProviderConfigService {
         config.setApiKeyCiphertext(ciphertext);
         config.setModel(model.trim());
         config.setEnabled(enabled);
-        // ON DUPLICATE KEY UPDATE 在 Connector/J found_rows 语义下：首存返回 1，更新既有行返回 2
-        // （2026-09-14 联调缺陷：误用 != 1 导致已存在配置的再次保存必现 50001，但数据实际已落库）。
-        if (mapper.upsert(config) < 1) {
+        if (mapper.upsert(config) != 1) {
             throw new BusinessException(ErrorCode.DATABASE_ERROR);
         }
         log.info("AI user provider config saved, userId={}, enabled={}", userId, enabled);
