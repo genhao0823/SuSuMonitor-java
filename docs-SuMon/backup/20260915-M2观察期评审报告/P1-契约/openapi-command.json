@@ -1,0 +1,672 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SuSuMonitor AI Command API (M1 approval-based)",
+    "description": "Approval-based command domain (M1). All endpoints are admin-only. The domain is gated by susumonitor.ai.command.enabled (default false): while disabled the controller bean is not loaded and requests receive 404 after the security chain. Only whitelisted template ids with validated typed parameters are accepted; free-form command strings are always rejected. Every run is persisted in ai_command_runs with proposer/approver audit. Execution goes to a restricted, non-PTY executor inside the Go agent over command.execute/command.result frames; the AI never touches terminal.* PTY frames. Command outputs are redacted and truncated before persistence.",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:18080",
+      "description": "Local development server; endpoints exist only when susumonitor.ai.command.enabled=true"
+    }
+  ],
+  "tags": [
+    {
+      "name": "ai-command",
+      "description": "Approval-based restricted command domain"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/ai/commands/suggestions": {
+      "post": {
+        "tags": ["ai-command"],
+        "summary": "Suggest commands via AI and create pending runs",
+        "description": "Admin sends an ops intent; the AI proposes 1-3 whitelisted template commands (validated server-side, invalid ones dropped) and each becomes a pending_approval run awaiting approval. Requires susumonitor.ai.enabled=true in addition to the command gate.",
+        "operationId": "createCommandSuggestions",
+        "x-required-role": "admin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandSuggestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pending runs created (possibly empty if every suggestion was invalid)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandRunListResponse"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidParameter" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "502": { "$ref": "#/components/responses/ProviderUnavailable" },
+          "503": { "$ref": "#/components/responses/Disabled" },
+          "504": { "$ref": "#/components/responses/ProviderTimeout" }
+        }
+      }
+    },
+    "/api/ai/commands/runs": {
+      "post": {
+        "tags": ["ai-command"],
+        "summary": "Create a pending command run manually",
+        "description": "Admin references a whitelisted template id with typed parameters; the rendered command preview is returned for later approval.",
+        "operationId": "createManualCommandRun",
+        "x-required-role": "admin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualCommandRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pending run created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandRunResponse"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidParameter" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "get": {
+        "tags": ["ai-command"],
+        "summary": "List command runs",
+        "operationId": "listCommandRuns",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending_approval",
+                "approved",
+                "executing",
+                "succeeded",
+                "failed",
+                "rejected",
+                "expired",
+                "timeout"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated command runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandRunPageResponse"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidParameter" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/ai/commands/runs/{id}": {
+      "get": {
+        "tags": ["ai-command"],
+        "summary": "Get a command run",
+        "operationId": "getCommandRun",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Command run detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandRunResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/ai/commands/runs/{id}/approve": {
+      "post": {
+        "tags": ["ai-command"],
+        "summary": "Approve a pending run and dispatch it to the agent",
+        "description": "CAS from pending_approval (unexpired). Dispatch failure marks the run failed with 40906. Results are fetched by polling GET /api/ai/commands/runs/{id}.",
+        "operationId": "approveCommandRun",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run approved and dispatched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandRunResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": {
+            "description": "State conflict (40905) or agent offline (40906)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": 40906,
+                  "message": "command agent offline",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/commands/runs/{id}/reject": {
+      "post": {
+        "tags": ["ai-command"],
+        "summary": "Reject a pending run",
+        "operationId": "rejectCommandRun",
+        "x-required-role": "admin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandRunResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": {
+            "description": "State conflict (40905)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": 40905,
+                  "message": "command run state conflict",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/commands/auto-approval-policy": {
+      "get": {
+        "tags": ["ai-command"],
+        "summary": "Get the auto-approval policy",
+        "description": "Instance-level single-row policy. A missing row is reported as disabled (fail-closed); when enabled, AI-sourced suggestions at or below max_risk_level are auto-approved and dispatched without a human click. Manual runs and high-risk templates always require human approval.",
+        "operationId": "getAutoApprovalPolicy",
+        "x-required-role": "admin",
+        "responses": {
+          "200": {
+            "description": "Current policy snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoApprovalPolicyResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "put": {
+        "tags": ["ai-command"],
+        "summary": "Update the auto-approval policy",
+        "description": "Upserts the single policy row. max_risk_level must be low or medium; high is rejected with 40002.",
+        "operationId": "updateAutoApprovalPolicy",
+        "x-required-role": "admin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoApprovalPolicyRequest"
+              },
+              "example": { "enabled": true, "max_risk_level": "medium" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated policy snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoApprovalPolicyResponse"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidParameter" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/ai/commands/templates": {
+      "get": {
+        "tags": ["ai-command"],
+        "summary": "List whitelisted command templates",
+        "description": "Mirror of the frozen L1 template table in command-protocol-v1.md; the Go agent enforces the same table independently before execution.",
+        "operationId": "listCommandTemplates",
+        "x-required-role": "admin",
+        "responses": {
+          "200": {
+            "description": "Template list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateListResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT for an active user with the admin role."
+      }
+    },
+    "responses": {
+      "InvalidParameter": {
+        "description": "Invalid request (40000/40002/40004).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "code": 40002, "message": "invalid request parameter", "data": null }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing, invalid, expired, or inactive JWT (40100).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "code": 40100, "message": "unauthorized", "data": null }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Authenticated user is not an active administrator (40300).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "code": 40300, "message": "forbidden", "data": null }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found (40400/40404).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "code": 40404, "message": "command run not found", "data": null }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Command rate limit reached (42907).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "code": 42907, "message": "command rate limit reached", "data": null }
+          }
+        }
+      },
+      "ProviderUnavailable": {
+        "description": "AI provider unavailable (50303).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "code": 50303, "message": "AI provider unavailable", "data": null }
+          }
+        }
+      },
+      "Disabled": {
+        "description": "AI disabled or provider configuration invalid (50304).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "code": 50304, "message": "AI diagnosis unavailable", "data": null }
+          }
+        }
+      },
+      "ProviderTimeout": {
+        "description": "AI provider timeout (50401).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "code": 50401, "message": "AI provider timeout", "data": null }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["code", "message", "data"],
+        "properties": {
+          "code": { "type": "integer" },
+          "message": { "type": "string" },
+          "data": { "nullable": true }
+        }
+      },
+      "CommandSuggestionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["server_id", "intent"],
+        "properties": {
+          "server_id": { "type": "integer", "format": "int64", "minimum": 1 },
+          "intent": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        }
+      },
+      "ManualCommandRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["server_id", "template_id"],
+        "properties": {
+          "server_id": { "type": "integer", "format": "int64", "minimum": 1 },
+          "template_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "params": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "maxProperties": 16
+          }
+        }
+      },
+      "CommandRun": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "execution_id",
+          "server_id",
+          "template_id",
+          "rendered_command",
+          "status",
+          "source"
+        ],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "execution_id": { "type": "string", "format": "uuid" },
+          "server_id": { "type": "integer", "format": "int64" },
+          "template_id": { "type": "string" },
+          "params": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "rendered_command": {
+            "type": "string",
+            "description": "Human-readable preview of the exact command approved for execution."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending_approval",
+              "approved",
+              "executing",
+              "succeeded",
+              "failed",
+              "rejected",
+              "expired",
+              "timeout"
+            ]
+          },
+          "source": { "type": "string", "enum": ["ai", "manual"] },
+          "risk_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "Risk tier snapshot taken from the template at creation time."
+          },
+          "approval_mode": {
+            "type": "string",
+            "enum": ["manual", "auto"],
+            "description": "manual = human approval; auto = policy-driven auto approval (approver_id stays null)."
+          },
+          "proposal": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "reason": { "type": "string" },
+              "model": { "type": "string" },
+              "prompt_version": { "type": "string" }
+            }
+          },
+          "result": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Redacted and truncated execution output; null until completed.",
+            "properties": {
+              "stdout": { "type": "string" },
+              "stderr": { "type": "string" },
+              "truncated": { "type": "boolean" },
+              "error": { "type": "string" }
+            }
+          },
+          "exit_code": { "type": "integer", "nullable": true },
+          "proposer_id": { "type": "integer", "format": "int64" },
+          "approver_id": { "type": "integer", "format": "int64", "nullable": true },
+          "expires_at": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "completed_at": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "CommandRunResponse": {
+        "type": "object",
+        "required": ["code", "message", "data"],
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "success" },
+          "data": { "$ref": "#/components/schemas/CommandRun" }
+        }
+      },
+      "CommandRunListResponse": {
+        "type": "object",
+        "required": ["code", "message", "data"],
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "success" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CommandRun" }
+          }
+        }
+      },
+      "CommandRunPageResponse": {
+        "type": "object",
+        "required": ["code", "message", "data"],
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "success" },
+          "data": {
+            "type": "object",
+            "required": ["items", "total", "page", "page_size"],
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/CommandRun" }
+              },
+              "total": { "type": "integer", "format": "int64" },
+              "page": { "type": "integer" },
+              "page_size": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "TemplateListResponse": {
+        "type": "object",
+        "required": ["code", "message", "data"],
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "success" },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "argv", "params"],
+              "properties": {
+                "id": { "type": "string" },
+                "argv": { "type": "array", "items": { "type": "string" } },
+                "risk_level": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"],
+                  "description": "Frozen risk tier of the template; high is never auto-approvable."
+                },
+                "params": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "pattern"],
+                    "properties": {
+                      "name": { "type": "string" },
+                      "pattern": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "AutoApprovalPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["enabled", "max_risk_level"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "When false (default), every command still requires human approval."
+          },
+          "max_risk_level": {
+            "type": "string",
+            "enum": ["low", "medium"],
+            "description": "Auto-approve templates at or below this tier (low only, or low+medium). high is never a valid threshold."
+          },
+          "updated_at": { "type": "string", "format": "date-time", "nullable": true },
+          "updated_by": { "type": "integer", "format": "int64", "nullable": true }
+        }
+      },
+      "AutoApprovalPolicyResponse": {
+        "type": "object",
+        "required": ["code", "message", "data"],
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "success" },
+          "data": { "$ref": "#/components/schemas/AutoApprovalPolicy" }
+        }
+      },
+      "AutoApprovalPolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["enabled", "max_risk_level"],
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "max_risk_level": { "type": "string", "enum": ["low", "medium"] }
+        }
+      }
+    }
+  }
+}
