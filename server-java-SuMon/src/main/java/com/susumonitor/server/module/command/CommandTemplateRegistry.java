@@ -14,6 +14,10 @@ import org.springframework.stereotype.Component;
  * <p>纵深防御的第一道校验：AI 或手动请求只能引用本表模板 ID 并提供通过参数
  * 正则校验的具名参数；渲染结果即管理员审批时看到的人工预览命令。Go Agent
  * 执行前会做第二道独立校验（内建同表），任何一侧失守都不会执行模板外命令。</p>
+ *
+ * <p>模板清单版本 v2（2026-09-15）：在 L1 只读八条基础上新增 L2 低影响变更两条
+ * （systemctl_reload / journalctl_vacuum，risk=medium）；渲染语义与 Go 侧统一为
+ * 参数值在 argv 元素内的子串替换（值先过白名单正则完整匹配）。</p>
  */
 @Component
 @ConditionalOnProperty(name = "susumonitor.ai.command.enabled", havingValue = "true")
@@ -30,9 +34,14 @@ public class CommandTemplateRegistry {
     private static final Pattern UNIT_PATTERN = Pattern.compile("^[a-zA-Z0-9_.@:-]{1,128}$");
     private static final Pattern LINES_PATTERN = Pattern.compile("^[0-9]{1,4}$");
 
+    // L2 变更类模板参数从严：reload 目标限定常驻服务单元（64 长度、不含 device/scope 类冒号）；
+    // vacuum 天数限定 1-999 的十进制整数，禁止 0（无意义）与前导 0。
+    private static final Pattern RELOAD_UNIT_PATTERN = Pattern.compile("^[a-zA-Z0-9@._-]{1,64}$");
+    private static final Pattern VACUUM_DAYS_PATTERN = Pattern.compile("^[1-9][0-9]{0,2}$");
+
     private final Map<String, Template> templates = new LinkedHashMap<>();
 
-    /** 构造注册表并装载契约冻结的 L1 只读模板（顺序即展示顺序；全部 low 风险）。 */
+    /** 构造注册表并装载契约冻结的模板（顺序即展示顺序；L1 只读全 low，L2 变更全 medium）。 */
     public CommandTemplateRegistry() {
         register(new Template("disk_free", new String[]{"df", "-h"}, new ParamSpec[0], CommandRiskLevel.LOW));
         register(new Template("mem_free", new String[]{"free", "-m"}, new ParamSpec[0], CommandRiskLevel.LOW));
@@ -46,6 +55,10 @@ public class CommandTemplateRegistry {
                 new String[]{"journalctl", "-u", "{unit}", "-n", "{lines}", "--no-pager"},
                 new ParamSpec[]{new ParamSpec("unit", UNIT_PATTERN), new ParamSpec("lines", LINES_PATTERN)},
                 CommandRiskLevel.LOW));
+        register(new Template("systemctl_reload", new String[]{"systemctl", "reload", "{unit}"},
+                new ParamSpec[]{new ParamSpec("unit", RELOAD_UNIT_PATTERN)}, CommandRiskLevel.MEDIUM));
+        register(new Template("journalctl_vacuum", new String[]{"journalctl", "--vacuum-time={days}d"},
+                new ParamSpec[]{new ParamSpec("days", VACUUM_DAYS_PATTERN)}, CommandRiskLevel.MEDIUM));
     }
 
     private void register(Template template) {

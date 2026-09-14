@@ -247,9 +247,13 @@ class CommandRunControllerTests {
 
         mockMvc.perform(get("/api/ai/commands/templates").header(AUTHORIZATION, ADMIN_BEARER))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(8))
+                .andExpect(jsonPath("$.data.length()").value(10))
                 .andExpect(jsonPath("$.data[0].id").value("disk_free"))
-                .andExpect(jsonPath("$.data[0].risk_level").value("low"));
+                .andExpect(jsonPath("$.data[0].risk_level").value("low"))
+                .andExpect(jsonPath("$.data[8].id").value("systemctl_reload"))
+                .andExpect(jsonPath("$.data[8].risk_level").value("medium"))
+                .andExpect(jsonPath("$.data[9].id").value("journalctl_vacuum"))
+                .andExpect(jsonPath("$.data[9].risk_level").value("medium"));
     }
 
     /** admin 可读取自动审批策略。 */

@@ -29,6 +29,11 @@ class CommandTemplateRegistryTests {
                 registry.validateAndRender("service_status", Map.of("unit", "nginx.service")));
         assertEquals("journalctl -u nginx -n 100 --no-pager",
                 registry.validateAndRender("service_logs", Map.of("unit", "nginx", "lines", "100")));
+        // L2 变更类：占位符可与固定前后缀共存于同一 argv 元素（子串替换语义，与 Go 侧一致）。
+        assertEquals("systemctl reload nginx",
+                registry.validateAndRender("systemctl_reload", Map.of("unit", "nginx")));
+        assertEquals("journalctl --vacuum-time=14d",
+                registry.validateAndRender("journalctl_vacuum", Map.of("days", "14")));
     }
 
     /** 模板外命令、元字符注入、参数缺失/越界/多余键一律拒绝。 */
@@ -48,6 +53,24 @@ class CommandTemplateRegistryTests {
         assertThrows(BusinessException.class,
                 () -> registry.validateAndRender("service_logs",
                         Map.of("unit", "nginx", "lines", "100", "extra", "x")));
+        // L2 变更类：元字符、空白、越界天数与多余键同样拒绝（2026-09-15）。
+        assertThrows(BusinessException.class,
+                () -> registry.validateAndRender("systemctl_reload", Map.of("unit", "nginx; reboot")));
+        assertThrows(BusinessException.class,
+                () -> registry.validateAndRender("systemctl_reload", Map.of("unit", "nginx x")));
+        assertThrows(BusinessException.class,
+                () -> registry.validateAndRender("systemctl_reload", Map.of("unit", "a".repeat(65))));
+        assertThrows(BusinessException.class,
+                () -> registry.validateAndRender("systemctl_reload", null));
+        assertThrows(BusinessException.class,
+                () -> registry.validateAndRender("journalctl_vacuum", Map.of("days", "0")));
+        assertThrows(BusinessException.class,
+                () -> registry.validateAndRender("journalctl_vacuum", Map.of("days", "1000")));
+        assertThrows(BusinessException.class,
+                () -> registry.validateAndRender("journalctl_vacuum", Map.of("days", "1d")));
+        assertThrows(BusinessException.class,
+                () -> registry.validateAndRender("journalctl_vacuum",
+                        Map.of("days", "14", "extra", "x")));
     }
 
     /** 全部抛出为 COMMAND_PARAM_INVALID（40004），与错误码契约一致。 */
@@ -58,16 +81,32 @@ class CommandTemplateRegistryTests {
         assertEquals(ErrorCode.COMMAND_PARAM_INVALID, exception.getErrorCode());
     }
 
-    /** 模板列表包含契约冻结的 8 个 L1 只读模板。 */
+    /** 模板列表包含契约冻结的 8 个 L1 只读模板与 2 个 L2 变更类模板。 */
     @Test
     void shouldExposeAllContractTemplates() {
         Map<String, Boolean> ids = new HashMap<>();
         registry.all().forEach(template -> ids.put(template.id(), true));
         for (String id : new String[]{"disk_free", "mem_free", "uptime", "listening_ports",
-                "process_list", "top_snapshot", "service_status", "service_logs"}) {
+                "process_list", "top_snapshot", "service_status", "service_logs",
+                "systemctl_reload", "journalctl_vacuum"}) {
             assertTrue(ids.containsKey(id), "missing template " + id);
         }
+        assertEquals(10, ids.size(), "registry must mirror the contract table exactly");
         assertDoesNotThrow(() -> registry.validateAndRender("service_logs",
                 Map.of("unit", "user@1000.service", "lines", "9999")));
+    }
+
+    /** 风险分级不变量：L1 全部 low、L2 全部 medium、注册表不存在 high（防脏数据进审计快照）。 */
+    @Test
+    void shouldCarryContractRiskTiers() {
+        for (CommandTemplateRegistry.Template template : registry.all()) {
+            switch (template.id()) {
+                case "systemctl_reload", "journalctl_vacuum" ->
+                        assertEquals(CommandRiskLevel.MEDIUM, template.risk(),
+                                "L2 template must be medium: " + template.id());
+                default -> assertEquals(CommandRiskLevel.LOW, template.risk(),
+                        "L1 template must be low: " + template.id());
+            }
+        }
     }
 }
