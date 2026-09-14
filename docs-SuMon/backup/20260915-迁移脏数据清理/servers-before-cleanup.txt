@@ -1,0 +1,40 @@
+*************************** 1. row ***************************
+               id: 1
+             name: wsl-dev
+             host: wsl-dev
+     agent_status: online
+last_heartbeat_at: 2026-07-30 03:07:39.000000
+       created_at: 2026-07-30 10:29:47
+          deleted: 0
+*************************** 2. row ***************************
+               id: 3
+             name: DESKTOP-VT1VN6O-31503
+             host: DESKTOP-VT1VN6O-31503
+     agent_status: online
+last_heartbeat_at: 2026-07-30 03:09:38.000000
+       created_at: 2026-07-30 11:07:50
+          deleted: 0
+*************************** 3. row ***************************
+               id: 34
+             name: processes-1789406281174
+             host: 127.3.122.203
+     agent_status: online
+last_heartbeat_at: 2026-09-14 17:18:01.178710
+       created_at: 2026-09-15 01:18:01
+          deleted: 1
+*************************** 4. row ***************************
+               id: 37
+             name: resources-1789425873768
+             host: 127.5.202.253
+     agent_status: online
+last_heartbeat_at: 2026-09-14 22:44:33.941756
+       created_at: 2026-09-15 06:44:33
+          deleted: 1
+*************************** 5. row ***************************
+               id: 39
+             name: processes-1789425882958
+             host: 127.3.238.45
+     agent_status: online
+last_heartbeat_at: 2026-09-14 22:44:43.111444
+       created_at: 2026-09-15 06:44:42
+          deleted: 1
