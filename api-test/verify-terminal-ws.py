@@ -17,7 +17,9 @@ import time
 import urllib.request
 from urllib.parse import urlparse
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "https://genhaosan.online"
+BASE = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("SUSUMONITOR_VALIDATION_BASE_URL", "http://localhost:18080")
+ADMIN_USERNAME = os.environ.get("SUSUMONITOR_VALIDATION_ADMIN_USERNAME", "")
+ADMIN_PASSWORD = os.environ.get("SUSUMONITOR_VALIDATION_ADMIN_PASSWORD", "")
 SERVER_ID = 4
 
 
@@ -122,7 +124,7 @@ def main():
     print(f"=== 终端全链路测试 @ {BASE} (server_id={SERVER_ID}) ===")
     # 1. 登录
     login = http_json("POST", BASE + "/api/auth/login",
-                      body={"username": "smoke", "password": "smoke123"})
+                      body={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD})
     token = login["data"]["token"]
     print("[1] login ok")
     # 2. 取 ticket
