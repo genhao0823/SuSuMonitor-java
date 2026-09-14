@@ -211,6 +211,36 @@ class MetricsControllerTests {
                 .andExpect(jsonPath("$.code").value(40400));
     }
 
+    /** 验证已审核用户可查询实时磁盘/网卡扩展资源快照，且响应字段保持 snake_case。 */
+    @Test
+    void approvedUserShouldGetLatestResources() throws Exception {
+        authenticateUser();
+        when(metricsService.latestResources(1L)).thenReturn(java.util.Optional.of(resourcesSnapshot()));
+
+        mockMvc.perform(get("/api/servers/1/resources/latest").header(AUTHORIZATION, USER_BEARER))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Request-ID", not(blankOrNullString())))
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.server_id").value(1))
+                .andExpect(jsonPath("$.data.collected_at").isNotEmpty())
+                .andExpect(jsonPath("$.data.disks[0].mount_point").value("/"))
+                .andExpect(jsonPath("$.data.disks[0].device").value("/dev/sda1"))
+                .andExpect(jsonPath("$.data.disks[0].total").value(1024))
+                .andExpect(jsonPath("$.data.nics[0].name").value("eth0"))
+                .andExpect(jsonPath("$.data.nics[0].rx_kbps").value(640.0));
+    }
+
+    /** 验证无新鲜资源快照时返回统一 404 资源不存在。 */
+    @Test
+    void latestResourcesShouldReturnNotFoundWhenAbsent() throws Exception {
+        authenticateUser();
+        when(metricsService.latestResources(1L)).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/api/servers/1/resources/latest").header(AUTHORIZATION, USER_BEARER))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(40400));
+    }
+
     /** 验证未认证请求由安全链返回统一 401。 */
     @Test
     void unauthenticatedRequestShouldReturnUnauthorized() throws Exception {
@@ -305,6 +335,17 @@ class MetricsControllerTests {
         ProcessSampleVo memTop = new ProcessSampleVo(5, "mysqld", BigDecimal.valueOf(0.6), BigDecimal.valueOf(32.1));
         return new ProcessSnapshotVo(1L, OffsetDateTime.of(2026, 7, 23, 0, 30, 0, 0, ZoneOffset.UTC),
                 List.of(cpuTop), List.of(memTop));
+    }
+
+    /** 构造带磁盘/网卡条目的扩展资源快照视图。 */
+    private com.susumonitor.server.module.metrics.vo.ServerResourcesSnapshotVo resourcesSnapshot() {
+        com.susumonitor.server.module.metrics.vo.DiskSampleVo disk =
+                new com.susumonitor.server.module.metrics.vo.DiskSampleVo("/", "/dev/sda1", 1024L, 256L);
+        com.susumonitor.server.module.metrics.vo.NicSampleVo nic =
+                new com.susumonitor.server.module.metrics.vo.NicSampleVo("eth0", BigDecimal.valueOf(640),
+                        BigDecimal.valueOf(12.8));
+        return new com.susumonitor.server.module.metrics.vo.ServerResourcesSnapshotVo(1L,
+                OffsetDateTime.of(2026, 7, 23, 0, 30, 0, 0, ZoneOffset.UTC), List.of(disk), List.of(nic));
     }
 
     private PageResult<MetricsHistoryVo> historyPage() {

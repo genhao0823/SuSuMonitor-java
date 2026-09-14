@@ -9,8 +9,7 @@ import java.util.List;
  * Agent 单次指标上报载荷，与 Metrics 固定宽表字段一一对应。
  *
  * <p>进程排行字段为 websocket-protocol.md v1.4 新增的可选字段，
- * 磁盘/网卡扩展资源字段为 v1.5 新增的可选字段；旧版 Agent 整体省略；
- * 服务端只保留内存快照，不写库。</p>
+ * 旧版 Agent 整体省略；服务端只保留内存快照，不写库。</p>
  */
 public class MetricsReportPayload {
 
@@ -43,10 +42,6 @@ public class MetricsReportPayload {
     private List<ProcessSamplePayload> processCpuTop;
     @JsonProperty("process_mem_top")
     private List<ProcessSamplePayload> processMemTop;
-    @JsonProperty("disks")
-    private List<DiskSamplePayload> disks;
-    @JsonProperty("nics")
-    private List<NicSamplePayload> nics;
 
     /** 获取服务器 ID。 */
     public Long getServerId() { return serverId; }
@@ -108,12 +103,4 @@ public class MetricsReportPayload {
     public List<ProcessSamplePayload> getProcessMemTop() { return processMemTop; }
     /** 设置按内存占比降序的 Top 进程列表。 */
     public void setProcessMemTop(List<ProcessSamplePayload> processMemTop) { this.processMemTop = processMemTop; }
-    /** 获取按总容量降序的挂载点容量列表；旧版 Agent 为 null。 */
-    public List<DiskSamplePayload> getDisks() { return disks; }
-    /** 设置按总容量降序的挂载点容量列表。 */
-    public void setDisks(List<DiskSamplePayload> disks) { this.disks = disks; }
-    /** 获取按接收速率降序的网卡吞吐列表；旧版 Agent 为 null。 */
-    public List<NicSamplePayload> getNics() { return nics; }
-    /** 设置按接收速率降序的网卡吞吐列表。 */
-    public void setNics(List<NicSamplePayload> nics) { this.nics = nics; }
 }

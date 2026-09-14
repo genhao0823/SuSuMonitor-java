@@ -66,7 +66,7 @@ class MetricsServiceTests {
     void setUp() {
         service = new MetricsServiceImpl(metricsMapper, serverService, outboxService,
                 outboxEnvelopeFactory, eventPublisher,
-                new ProcessSnapshotRegistry(Clock.systemUTC()), new ResourcesSnapshotRegistry(Clock.systemUTC()));
+                new ProcessSnapshotRegistry(Clock.systemUTC()));
     }
 
     /** 首次投递写入去重记录和指标，并发布一次 Metrics 事件。 */
@@ -292,109 +292,6 @@ class MetricsServiceTests {
         assertThrows(MetricsRejectedException.class,
                 () -> service.report(SERVER_ID, UUID.randomUUID().toString(), payload));
         verify(metricsMapper, never()).insertIngestion(any());
-    }
-
-    /** 携带磁盘/网卡扩展资源的载荷成功入库后，事件应捎带结构完整的资源快照。 */
-    @Test
-    void reportWithResourcesShouldPublishSnapshotInEvent() {
-        lockActiveServer();
-        when(metricsMapper.insertIngestion(any())).thenReturn(1);
-        when(metricsMapper.insertMetric(any())).thenReturn(1);
-        MetricsReportPayload payload = payload(COLLECTED_AT);
-        payload.setDisks(List.of(new com.susumonitor.server.module.metrics.dto.DiskSamplePayload(
-                "/", "/dev/sda1", 1024L, 256L)));
-        payload.setNics(List.of(new com.susumonitor.server.module.metrics.dto.NicSamplePayload(
-                "eth0", BigDecimal.valueOf(640), BigDecimal.valueOf(12.8))));
-
-        service.report(SERVER_ID, UUID.randomUUID().toString(), payload);
-
-        ArgumentCaptor<MetricsService.MetricsReportedEvent> captor =
-                ArgumentCaptor.forClass(MetricsService.MetricsReportedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        com.susumonitor.server.module.metrics.vo.ServerResourcesSnapshotVo snapshot = captor.getValue().resources();
-        org.junit.jupiter.api.Assertions.assertNotNull(snapshot);
-        org.junit.jupiter.api.Assertions.assertEquals(COLLECTED_AT, snapshot.collectedAt());
-        org.junit.jupiter.api.Assertions.assertEquals("/", snapshot.disks().get(0).mountPoint());
-        org.junit.jupiter.api.Assertions.assertEquals(1024L, snapshot.disks().get(0).total());
-        org.junit.jupiter.api.Assertions.assertEquals("eth0", snapshot.nics().get(0).name());
-        org.junit.jupiter.api.Assertions.assertEquals(0, snapshot.nics().get(0).rxKbps().compareTo(BigDecimal.valueOf(640)));
-    }
-
-    /** 旧版 Agent 不带扩展资源字段的载荷照常入库，事件不携带资源快照。 */
-    @Test
-    void legacyPayloadShouldPublishEventWithoutResourcesSnapshot() {
-        lockActiveServer();
-        when(metricsMapper.insertIngestion(any())).thenReturn(1);
-        when(metricsMapper.insertMetric(any())).thenReturn(1);
-
-        service.report(SERVER_ID, UUID.randomUUID().toString(), payload(COLLECTED_AT));
-
-        ArgumentCaptor<MetricsService.MetricsReportedEvent> captor =
-                ArgumentCaptor.forClass(MetricsService.MetricsReportedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        org.junit.jupiter.api.Assertions.assertNull(captor.getValue().resources());
-    }
-
-    /**
-     * 磁盘列表超限（33 条 > 协议上限 32）丢弃资源快照但指标行照常入库：
-     * 扩展字段走"丢节点 + 告警日志"语义，不触发永久 nack（与进程字段严格语义刻意不同）。
-     */
-    @Test
-    void oversizedDiskListShouldDropSnapshotWithoutRejectingReport() {
-        lockActiveServer();
-        when(metricsMapper.insertIngestion(any())).thenReturn(1);
-        when(metricsMapper.insertMetric(any())).thenReturn(1);
-        MetricsReportPayload payload = payload(COLLECTED_AT);
-        List<com.susumonitor.server.module.metrics.dto.DiskSamplePayload> oversized = new ArrayList<>();
-        for (int i = 0; i < 33; i++) {
-            oversized.add(new com.susumonitor.server.module.metrics.dto.DiskSamplePayload(
-                    "/mnt/d" + i, "/dev/sd" + i, 1024L, 256L));
-        }
-        payload.setDisks(oversized);
-
-        service.report(SERVER_ID, UUID.randomUUID().toString(), payload);
-
-        verify(metricsMapper).insertMetric(any());
-        ArgumentCaptor<MetricsService.MetricsReportedEvent> captor =
-                ArgumentCaptor.forClass(MetricsService.MetricsReportedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        org.junit.jupiter.api.Assertions.assertNull(captor.getValue().resources());
-    }
-
-    /** 磁盘条目含负数值（free < 0）丢弃资源快照但指标行照常入库。 */
-    @Test
-    void negativeDiskValueShouldDropSnapshotWithoutRejectingReport() {
-        lockActiveServer();
-        when(metricsMapper.insertIngestion(any())).thenReturn(1);
-        when(metricsMapper.insertMetric(any())).thenReturn(1);
-        MetricsReportPayload payload = payload(COLLECTED_AT);
-        payload.setDisks(List.of(new com.susumonitor.server.module.metrics.dto.DiskSamplePayload(
-                "/", "/dev/sda1", 1024L, -1L)));
-
-        service.report(SERVER_ID, UUID.randomUUID().toString(), payload);
-
-        ArgumentCaptor<MetricsService.MetricsReportedEvent> captor =
-                ArgumentCaptor.forClass(MetricsService.MetricsReportedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        org.junit.jupiter.api.Assertions.assertNull(captor.getValue().resources());
-    }
-
-    /** 网卡条目名称空白丢弃资源快照但指标行照常入库。 */
-    @Test
-    void blankNicNameShouldDropSnapshotWithoutRejectingReport() {
-        lockActiveServer();
-        when(metricsMapper.insertIngestion(any())).thenReturn(1);
-        when(metricsMapper.insertMetric(any())).thenReturn(1);
-        MetricsReportPayload payload = payload(COLLECTED_AT);
-        payload.setNics(List.of(new com.susumonitor.server.module.metrics.dto.NicSamplePayload(
-                " ", BigDecimal.ONE, BigDecimal.ONE)));
-
-        service.report(SERVER_ID, UUID.randomUUID().toString(), payload);
-
-        ArgumentCaptor<MetricsService.MetricsReportedEvent> captor =
-                ArgumentCaptor.forClass(MetricsService.MetricsReportedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        org.junit.jupiter.api.Assertions.assertNull(captor.getValue().resources());
     }
 
     /** 构造满足宽表校验的最小 Metrics 上报载荷。 */

@@ -3,10 +3,8 @@ package com.susumonitor.server.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.susumonitor.server.module.metrics.service.MetricsService.MetricsReportedEvent;
 import com.susumonitor.server.module.metrics.service.ProcessSnapshotRegistry;
-import com.susumonitor.server.module.metrics.service.ResourcesSnapshotRegistry;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
 import com.susumonitor.server.module.metrics.vo.ProcessSnapshotVo;
-import com.susumonitor.server.module.metrics.vo.ServerResourcesSnapshotVo;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -24,18 +22,15 @@ public class MonitorMetricsPublisher {
     private final Clock clock;
     private final MonitorSessionTerminationService terminationService;
     private final ProcessSnapshotRegistry processSnapshotRegistry;
-    private final ResourcesSnapshotRegistry resourcesSnapshotRegistry;
 
-    /** 注入 JSON 序列化器、订阅注册表、进程/资源快照注册表与终止服务。 */
+    /** 注入 JSON 序列化器、订阅注册表、进程快照注册表与终止服务。 */
     public MonitorMetricsPublisher(ObjectMapper objectMapper, MonitorSubscriptionRegistry registry, Clock clock,
-            MonitorSessionTerminationService terminationService, ProcessSnapshotRegistry processSnapshotRegistry,
-            ResourcesSnapshotRegistry resourcesSnapshotRegistry) {
+            MonitorSessionTerminationService terminationService, ProcessSnapshotRegistry processSnapshotRegistry) {
         this.objectMapper = objectMapper;
         this.registry = registry;
         this.clock = clock;
         this.terminationService = terminationService;
         this.processSnapshotRegistry = processSnapshotRegistry;
-        this.resourcesSnapshotRegistry = resourcesSnapshotRegistry;
     }
 
     /** 仅在数据库事务成功提交后发送指标更新。 */
@@ -46,13 +41,9 @@ public class MonitorMetricsPublisher {
         if (event.processes() != null) {
             processSnapshotRegistry.update(event.processes());
         }
-        // 提交后才把扩展资源快照落入注册表，语义与进程快照一致（协议 v1.5）。
-        if (event.resources() != null) {
-            resourcesSnapshotRegistry.update(event.resources());
-        }
         for (MonitorWebSocketSession subscriber : registry.subscribers(metrics.getServerId())) {
             try {
-                if (!subscriber.send(new TextMessage(message(metrics, event.processes(), event.resources())))) {
+                if (!subscriber.send(new TextMessage(message(metrics, event.processes())))) {
                     terminationService.terminateNormally(subscriber);
                 }
             } catch (MonitorBackpressureException exception) {
@@ -63,20 +54,13 @@ public class MonitorMetricsPublisher {
         }
     }
 
-    /**
-     * 构建 metrics.update WebSocket 消息 JSON 字符串；进程快照存在时追加可选 processes 节点，
-     * 扩展资源快照存在时追加可选 resources 节点（协议 v1.4/v1.5）。
-     */
-    private String message(MetricsLatestVo metrics, ProcessSnapshotVo processes,
-            ServerResourcesSnapshotVo resources) throws IOException {
+    /** 构建 metrics.update WebSocket 消息 JSON 字符串；进程快照存在时追加可选 processes 节点。 */
+    private String message(MetricsLatestVo metrics, ProcessSnapshotVo processes) throws IOException {
         var payload = objectMapper.createObjectNode();
         payload.put("server_id", metrics.getServerId());
         payload.set("metrics", objectMapper.valueToTree(metrics));
         if (processes != null) {
             payload.set("processes", objectMapper.valueToTree(processes));
-        }
-        if (resources != null) {
-            payload.set("resources", objectMapper.valueToTree(resources));
         }
         return objectMapper.createObjectNode()
                 .put("type", "metrics.update")

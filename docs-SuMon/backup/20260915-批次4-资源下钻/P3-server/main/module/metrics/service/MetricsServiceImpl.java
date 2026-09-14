@@ -4,22 +4,17 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.common.vo.PageResult;
-import com.susumonitor.server.module.metrics.dto.DiskSamplePayload;
 import com.susumonitor.server.module.metrics.dto.MetricsReportPayload;
-import com.susumonitor.server.module.metrics.dto.NicSamplePayload;
 import com.susumonitor.server.module.metrics.dto.ProcessSamplePayload;
 import com.susumonitor.server.module.metrics.entity.MetricsEntity;
 import com.susumonitor.server.module.metrics.entity.MetricsIngestionEntity;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxEnvelopeFactory;
 import com.susumonitor.server.module.metrics.outbox.OutboxService;
-import com.susumonitor.server.module.metrics.vo.DiskSampleVo;
 import com.susumonitor.server.module.metrics.vo.MetricsHistoryVo;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
-import com.susumonitor.server.module.metrics.vo.NicSampleVo;
 import com.susumonitor.server.module.metrics.vo.ProcessSampleVo;
 import com.susumonitor.server.module.metrics.vo.ProcessSnapshotVo;
-import com.susumonitor.server.module.metrics.vo.ServerResourcesSnapshotVo;
 import com.susumonitor.server.module.server.service.ServerService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -29,7 +24,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.context.ApplicationEventPublisher;
@@ -37,8 +31,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 负责固定宽表指标校验、写入、最新值和历史分页查询。 */
-// 开启 Slf4j 日志：扩展资源快照被拒收时需要输出含服务器 ID 的告警日志（协议 v1.5 丢节点语义）。
-@Slf4j
 @Service
 public class MetricsServiceImpl implements MetricsService {
 
@@ -48,12 +40,6 @@ public class MetricsServiceImpl implements MetricsService {
     private static final int MAX_PROCESS_ENTRIES = 20;
     // 进程名字符数上限，与协议一致。
     private static final int MAX_PROCESS_NAME_LENGTH = 128;
-    // 磁盘容量列表条数上限，与协议（websocket-protocol.md v1.5）一致。
-    private static final int MAX_DISK_ENTRIES = 32;
-    // 网卡吞吐列表条数上限，与协议一致。
-    private static final int MAX_NIC_ENTRIES = 64;
-    // 挂载点/设备名/网卡名的字符数上限，与协议一致。
-    private static final int MAX_RESOURCE_NAME_LENGTH = 128;
     private static final ZoneId APPLICATION_ZONE = ZoneOffset.UTC;
     private final MetricsMapper metricsMapper;
     private final ServerService serverService;
@@ -61,20 +47,17 @@ public class MetricsServiceImpl implements MetricsService {
     private final OutboxEnvelopeFactory outboxEnvelopeFactory;
     private final ApplicationEventPublisher eventPublisher;
     private final ProcessSnapshotRegistry processSnapshotRegistry;
-    private final ResourcesSnapshotRegistry resourcesSnapshotRegistry;
 
-    /** 注入指标数据访问组件、服务器契约、Outbox 登记服务、信封工厂与进程/资源快照注册表（servers 表访问统一走 ServerService）。 */
+    /** 注入指标数据访问组件、服务器契约、Outbox 登记服务、信封工厂与进程快照注册表（servers 表访问统一走 ServerService）。 */
     public MetricsServiceImpl(MetricsMapper metricsMapper, ServerService serverService,
             OutboxService outboxService, OutboxEnvelopeFactory outboxEnvelopeFactory,
-            ApplicationEventPublisher eventPublisher, ProcessSnapshotRegistry processSnapshotRegistry,
-            ResourcesSnapshotRegistry resourcesSnapshotRegistry) {
+            ApplicationEventPublisher eventPublisher, ProcessSnapshotRegistry processSnapshotRegistry) {
         this.metricsMapper = metricsMapper;
         this.serverService = serverService;
         this.outboxService = outboxService;
         this.outboxEnvelopeFactory = outboxEnvelopeFactory;
         this.eventPublisher = eventPublisher;
         this.processSnapshotRegistry = processSnapshotRegistry;
-        this.resourcesSnapshotRegistry = resourcesSnapshotRegistry;
     }
 
     /**
@@ -115,8 +98,7 @@ public class MetricsServiceImpl implements MetricsService {
             String envelope = outboxEnvelopeFactory.build(entity, messageId, eventId);
             outboxService.enqueue(OutboxEnvelopeFactory.EVENT_TYPE, OutboxEnvelopeFactory.ROUTING_KEY,
                     envelope, eventId);
-            eventPublisher.publishEvent(new MetricsReportedEvent(toLatestVo(entity), toProcessSnapshot(payload),
-                    toResourcesSnapshot(payload)));
+            eventPublisher.publishEvent(new MetricsReportedEvent(toLatestVo(entity), toProcessSnapshot(payload)));
         } catch (DuplicateKeyException exception) {
             // 重复投递竞态（isDuplicateIngestion 预检查兜底）：数据级冲突，重发不会改变结果
             throw exception;
@@ -142,13 +124,6 @@ public class MetricsServiceImpl implements MetricsService {
     public Optional<ProcessSnapshotVo> latestProcessSnapshot(Long serverId) {
         ensureServerExists(serverId);
         return processSnapshotRegistry.latest(serverId);
-    }
-
-    /** 查询服务器新鲜窗口内的实时磁盘/网卡扩展资源快照；无快照或已过期时为空。 */
-    @Transactional(readOnly = true)
-    public Optional<ServerResourcesSnapshotVo> latestResources(Long serverId) {
-        ensureServerExists(serverId);
-        return resourcesSnapshotRegistry.latest(serverId);
     }
 
     /** 查询服务器时间窗口内的历史指标。 */
@@ -306,100 +281,6 @@ public class MetricsServiceImpl implements MetricsService {
         } catch (IllegalArgumentException exception) {
             return false;
         }
-    }
-
-    /**
-     * 将上报载荷中的可选磁盘/网卡扩展资源转换为内存快照视图；两个列表均缺省时返回 null。
-     *
-     * <p>扩展字段校验语义与进程字段（永久 nack）刻意不同：任一列表超限或任一元素
-     * 非法时丢弃整个快照并输出告警日志，核心指标行照常入库与确认——可选增强
-     * 不得打断核心遥测链路（websocket-protocol.md v1.5 丢节点语义）。</p>
-     *
-     * @param payload 指标上报载荷
-     * @return 资源快照；旧版 Agent 载荷或扩展字段被拒收时返回 null
-     */
-    private ServerResourcesSnapshotVo toResourcesSnapshot(MetricsReportPayload payload) {
-        if (payload.getDisks() == null && payload.getNics() == null) {
-            return null;
-        }
-        if (payload.getDisks() != null && (payload.getDisks().size() > MAX_DISK_ENTRIES
-                || payload.getDisks().stream().anyMatch(this::isInvalidDiskSample))) {
-            log.warn("resources snapshot dropped: invalid disks node, serverId={}, diskEntries={}",
-                    payload.getServerId(), payload.getDisks().size());
-            return null;
-        }
-        if (payload.getNics() != null && (payload.getNics().size() > MAX_NIC_ENTRIES
-                || payload.getNics().stream().anyMatch(this::isInvalidNicSample))) {
-            log.warn("resources snapshot dropped: invalid nics node, serverId={}, nicEntries={}",
-                    payload.getServerId(), payload.getNics().size());
-            return null;
-        }
-        List<DiskSampleVo> disks = toDiskSampleVos(payload.getDisks());
-        List<NicSampleVo> nics = toNicSampleVos(payload.getNics());
-        // 校验层已保证 collected_at 为 UTC offset，可直接透传。
-        return new ServerResourcesSnapshotVo(payload.getServerId(), payload.getCollectedAt(), disks, nics);
-    }
-
-    /**
-     * 判断单个磁盘条目是否非法：元素缺失、名称空白或超长、字节数缺失或为负。
-     *
-     * @param sample 磁盘条目
-     * @return 非法时为 true
-     */
-    private boolean isInvalidDiskSample(DiskSamplePayload sample) {
-        return sample == null || isBlankOrOverLong(sample.mountPoint()) || isBlankOrOverLong(sample.device())
-                || isNullOrNegative(sample.total()) || isNullOrNegative(sample.free());
-    }
-
-    /**
-     * 判断单个网卡条目是否非法：元素缺失、名称空白或超长、速率缺失或为负。
-     *
-     * @param sample 网卡条目
-     * @return 非法时为 true
-     */
-    private boolean isInvalidNicSample(NicSamplePayload sample) {
-        return sample == null || isBlankOrOverLong(sample.name())
-                || isNullOrNegative(sample.rxKbps()) || isNullOrNegative(sample.txKbps());
-    }
-
-    /** 名称既不能为空白，也不能超过协议规定的字符数上限。 */
-    private boolean isBlankOrOverLong(String name) {
-        return name == null || name.isBlank() || name.length() > MAX_RESOURCE_NAME_LENGTH;
-    }
-
-    /** 数值既不能缺失，也不能为负。 */
-    private boolean isNullOrNegative(Number value) {
-        return value == null || value.doubleValue() < 0;
-    }
-
-    /**
-     * 批量转换磁盘条目视图；缺省（null）转为空列表以稳定快照形状。
-     *
-     * @param samples 上报的磁盘条目
-     * @return 磁盘条目视图列表
-     */
-    private List<DiskSampleVo> toDiskSampleVos(List<DiskSamplePayload> samples) {
-        if (samples == null) {
-            return List.of();
-        }
-        return samples.stream()
-                .map(sample -> new DiskSampleVo(sample.mountPoint(), sample.device(), sample.total(), sample.free()))
-                .toList();
-    }
-
-    /**
-     * 批量转换网卡条目视图；缺省（null）转为空列表以稳定快照形状。
-     *
-     * @param samples 上报的网卡条目
-     * @return 网卡条目视图列表
-     */
-    private List<NicSampleVo> toNicSampleVos(List<NicSamplePayload> samples) {
-        if (samples == null) {
-            return List.of();
-        }
-        return samples.stream()
-                .map(sample -> new NicSampleVo(sample.name(), sample.rxKbps(), sample.txKbps()))
-                .toList();
     }
 
     /**

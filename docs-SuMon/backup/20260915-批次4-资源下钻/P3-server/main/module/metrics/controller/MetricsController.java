@@ -7,7 +7,6 @@ import com.susumonitor.server.module.metrics.service.MetricsService;
 import com.susumonitor.server.module.metrics.vo.MetricsHistoryVo;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
 import com.susumonitor.server.module.metrics.vo.ProcessSnapshotVo;
-import com.susumonitor.server.module.metrics.vo.ServerResourcesSnapshotVo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -87,33 +86,6 @@ public class MetricsController {
             @PathVariable("id") @Positive Long serverId) {
         return com.susumonitor.server.common.ApiResponse.success(
                 metricsService.latestProcessSnapshot(serverId)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)));
-    }
-
-    /** 查询服务器新鲜窗口内的实时磁盘/网卡扩展资源快照。 */
-    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-server.json 的 getLatestResources 操作对齐。
-    // 扩展资源快照为内存实时数据（90 秒新鲜窗口），任意已认证用户可访问，声明 Bearer JWT 认证。
-    @Operation(
-            summary = "Get latest in-memory per-disk and per-nic resource snapshot",
-            description = "Returns the latest in-memory per-disk and per-nic resource snapshot for a server "
-                    + "within the 90-second freshness window. Never persisted; 404 when the Agent has not "
-                    + "reported resource data recently. Authenticated users only.",
-            operationId = "getLatestResources",
-            security = @SecurityRequirement(name = "bearerAuth"))
-    // 声明扩展资源快照接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Latest extended-resource snapshot (90-second freshness window)"),
-            @ApiResponse(responseCode = "401", description = "Bearer JWT is missing, invalid, expired, or no longer authorized (40100)"),
-            @ApiResponse(responseCode = "403", description = "Authenticated user is not an admin (40300)"),
-            @ApiResponse(responseCode = "404", description = "Server does not exist, or no fresh resource snapshot exists (40400)")
-    })
-    @GetMapping("/{id}/resources/latest")
-    public com.susumonitor.server.common.ApiResponse<ServerResourcesSnapshotVo> latestResources(
-            // 描述路径参数，约束与 @Positive 校验一致。
-            @Parameter(description = "Server ID.")
-            @PathVariable("id") @Positive Long serverId) {
-        return com.susumonitor.server.common.ApiResponse.success(
-                metricsService.latestResources(serverId)
                         .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)));
     }
 

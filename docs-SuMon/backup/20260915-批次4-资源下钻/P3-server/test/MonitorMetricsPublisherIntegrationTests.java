@@ -61,9 +61,6 @@ class MonitorMetricsPublisherIntegrationTests {
     private com.susumonitor.server.module.metrics.service.ProcessSnapshotRegistry processSnapshotRegistry;
 
     @Autowired
-    private com.susumonitor.server.module.metrics.service.ResourcesSnapshotRegistry resourcesSnapshotRegistry;
-
-    @Autowired
     private TransactionTemplate transactionTemplate;
 
     private WebSocketSession socketSession;
@@ -122,56 +119,6 @@ class MonitorMetricsPublisherIntegrationTests {
         com.susumonitor.server.module.metrics.vo.ProcessSnapshotVo snapshot =
                 processSnapshotRegistry.latest(SERVER_ID).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("java", snapshot.cpuTop().get(0).name());
-    }
-
-    /** 验证携带扩展资源的上报在提交后广播 resources 节点，且 REST 注册表同步可读。 */
-    @Test
-    void shouldBroadcastResourcesAndExposeSnapshotAfterCommit() throws Exception {
-        MetricsReportPayload payload = payload();
-        payload.setDisks(List.of(new com.susumonitor.server.module.metrics.dto.DiskSamplePayload(
-                "/", "/dev/sda1", 1024L, 256L)));
-        payload.setNics(List.of(new com.susumonitor.server.module.metrics.dto.NicSamplePayload(
-                "eth0", BigDecimal.valueOf(640), BigDecimal.valueOf(12.8))));
-
-        transactionTemplate.executeWithoutResult(status ->
-                metricsService.report(SERVER_ID, UUID.randomUUID().toString(), payload));
-
-        org.mockito.ArgumentCaptor<TextMessage> captor = org.mockito.ArgumentCaptor.forClass(TextMessage.class);
-        verify(socketSession).sendMessage(captor.capture());
-        String broadcast = captor.getValue().getPayload();
-        org.junit.jupiter.api.Assertions.assertTrue(broadcast.contains("\"resources\""),
-                "metrics.update should carry optional resources node: " + broadcast);
-        org.junit.jupiter.api.Assertions.assertTrue(broadcast.contains("\"mount_point\""),
-                "resources node should carry per-disk entries");
-        com.susumonitor.server.module.metrics.vo.ServerResourcesSnapshotVo snapshot =
-                resourcesSnapshotRegistry.latest(SERVER_ID).orElseThrow();
-        org.junit.jupiter.api.Assertions.assertEquals("/dev/sda1", snapshot.disks().get(0).device());
-        org.junit.jupiter.api.Assertions.assertEquals("eth0", snapshot.nics().get(0).name());
-    }
-
-    /** 验证扩展字段超限时丢弃资源快照：广播与注册表均不含 resources，但指标行照常入库并广播。 */
-    @Test
-    void shouldDropOversizedResourcesNodeWithoutBreakingCoreBroadcast() throws Exception {
-        MetricsReportPayload payload = payload();
-        List<com.susumonitor.server.module.metrics.dto.DiskSamplePayload> oversized =
-                new java.util.ArrayList<>();
-        for (int i = 0; i < 33; i++) {
-            oversized.add(new com.susumonitor.server.module.metrics.dto.DiskSamplePayload(
-                    "/mnt/d" + i, "/dev/sd" + i, 1024L, 256L));
-        }
-        payload.setDisks(oversized);
-
-        transactionTemplate.executeWithoutResult(status ->
-                metricsService.report(SERVER_ID, UUID.randomUUID().toString(), payload));
-
-        org.mockito.ArgumentCaptor<TextMessage> captor = org.mockito.ArgumentCaptor.forClass(TextMessage.class);
-        // 核心指标行照常入库并广播（不断链），只是 resources 节点被丢弃。
-        verify(socketSession).sendMessage(captor.capture());
-        String broadcast = captor.getValue().getPayload();
-        org.junit.jupiter.api.Assertions.assertFalse(broadcast.contains("\"resources\""),
-                "oversized resources node should be dropped: " + broadcast);
-        org.junit.jupiter.api.Assertions.assertTrue(resourcesSnapshotRegistry.latest(SERVER_ID).isEmpty(),
-                "dropped snapshot should not enter the registry");
     }
 
     private MetricsReportPayload payload() {
@@ -263,22 +210,15 @@ class MonitorMetricsPublisherIntegrationTests {
         @Bean
         MetricsService metricsService(MetricsMapper metricsMapper, ServerService serverService,
                 OutboxService outboxService, OutboxEnvelopeFactory outboxEnvelopeFactory,
-                ApplicationEventPublisher eventPublisher, ProcessSnapshotRegistry processSnapshotRegistry,
-                com.susumonitor.server.module.metrics.service.ResourcesSnapshotRegistry resourcesSnapshotRegistry) {
+                ApplicationEventPublisher eventPublisher, ProcessSnapshotRegistry processSnapshotRegistry) {
             return new MetricsServiceImpl(metricsMapper, serverService, outboxService,
-                    outboxEnvelopeFactory, eventPublisher, processSnapshotRegistry, resourcesSnapshotRegistry);
+                    outboxEnvelopeFactory, eventPublisher, processSnapshotRegistry);
         }
 
         /** 提供进程快照注册表，承接发布器在事务提交后的快照更新。 */
         @Bean
         ProcessSnapshotRegistry processSnapshotRegistry(Clock clock) {
             return new ProcessSnapshotRegistry(clock);
-        }
-
-        /** 提供资源快照注册表，承接发布器在事务提交后的扩展资源快照更新。 */
-        @Bean
-        com.susumonitor.server.module.metrics.service.ResourcesSnapshotRegistry resourcesSnapshotRegistry(Clock clock) {
-            return new com.susumonitor.server.module.metrics.service.ResourcesSnapshotRegistry(clock);
         }
     }
 }
