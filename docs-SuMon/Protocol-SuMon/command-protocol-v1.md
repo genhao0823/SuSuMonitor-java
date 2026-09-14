@@ -1,13 +1,13 @@
 # Command Protocol v1（AI 命令域 M1 审批制契约）
 
-**版本**：v1
+**版本**：v1（2026-09-15 修订：§五 增补 L2 变更类模板 `systemctl_reload` / `journalctl_vacuum` 与参数子串替换语义，纯增量不破坏既有字段与枚举含义）
 **状态**：v1 已冻结（2026-09-03）；M1 审批制。未实现前本文为契约源（source of truth）；实现落地后以 `docs-SuMon/Develop-log/` 对应日志为验证证据，本文与实现冲突时先修订本文、再改代码。
 **时间标准**：UTC ISO-8601，例如 `2026-09-03T12:00:00Z`
 **配套威胁模型**：`ai-command-domain-threat-model.md`
 
 ## 一、适用范围
 
-本文定义 AI 命令域（command domain）在 `/ws/agent` 上使用的 `command.execute` 与 `command.result` 帧契约、L1 只读诊断命令模板白名单（单一来源）与强制安全语义。M1 阶段命令域为审批制（approval-based）：每条命令执行必须先经 Java 侧审批状态机批准，才允许下发到 Agent 执行；命令域由独立 kill switch `AI_COMMAND_ENABLED` 控制，默认 `false`。
+本文定义 AI 命令域（command domain）在 `/ws/agent` 上使用的 `command.execute` 与 `command.result` 帧契约、命令模板白名单（L1 只读诊断 + L2 低影响变更，单一来源）与强制安全语义。M1 阶段命令域为审批制（approval-based）：每条命令执行必须先经 Java 侧审批状态机批准，才允许下发到 Agent 执行；M2 起对 L2 模板增加自动审批策略（默认关闭，见 §五）；命令域由独立 kill switch `AI_COMMAND_ENABLED` 控制，默认 `false`。
 
 本文不覆盖、也不修改 `terminal.*` 与 `metrics.*` 的任何既有契约，三者互不复用帧型。既有边界不变：AI 永不接触 `terminal.*` PTY，命令执行一律走独立的 `command.*` 通道。威胁分析与控制矩阵见 `ai-command-domain-threat-model.md`。
 
@@ -95,9 +95,14 @@
 - 非零退出：`success=false`、`error=execution_error`，`exit_code` 携带真实退出码。
 - 超时：进程被强制终止，`success=false`、`error=timeout`、`exit_code=-1`。
 
-## 五、L1 模板表（单一来源）
+## 五、命令模板表（单一来源）
 
-**本表是 L1 模板的唯一权威来源（single source of truth）。** Java 与 Go 双侧模板表必须与本文逐字一致（模板 id、argv 序列、参数正则）；任何增删改必须先修订本文，再同步双侧实现，不允许任何一侧单独扩展。
+**本表是命令模板的唯一权威来源（single source of truth）。** Java 与 Go 双侧模板表必须与本文逐字一致（模板 id、argv 序列、参数正则、风险等级）；任何增删改必须先修订本文，再同步双侧实现，不允许任何一侧单独扩展。
+
+模板分两层：
+
+- **L1 只读诊断**（`low`）：仅读取系统状态，无任何变更副作用。
+- **L2 低影响变更**（`medium`，2026-09-15 新增）：产生有限的、可预期副作用的服务变更动作；自 M2 起在自动审批策略开启且阈值 ≥ `medium` 时允许免人工审批执行，默认策略仍为关闭。
 
 | id | argv | 风险等级 | 参数 |
 |---|---|---|---|
@@ -109,18 +114,21 @@
 | `top_snapshot` | `top -b -n1` | low | 无 |
 | `service_status` | `systemctl status {unit}` | low | `unit`: `^[a-zA-Z0-9_.@:-]{1,128}$` |
 | `service_logs` | `journalctl -u {unit} -n {lines} --no-pager` | low | `unit`: 同 `service_status`；`lines`: `^[0-9]{1,4}$` |
+| `systemctl_reload` | `systemctl reload {unit}` | medium | `unit`: `^[a-zA-Z0-9@._-]{1,64}$` |
+| `journalctl_vacuum` | `journalctl --vacuum-time={days}d` | medium | `days`: `^[1-9][0-9]{0,2}$`（1-999 天） |
 
 渲染规则：
 
-- `{unit}`、`{lines}` 为参数占位符；渲染后按空白切分为独立 argv 元素，参数值整体作为单个 argv 元素传入，不做二次拆分、不做 shell 解析。
+- `{unit}`、`{lines}`、`{days}` 为参数占位符；参数值在 argv 元素内做文本替换，可与固定前后缀共存于同一元素（如 `--vacuum-time={days}d` 渲染为 `--vacuum-time=14d`）；替换后不重新切分、不做 shell 解析，渲染结果仍按原元素边界作为独立 argv 传入。
+- 参数值在替换前必须通过白名单正则**完整匹配**校验（拒绝元字符、空白、分号等），这是子串替换安全性的前提；双侧实现一致。
 - 参数必须同时满足：键名与模板声明一致、无多余键、值匹配对应正则；任一不满足即 `param_invalid`。
-- M1 仅限本表 L1 只读模板；写操作或交互式模板属 M2/M3 设想，不在本文范围。
 
-风险等级（2026-09-10 修订，V33 自动审批配套）：
+风险等级（2026-09-10 修订引入分级，2026-09-15 随 L2 模板扩充）：
 
-- `low` = 只读诊断（本表全部模板）；`medium` = 低影响变更（M2 预留）；`high` = 高影响变更（永不参与自动审批）。
+- `low` = 只读诊断（L1 八条）；`medium` = 低影响变更（L2 两条，受自动审批策略开关与阈值约束）；`high` = 高影响变更（永不参与自动审批）。
 - Java 侧 `CommandTemplateRegistry` 与 `GET /api/ai/commands/templates` 输出与本表等级一致；`ai_command_runs.risk_level` 在创建时按本表快照落审计。
 - 自动审批策略阈值仅允许 `low` / `medium`；`high` 不可作为阈值，且任何阈值下 high 模板都不会被自动审批。
+- L2 模板进入自动审批的前提是策略 `enabled=true` 且阈值 `medium`；默认策略保持关闭，是否放开由管理员结合 M2 观察期评审报告决策。
 
 ## 六、安全语义
 
@@ -152,3 +160,8 @@
 ## 八、当前实现边界
 
 截至 2026-09-03，命令域仅有本文契约，Java 侧尚未实现；实现落地后必须以 `docs-SuMon/Develop-log/` 对应日志为证据，并参照 `message-contracts-v1.md` §八-§十三 的模式在本文补记实现确认。
+
+实现确认补记：
+
+- 2026-09-10/11：M1 审批制与 M2 自动审批首版落地（V33 风险分级），模板表 8 条全部 `low`，证据见 `Develop-log/20260910-AI命令自动审批三端实现.md` 等日志。
+- 2026-09-15：§五 增补 L2 变更类模板 `systemctl_reload` / `journalctl_vacuum`（`medium`）与参数子串替换语义，Java `CommandTemplateRegistry` 与 Go `internal/command` 双侧同批对齐，证据见 `Develop-log/20260915-批次3-L2模板准入三端同步.md`。

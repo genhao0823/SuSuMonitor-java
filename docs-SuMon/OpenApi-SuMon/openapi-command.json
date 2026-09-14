@@ -444,7 +444,7 @@
           "ai-command"
         ],
         "summary": "List whitelisted command templates",
-        "description": "Mirror of the frozen L1 template table in command-protocol-v1.md; the Go agent enforces the same table independently before execution.",
+        "description": "Mirror of the command template table (L1 read-only + L2 low-impact change tiers) in command-protocol-v1.md; the Go agent enforces the same table independently before execution. L2 (medium) templates are auto-approvable only while the policy is enabled with a medium threshold.",
         "operationId": "listCommandTemplates",
         "x-required-role": "admin",
         "responses": {
