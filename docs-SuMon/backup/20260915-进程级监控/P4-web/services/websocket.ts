@@ -1,6 +1,6 @@
 import type { AlertPushPayload, ServerStatusPushPayload } from '@/types/api'
 import { isAlertPush } from '@/api/alert'
-import type { MetricsLatest, ProcessSnapshot } from '@/types/metrics'
+import type { MetricsLatest } from '@/types/metrics'
 import { issueMonitorTicket } from '@/api/websocket'
 import { newCorrelationId } from '@/api/client'
 
@@ -65,9 +65,7 @@ export class MonitorWebSocket {
      */
     private readonly onTerminalMessage?: (frame: MonitorMessage) => void,
     /** 可选服务器状态回调，仅实时监控页消费 Agent 在线/离线转换。 */
-    private readonly onServerStatus?: (payload: ServerStatusPushPayload) => void,
-    /** 可选进程快照回调，metrics.update 携带可选 processes 节点时触发（协议 v1.4）。 */
-    private readonly onProcesses?: (value: ProcessSnapshot) => void
+    private readonly onServerStatus?: (payload: ServerStatusPushPayload) => void
   ) {}
 
   /**
@@ -155,11 +153,8 @@ export class MonitorWebSocket {
         return
       }
       if (message.type === 'metrics.update') {
-        const payload = message.payload as { metrics?: MetricsLatest; processes?: ProcessSnapshot } | undefined
-        if (payload?.metrics !== undefined) this.onMetrics(payload.metrics)
-        if (payload?.processes !== undefined && this.onProcesses !== undefined) {
-          this.onProcesses(payload.processes)
-        }
+        const metrics = (message.payload as { metrics?: MetricsLatest } | undefined)?.metrics
+        if (metrics !== undefined) this.onMetrics(metrics)
         return
       }
       if (message.type === 'alert.push' && this.onAlertPush !== undefined) {

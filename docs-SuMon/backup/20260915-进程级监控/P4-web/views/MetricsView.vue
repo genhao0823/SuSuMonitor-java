@@ -38,7 +38,6 @@
         </el-card>
       </el-col>
     </el-row>
-    <ProcessTopCard :snapshot="processSnapshot" />
     <el-card
       shadow="never"
       class="history-card"
@@ -131,14 +130,11 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import MetricsLineChart from '@/components/MetricsLineChart.vue'
-import ProcessTopCard from '@/components/ProcessTopCard.vue'
 import { useMetricsStore } from '@/stores/metrics'
 import { MonitorWebSocket } from '@/services/websocket'
-import { getLatestProcesses } from '@/api/metrics'
 import { getServerStatus } from '@/api/server'
 import { listAlertRules } from '@/api/alert'
 import type { AgentStatusKind, AlertRule, ServerStatusPushPayload } from '@/types/api'
-import type { ProcessSnapshot } from '@/types/metrics'
 import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
@@ -148,8 +144,6 @@ const agentStatus = ref<AgentStatusKind>('offline')
 const activeTab = ref<'chart' | 'table'>('chart')
 /** 当前服务器的活跃告警规则（含全局规则），用于在图表上画阈值线。 */
 const alertRules = ref<AlertRule[]>([])
-/** 实时 Top 进程快照：REST 初载后由 metrics.update 捎带的 processes 节点覆盖。 */
-const processSnapshot = ref<ProcessSnapshot | null>(null)
 let latestHeartbeatAt: string | null = null
 let socket: MonitorWebSocket | null = null
 
@@ -235,30 +229,13 @@ async function loadAlertRules(): Promise<void> {
   }
 }
 
-/** 拉取实时进程快照作为 WS 推送前的初载数据；404/失败时保持空态。 */
-async function loadProcessSnapshot(): Promise<void> {
-  try {
-    const response = await getLatestProcesses(serverId)
-    processSnapshot.value = response.data
-  } catch {
-    // 无快照（Agent 未上报或版本过旧）时展示空态即可，不阻断页面。
-  }
-}
-
-/** 应用 WS 推送的进程快照；仅在当前订阅服务器上应用。 */
-function applyProcessSnapshot(snapshot: ProcessSnapshot): void {
-  if (snapshot.server_id !== serverId) return
-  processSnapshot.value = snapshot
-}
-
 onMounted(() => {
   timeRangeModel.value = [...metrics.timeRange]
   void metrics.load(serverId, timeRangeModel.value[0], timeRangeModel.value[1])
   void loadServerStatus()
   void loadAlertRules()
-  void loadProcessSnapshot()
   socket = new MonitorWebSocket(metrics.applyRealtime, metrics.setConnected, undefined, undefined, undefined,
-    applyServerStatus, applyProcessSnapshot)
+    applyServerStatus)
   socket.connect(serverId)
 })
 
