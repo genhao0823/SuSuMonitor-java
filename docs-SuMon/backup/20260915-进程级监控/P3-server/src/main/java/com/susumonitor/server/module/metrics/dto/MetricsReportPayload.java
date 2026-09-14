@@ -3,13 +3,9 @@ package com.susumonitor.server.module.metrics.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.List;
 
 /**
  * Agent 单次指标上报载荷，与 Metrics 固定宽表字段一一对应。
- *
- * <p>进程排行字段为 websocket-protocol.md v1.4 新增的可选字段，
- * 旧版 Agent 整体省略；服务端只保留内存快照，不写库。</p>
  */
 public class MetricsReportPayload {
 
@@ -38,10 +34,6 @@ public class MetricsReportPayload {
     private BigDecimal temperature;
     @JsonProperty("load_avg")
     private BigDecimal loadAvg;
-    @JsonProperty("process_cpu_top")
-    private List<ProcessSamplePayload> processCpuTop;
-    @JsonProperty("process_mem_top")
-    private List<ProcessSamplePayload> processMemTop;
 
     /** 获取服务器 ID。 */
     public Long getServerId() { return serverId; }
@@ -95,12 +87,4 @@ public class MetricsReportPayload {
     public BigDecimal getLoadAvg() { return loadAvg; }
     /** 设置系统负载均值。 */
     public void setLoadAvg(BigDecimal loadAvg) { this.loadAvg = loadAvg; }
-    /** 获取按 CPU 占比降序的 Top 进程列表；旧版 Agent 为 null。 */
-    public List<ProcessSamplePayload> getProcessCpuTop() { return processCpuTop; }
-    /** 设置按 CPU 占比降序的 Top 进程列表。 */
-    public void setProcessCpuTop(List<ProcessSamplePayload> processCpuTop) { this.processCpuTop = processCpuTop; }
-    /** 获取按内存占比降序的 Top 进程列表；旧版 Agent 为 null。 */
-    public List<ProcessSamplePayload> getProcessMemTop() { return processMemTop; }
-    /** 设置按内存占比降序的 Top 进程列表。 */
-    public void setProcessMemTop(List<ProcessSamplePayload> processMemTop) { this.processMemTop = processMemTop; }
 }

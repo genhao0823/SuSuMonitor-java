@@ -27,8 +27,6 @@ import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.metrics.service.MetricsService;
 import com.susumonitor.server.module.metrics.vo.MetricsHistoryVo;
 import com.susumonitor.server.module.metrics.vo.MetricsLatestVo;
-import com.susumonitor.server.module.metrics.vo.ProcessSampleVo;
-import com.susumonitor.server.module.metrics.vo.ProcessSnapshotVo;
 import com.susumonitor.server.module.server.mapper.ServerMapper;
 import com.susumonitor.server.module.server.mapper.SshTestHistoryMapper;
 import com.susumonitor.server.security.JwtTokenService;
@@ -182,35 +180,6 @@ class MetricsControllerTests {
                 .andExpect(jsonPath("$.data.items[0].server_id").value(1));
     }
 
-    /** 验证已审核用户可查询实时进程快照，且响应字段保持 snake_case。 */
-    @Test
-    void approvedUserShouldGetLatestProcesses() throws Exception {
-        authenticateUser();
-        when(metricsService.latestProcessSnapshot(1L)).thenReturn(java.util.Optional.of(processSnapshot()));
-
-        mockMvc.perform(get("/api/servers/1/processes/latest").header(AUTHORIZATION, USER_BEARER))
-                .andExpect(status().isOk())
-                .andExpect(header().string("X-Request-ID", not(blankOrNullString())))
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.server_id").value(1))
-                .andExpect(jsonPath("$.data.collected_at").isNotEmpty())
-                .andExpect(jsonPath("$.data.cpu_top[0].pid").value(9))
-                .andExpect(jsonPath("$.data.cpu_top[0].name").value("java"))
-                .andExpect(jsonPath("$.data.cpu_top[0].cpu_percent").value(41.2))
-                .andExpect(jsonPath("$.data.mem_top[0].mem_percent").value(32.1));
-    }
-
-    /** 验证无新鲜进程快照时返回统一 404 资源不存在。 */
-    @Test
-    void latestProcessesShouldReturnNotFoundWhenAbsent() throws Exception {
-        authenticateUser();
-        when(metricsService.latestProcessSnapshot(1L)).thenReturn(java.util.Optional.empty());
-
-        mockMvc.perform(get("/api/servers/1/processes/latest").header(AUTHORIZATION, USER_BEARER))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value(40400));
-    }
-
     /** 验证未认证请求由安全链返回统一 401。 */
     @Test
     void unauthenticatedRequestShouldReturnUnauthorized() throws Exception {
@@ -297,14 +266,6 @@ class MetricsControllerTests {
         metrics.setCpuPercent(BigDecimal.valueOf(35.2));
         metrics.setCollectedAt(OffsetDateTime.of(2026, 7, 23, 0, 30, 0, 0, ZoneOffset.UTC));
         return metrics;
-    }
-
-    /** 构造带 CPU/内存排行的进程快照视图。 */
-    private ProcessSnapshotVo processSnapshot() {
-        ProcessSampleVo cpuTop = new ProcessSampleVo(9, "java", BigDecimal.valueOf(41.2), BigDecimal.valueOf(18.4));
-        ProcessSampleVo memTop = new ProcessSampleVo(5, "mysqld", BigDecimal.valueOf(0.6), BigDecimal.valueOf(32.1));
-        return new ProcessSnapshotVo(1L, OffsetDateTime.of(2026, 7, 23, 0, 30, 0, 0, ZoneOffset.UTC),
-                List.of(cpuTop), List.of(memTop));
     }
 
     private PageResult<MetricsHistoryVo> historyPage() {

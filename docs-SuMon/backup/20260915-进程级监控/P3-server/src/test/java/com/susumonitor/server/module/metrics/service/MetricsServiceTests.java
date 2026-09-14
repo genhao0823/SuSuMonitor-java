@@ -11,26 +11,19 @@ import static org.mockito.Mockito.when;
 import com.susumonitor.server.common.BusinessException;
 import com.susumonitor.server.common.ErrorCode;
 import com.susumonitor.server.module.metrics.dto.MetricsReportPayload;
-import com.susumonitor.server.module.metrics.dto.ProcessSamplePayload;
 import com.susumonitor.server.module.metrics.mapper.MetricsMapper;
 import com.susumonitor.server.module.metrics.outbox.OutboxEnvelopeFactory;
 import com.susumonitor.server.module.metrics.outbox.OutboxService;
-import com.susumonitor.server.module.metrics.vo.ProcessSnapshotVo;
 import com.susumonitor.server.module.server.entity.ServerEntity;
 import com.susumonitor.server.module.server.service.ServerService;
 import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -65,8 +58,7 @@ class MetricsServiceTests {
     @BeforeEach
     void setUp() {
         service = new MetricsServiceImpl(metricsMapper, serverService, outboxService,
-                outboxEnvelopeFactory, eventPublisher,
-                new ProcessSnapshotRegistry(Clock.systemUTC()));
+                outboxEnvelopeFactory, eventPublisher);
     }
 
     /** 首次投递写入去重记录和指标，并发布一次 Metrics 事件。 */
@@ -208,89 +200,6 @@ class MetricsServiceTests {
         org.junit.jupiter.api.Assertions.assertEquals(MetricsRejectionReason.INVALID_METRICS_PAYLOAD,
                 exception.getReason());
         verify(serverService, never()).existsActiveForUpdate(eq(SERVER_ID));
-        verify(metricsMapper, never()).insertIngestion(any());
-    }
-
-    /** 携带进程排行的载荷成功入库后，事件应捎带结构完整的进程快照。 */
-    @Test
-    void reportWithProcessTopShouldPublishSnapshotInEvent() {
-        lockActiveServer();
-        when(metricsMapper.insertIngestion(any())).thenReturn(1);
-        when(metricsMapper.insertMetric(any())).thenReturn(1);
-        MetricsReportPayload payload = payload(COLLECTED_AT);
-        payload.setProcessCpuTop(List.of(new ProcessSamplePayload(9, "java", BigDecimal.TEN, BigDecimal.ONE)));
-        payload.setProcessMemTop(List.of(new ProcessSamplePayload(5, "mysqld", BigDecimal.ZERO, BigDecimal.TEN)));
-
-        service.report(SERVER_ID, UUID.randomUUID().toString(), payload);
-
-        ArgumentCaptor<MetricsService.MetricsReportedEvent> captor =
-                ArgumentCaptor.forClass(MetricsService.MetricsReportedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        ProcessSnapshotVo snapshot = captor.getValue().processes();
-        org.junit.jupiter.api.Assertions.assertNotNull(snapshot);
-        org.junit.jupiter.api.Assertions.assertEquals(COLLECTED_AT, snapshot.collectedAt());
-        org.junit.jupiter.api.Assertions.assertEquals(1, snapshot.cpuTop().size());
-        org.junit.jupiter.api.Assertions.assertEquals("java", snapshot.cpuTop().get(0).name());
-        org.junit.jupiter.api.Assertions.assertEquals(1, snapshot.memTop().size());
-        org.junit.jupiter.api.Assertions.assertEquals("mysqld", snapshot.memTop().get(0).name());
-    }
-
-    /** 旧版 Agent 不带进程字段的载荷照常入库，事件不携带进程快照。 */
-    @Test
-    void legacyPayloadShouldPublishEventWithoutSnapshot() {
-        lockActiveServer();
-        when(metricsMapper.insertIngestion(any())).thenReturn(1);
-        when(metricsMapper.insertMetric(any())).thenReturn(1);
-
-        service.report(SERVER_ID, UUID.randomUUID().toString(), payload(COLLECTED_AT));
-
-        ArgumentCaptor<MetricsService.MetricsReportedEvent> captor =
-                ArgumentCaptor.forClass(MetricsService.MetricsReportedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        org.junit.jupiter.api.Assertions.assertNull(captor.getValue().processes());
-    }
-
-    /** 超过协议上限（20 条）的进程排行按永久非法载荷拒绝，不访问数据库。 */
-    @Test
-    void oversizedProcessListShouldBeRejected() {
-        MetricsReportPayload payload = payload(COLLECTED_AT);
-        List<ProcessSamplePayload> oversized = new ArrayList<>();
-        for (int i = 0; i < 21; i++) {
-            oversized.add(new ProcessSamplePayload(i + 1, "proc", BigDecimal.ZERO, BigDecimal.ZERO));
-        }
-        payload.setProcessCpuTop(oversized);
-
-        MetricsRejectedException exception = assertThrows(MetricsRejectedException.class,
-                () -> service.report(SERVER_ID, UUID.randomUUID().toString(), payload));
-
-        org.junit.jupiter.api.Assertions.assertEquals(MetricsRejectionReason.INVALID_METRICS_PAYLOAD,
-                exception.getReason());
-        verify(metricsMapper, never()).insertIngestion(any());
-    }
-
-    /** 进程条目缺失必填字段（占比为 null）按永久非法载荷拒绝。 */
-    @Test
-    void processSampleWithMissingPercentShouldBeRejected() {
-        MetricsReportPayload payload = payload(COLLECTED_AT);
-        payload.setProcessCpuTop(List.of(new ProcessSamplePayload(9, "java", null, BigDecimal.ONE)));
-
-        MetricsRejectedException exception = assertThrows(MetricsRejectedException.class,
-                () -> service.report(SERVER_ID, UUID.randomUUID().toString(), payload));
-
-        org.junit.jupiter.api.Assertions.assertEquals(MetricsRejectionReason.INVALID_METRICS_PAYLOAD,
-                exception.getReason());
-        verify(metricsMapper, never()).insertIngestion(any());
-    }
-
-    /** 进程条目占比越界（>100）按永久非法载荷拒绝。 */
-    @Test
-    void processSampleWithOutOfRangePercentShouldBeRejected() {
-        MetricsReportPayload payload = payload(COLLECTED_AT);
-        payload.setProcessMemTop(List.of(new ProcessSamplePayload(9, "java", BigDecimal.TEN,
-                BigDecimal.valueOf(100.01))));
-
-        assertThrows(MetricsRejectedException.class,
-                () -> service.report(SERVER_ID, UUID.randomUUID().toString(), payload));
         verify(metricsMapper, never()).insertIngestion(any());
     }
 

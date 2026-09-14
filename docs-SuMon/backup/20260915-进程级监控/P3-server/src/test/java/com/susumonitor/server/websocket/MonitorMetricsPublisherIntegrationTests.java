@@ -14,7 +14,6 @@ import com.susumonitor.server.module.metrics.outbox.OutboxEnvelopeFactory;
 import com.susumonitor.server.module.metrics.outbox.OutboxService;
 import com.susumonitor.server.module.metrics.service.MetricsService;
 import com.susumonitor.server.module.metrics.service.MetricsServiceImpl;
-import com.susumonitor.server.module.metrics.service.ProcessSnapshotRegistry;
 import com.susumonitor.server.module.server.entity.ServerEntity;
 import com.susumonitor.server.module.server.service.ServerService;
 import java.math.BigDecimal;
@@ -58,9 +57,6 @@ class MonitorMetricsPublisherIntegrationTests {
     private MonitorSubscriptionRegistry registry;
 
     @Autowired
-    private com.susumonitor.server.module.metrics.service.ProcessSnapshotRegistry processSnapshotRegistry;
-
-    @Autowired
     private TransactionTemplate transactionTemplate;
 
     private WebSocketSession socketSession;
@@ -95,30 +91,6 @@ class MonitorMetricsPublisherIntegrationTests {
         });
 
         verify(socketSession, never()).sendMessage(any(TextMessage.class));
-    }
-
-    /** 验证携带进程排行的上报在提交后广播 processes 节点，且 REST 注册表同步可读。 */
-    @Test
-    void shouldBroadcastProcessesAndExposeSnapshotAfterCommit() throws Exception {
-        MetricsReportPayload payload = payload();
-        payload.setProcessCpuTop(List.of(new com.susumonitor.server.module.metrics.dto.ProcessSamplePayload(
-                9, "java", BigDecimal.valueOf(41.2), BigDecimal.valueOf(18.4))));
-        payload.setProcessMemTop(List.of(new com.susumonitor.server.module.metrics.dto.ProcessSamplePayload(
-                5, "mysqld", BigDecimal.valueOf(0.6), BigDecimal.valueOf(32.1))));
-
-        transactionTemplate.executeWithoutResult(status ->
-                metricsService.report(SERVER_ID, UUID.randomUUID().toString(), payload));
-
-        org.mockito.ArgumentCaptor<TextMessage> captor = org.mockito.ArgumentCaptor.forClass(TextMessage.class);
-        verify(socketSession).sendMessage(captor.capture());
-        String broadcast = captor.getValue().getPayload();
-        org.junit.jupiter.api.Assertions.assertTrue(broadcast.contains("\"processes\""),
-                "metrics.update should carry optional processes node: " + broadcast);
-        org.junit.jupiter.api.Assertions.assertTrue(broadcast.contains("\"cpu_top\""),
-                "processes node should carry cpu_top ranking");
-        com.susumonitor.server.module.metrics.vo.ProcessSnapshotVo snapshot =
-                processSnapshotRegistry.latest(SERVER_ID).orElseThrow();
-        org.junit.jupiter.api.Assertions.assertEquals("java", snapshot.cpuTop().get(0).name());
     }
 
     private MetricsReportPayload payload() {
@@ -210,15 +182,9 @@ class MonitorMetricsPublisherIntegrationTests {
         @Bean
         MetricsService metricsService(MetricsMapper metricsMapper, ServerService serverService,
                 OutboxService outboxService, OutboxEnvelopeFactory outboxEnvelopeFactory,
-                ApplicationEventPublisher eventPublisher, ProcessSnapshotRegistry processSnapshotRegistry) {
+                ApplicationEventPublisher eventPublisher) {
             return new MetricsServiceImpl(metricsMapper, serverService, outboxService,
-                    outboxEnvelopeFactory, eventPublisher, processSnapshotRegistry);
-        }
-
-        /** 提供进程快照注册表，承接发布器在事务提交后的快照更新。 */
-        @Bean
-        ProcessSnapshotRegistry processSnapshotRegistry(Clock clock) {
-            return new ProcessSnapshotRegistry(clock);
+                    outboxEnvelopeFactory, eventPublisher);
         }
     }
 }
