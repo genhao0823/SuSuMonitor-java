@@ -7,6 +7,7 @@ package command
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -38,10 +39,11 @@ type Template struct {
 	Params []ParamSpec
 }
 
-// templates 是 Agent 内建 L1 只读模板表（与 command-protocol-v1.md 逐字一致）。
+// templates 是 Agent 内建命令模板表（与 command-protocol-v1.md §五 逐字一致）：
+// L1 只读诊断（low）+ L2 低影响变更（medium，2026-09-15）。
 //
-// 双侧纵深防御：Java 侧另有镜像注册表用于渲染人工预览；本表是执行前的
-// 最终校验，任何一侧被绕过都不会执行模板之外的命令。
+// 风险分级与自动审批是 Java 侧审批策略概念，本表不携带 risk 字段；
+// 本表是执行前的最终校验，任何一侧被绕过都不会执行模板之外的命令。
 var templates = map[string]Template{
 	"disk_free":        {ID: "disk_free", Argv: []string{"df", "-h"}},
 	"mem_free":         {ID: "mem_free", Argv: []string{"free", "-m"}},
@@ -56,6 +58,10 @@ var templates = map[string]Template{
 			{Name: "unit", Pattern: regexp.MustCompile(`^[a-zA-Z0-9_.@:-]{1,128}$`)},
 			{Name: "lines", Pattern: regexp.MustCompile(`^[0-9]{1,4}$`)},
 		}},
+	"systemctl_reload": {ID: "systemctl_reload", Argv: []string{"systemctl", "reload", "{unit}"},
+		Params: []ParamSpec{{Name: "unit", Pattern: regexp.MustCompile(`^[a-zA-Z0-9@._-]{1,64}$`)}}},
+	"journalctl_vacuum": {ID: "journalctl_vacuum", Argv: []string{"journalctl", "--vacuum-time={days}d"},
+		Params: []ParamSpec{{Name: "days", Pattern: regexp.MustCompile(`^[1-9][0-9]{0,2}$`)}}},
 }
 
 // ErrUnknownTemplate 表示模板 ID 不在内建白名单内。
@@ -105,15 +111,16 @@ func Render(templateID string, params map[string]string) ([]string, error) {
 }
 
 // replaceArgv 把 argv 中所有 {name} 占位符替换为已校验的参数值。
+//
+// 子串替换（与 Java 侧渲染语义一致）：占位符可与固定前后缀共存于同一
+// argv 元素（如 --vacuum-time={days}d）。安全性前提是 value 已通过白名单
+// 正则完整匹配校验（拒绝元字符与空白），替换后仍是一个 argv 元素，
+// 不重新切分、不经 shell 解析。
 func replaceArgv(argv []string, name, value string) []string {
 	placeholder := "{" + name + "}"
 	out := make([]string, len(argv))
 	for i, part := range argv {
-		if part == placeholder {
-			out[i] = value
-		} else {
-			out[i] = part
-		}
+		out[i] = strings.ReplaceAll(part, placeholder, value)
 	}
 	return out
 }

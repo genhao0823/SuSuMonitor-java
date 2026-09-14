@@ -24,6 +24,10 @@ func TestRenderWhitelistedTemplates(t *testing.T) {
 			[]string{"systemctl", "status", "nginx.service"}},
 		{"service_logs", "service_logs", map[string]string{"unit": "nginx", "lines": "100"},
 			[]string{"journalctl", "-u", "nginx", "-n", "100", "--no-pager"}},
+		{"systemctl_reload", "systemctl_reload", map[string]string{"unit": "nginx"},
+			[]string{"systemctl", "reload", "nginx"}},
+		{"journalctl_vacuum", "journalctl_vacuum", map[string]string{"days": "14"},
+			[]string{"journalctl", "--vacuum-time=14d"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -66,6 +70,15 @@ func TestRenderRejectsInvalidParams(t *testing.T) {
 		{"non-numeric lines", "service_logs", map[string]string{"unit": "nginx", "lines": "abc"}},
 		{"oversized lines", "service_logs", map[string]string{"unit": "nginx", "lines": "100000"}},
 		{"extra key", "service_status", map[string]string{"unit": "nginx", "extra": "x"}},
+		{"missing unit for reload", "systemctl_reload", nil},
+		{"shell metachar in reload unit", "systemctl_reload", map[string]string{"unit": "nginx; reboot"}},
+		{"space in reload unit", "systemctl_reload", map[string]string{"unit": "nginx x"}},
+		{"oversized reload unit", "systemctl_reload", map[string]string{"unit": strings.Repeat("a", 65)}},
+		{"zero days", "journalctl_vacuum", map[string]string{"days": "0"}},
+		{"four-digit days", "journalctl_vacuum", map[string]string{"days": "1000"}},
+		{"non-numeric days", "journalctl_vacuum", map[string]string{"days": "1d"}},
+		{"missing days", "journalctl_vacuum", nil},
+		{"extra key for vacuum", "journalctl_vacuum", map[string]string{"days": "14", "unit": "x"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
