@@ -5,14 +5,17 @@ import type { ApiResponse } from '@/types/api'
 import { ErrorCode } from '@/types/error-code'
 
 /**
- * 扩展 axios 请求配置:允许单个请求声明 silent,
- * 业务错误时跳过全局 ElMessage 弹窗,由调用方自行处理
- * (例如"告警暂无 AI 解释"的 404 属正常空态,不应弹错误提示)。
- * 40100/40300 的登录态回调不受 silent 影响,始终触发。
+ * 扩展 axios 请求配置:
+ * - silent:业务错误时跳过全局 ElMessage 弹窗,由调用方自行处理
+ *   (例如"告警暂无 AI 解释"的 404 属正常空态,不应弹错误提示);
+ * - authAttempt:标记请求为"认证尝试"(如登录)。此类请求的 40100/40300
+ *   表示本次尝试被拒,而非已建立会话的失效或权限不足,因此跳过全局登录态
+ *   回调(onUnauthorized/onForbidden),由调用方(登录页)统一处理文案与去向。
  */
 declare module 'axios' {
   export interface AxiosRequestConfig {
     silent?: boolean
+    authAttempt?: boolean
   }
 }
 
@@ -106,15 +109,20 @@ function extractBusinessCode(error: AxiosError): number | undefined {
  *
  * @param code 业务错误码
  * @param message 业务消息
- * @param silent 为 true 时跳过 ElMessage 弹窗(回调不受影响)
+ * @param config 请求配置;silent 为 true 跳过 ElMessage 弹窗,
+ *               authAttempt 为 true 跳过登录态回调(登录尝试失败不是会话变化)
  */
-function handleBusinessError(code: number, message: string, silent?: boolean): void {
-  if (code === ErrorCode.UNAUTHORIZED) {
+function handleBusinessError(
+  code: number,
+  message: string,
+  config?: { silent?: boolean; authAttempt?: boolean }
+): void {
+  if (code === ErrorCode.UNAUTHORIZED && config?.authAttempt !== true) {
     callbacks.onUnauthorized?.()
-  } else if (code === ErrorCode.FORBIDDEN) {
+  } else if (code === ErrorCode.FORBIDDEN && config?.authAttempt !== true) {
     callbacks.onForbidden?.()
   }
-  if (silent !== true) {
+  if (config?.silent !== true) {
     ElMessage.error(message || '请求失败')
   }
 }
@@ -148,7 +156,7 @@ apiClient.interceptors.response.use(
   (response) => {
     const payload = response.data as ApiResponse<unknown> | undefined
     if (payload && payload.code !== ErrorCode.SUCCESS) {
-      handleBusinessError(payload.code, payload.message, response.config.silent)
+      handleBusinessError(payload.code, payload.message, response.config)
       return Promise.reject(new ApiBusinessError(payload.code, payload.message))
     }
     return response
@@ -158,7 +166,7 @@ apiClient.interceptors.response.use(
     if (code !== undefined) {
       const message =
         (error.response?.data as ApiResponse<unknown> | undefined)?.message ?? error.message
-      handleBusinessError(code, message, error.config?.silent)
+      handleBusinessError(code, message, error.config)
       return Promise.reject(new ApiBusinessError(code, message))
     }
     ElMessage.error('网络异常,请稍后重试')

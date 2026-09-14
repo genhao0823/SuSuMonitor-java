@@ -13,7 +13,7 @@ import { useAuthStore } from '@/stores/auth'
  *   ↓
  * Vue 启动 → router 解析 /dashboard
  *   ↓
- * beforeEach 守卫执行:
+ * beforeEach 守卫执行(判定顺序:认证 → 角色 → publicOnly):
  *   - 未登录 (auth.isAuthenticated=false) → 重定向 /login?redirect=/dashboard
  *   - 已登录但非 admin (requiresAdmin)        → 重定向 /forbidden
  *   - 已登录且通过                          → 进入 DashboardView
@@ -37,15 +37,19 @@ export function installRouterGuards(router: Router): void {
   router.beforeEach((to) => {
     const auth = useAuthStore()
 
-    if (to.meta.requiresAdmin === true && !auth.isAdmin) {
-      return { name: 'forbidden' }
-    }
-
+    // 认证判定必须在角色判定之前:未登录用户 isAdmin 恒为 false,
+    // 若先判角色会把"未登录访问 admin 路由"误导向 /forbidden,
+    // 使用户丢失带 redirect 的登录入口(联调观察项 B2-2)。
     if (to.meta.requiresAuth === true && !auth.isAuthenticated) {
       return {
         name: 'login',
         query: to.fullPath !== '/' ? { redirect: to.fullPath } : undefined
       }
+    }
+
+    // 走到这里必已通过认证,非 admin 访问 admin 路由才落无权限页。
+    if (to.meta.requiresAdmin === true && !auth.isAdmin) {
+      return { name: 'forbidden' }
     }
 
     if (to.meta.publicOnly === true && auth.isAuthenticated) {

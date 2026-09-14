@@ -36,6 +36,10 @@ export function registerUser(
  * 调用 POST /api/auth/login 登录。
  * 仅 approved 用户可登录;pending/rejected 用户返回 40300。
  *
+ * 请求携带 silent + authAttempt:登录失败属于"本次尝试被拒"而非会话变化,
+ * 全局拦截器不弹窗、不触发 onUnauthorized/onForbidden 跳转,
+ * 失败文案与去向由 LoginView 统一处理(修复联调观察项:双 Toast 与误跳 /forbidden)。
+ *
  * @param body 登录请求
  * @returns 登录结果,包含 JWT 和当前用户数据
  */
@@ -43,7 +47,7 @@ export function loginUser(
   body: LoginRequestBody
 ): Promise<ApiResponse<LoginResult>> {
   return apiClient
-    .post<ApiResponse<LoginResult>>('/auth/login', body)
+    .post<ApiResponse<LoginResult>>('/auth/login', body, { silent: true, authAttempt: true })
     .then((r) => r.data)
 }
 
