@@ -1,6 +1,6 @@
 import apiClient from '@/api/client'
 import type { ApiResponse, PageResult } from '@/types/api'
-import type { MetricsHistory, MetricsLatest, ProcessSnapshot, ServerResourcesSnapshot } from '@/types/metrics'
+import type { MetricsHistory, MetricsLatest, ProcessSnapshot } from '@/types/metrics'
 
 /** 查询服务器最新固定宽表指标。 */
 export function getLatestMetrics(serverId: number): Promise<ApiResponse<MetricsLatest>> {
@@ -10,11 +10,6 @@ export function getLatestMetrics(serverId: number): Promise<ApiResponse<MetricsL
 /** 查询服务器实时 Top 进程快照；404 表示暂无新鲜快照（Agent 未上报或版本过旧）。 */
 export function getLatestProcesses(serverId: number): Promise<ApiResponse<ProcessSnapshot>> {
   return apiClient.get<ApiResponse<ProcessSnapshot>>(`/servers/${serverId}/processes/latest`).then((r) => r.data)
-}
-
-/** 查询服务器实时磁盘/网卡扩展资源快照；404 表示暂无新鲜快照（Agent 未上报或版本过旧）。 */
-export function getResourcesLatest(serverId: number): Promise<ApiResponse<ServerResourcesSnapshot>> {
-  return apiClient.get<ApiResponse<ServerResourcesSnapshot>>(`/servers/${serverId}/resources/latest`).then((r) => r.data)
 }
 
 /** 查询服务器历史固定宽表指标。 */

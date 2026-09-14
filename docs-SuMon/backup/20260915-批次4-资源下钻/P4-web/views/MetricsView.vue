@@ -39,7 +39,6 @@
       </el-col>
     </el-row>
     <ProcessTopCard :snapshot="processSnapshot" />
-    <ResourcesCard :snapshot="resourcesSnapshot" />
     <el-card
       shadow="never"
       class="history-card"
@@ -133,14 +132,13 @@ import { useRoute } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import MetricsLineChart from '@/components/MetricsLineChart.vue'
 import ProcessTopCard from '@/components/ProcessTopCard.vue'
-import ResourcesCard from '@/components/ResourcesCard.vue'
 import { useMetricsStore } from '@/stores/metrics'
 import { MonitorWebSocket } from '@/services/websocket'
-import { getLatestProcesses, getResourcesLatest } from '@/api/metrics'
+import { getLatestProcesses } from '@/api/metrics'
 import { getServerStatus } from '@/api/server'
 import { listAlertRules } from '@/api/alert'
 import type { AgentStatusKind, AlertRule, ServerStatusPushPayload } from '@/types/api'
-import type { ProcessSnapshot, ServerResourcesSnapshot } from '@/types/metrics'
+import type { ProcessSnapshot } from '@/types/metrics'
 import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
@@ -152,8 +150,6 @@ const activeTab = ref<'chart' | 'table'>('chart')
 const alertRules = ref<AlertRule[]>([])
 /** 实时 Top 进程快照：REST 初载后由 metrics.update 捎带的 processes 节点覆盖。 */
 const processSnapshot = ref<ProcessSnapshot | null>(null)
-/** 实时磁盘/网卡资源快照：REST 初载后由 metrics.update 捎带的 resources 节点覆盖（协议 v1.5）。 */
-const resourcesSnapshot = ref<ServerResourcesSnapshot | null>(null)
 let latestHeartbeatAt: string | null = null
 let socket: MonitorWebSocket | null = null
 
@@ -255,31 +251,14 @@ function applyProcessSnapshot(snapshot: ProcessSnapshot): void {
   processSnapshot.value = snapshot
 }
 
-/** 拉取实时资源快照作为 WS 推送前的初载数据；404/失败时保持空态。 */
-async function loadResourcesSnapshot(): Promise<void> {
-  try {
-    const response = await getResourcesLatest(serverId)
-    resourcesSnapshot.value = response.data
-  } catch {
-    // 无快照（Agent 未上报或版本过旧）时展示空态即可，不阻断页面。
-  }
-}
-
-/** 应用 WS 推送的资源快照；仅在当前订阅服务器上应用。 */
-function applyResourcesSnapshot(snapshot: ServerResourcesSnapshot): void {
-  if (snapshot.server_id !== serverId) return
-  resourcesSnapshot.value = snapshot
-}
-
 onMounted(() => {
   timeRangeModel.value = [...metrics.timeRange]
   void metrics.load(serverId, timeRangeModel.value[0], timeRangeModel.value[1])
   void loadServerStatus()
   void loadAlertRules()
   void loadProcessSnapshot()
-  void loadResourcesSnapshot()
   socket = new MonitorWebSocket(metrics.applyRealtime, metrics.setConnected, undefined, undefined, undefined,
-    applyServerStatus, applyProcessSnapshot, applyResourcesSnapshot)
+    applyServerStatus, applyProcessSnapshot)
   socket.connect(serverId)
 })
 

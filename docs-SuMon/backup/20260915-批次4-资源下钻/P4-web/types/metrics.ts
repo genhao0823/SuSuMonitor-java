@@ -33,26 +33,3 @@ export interface ProcessSnapshot {
   cpu_top: ProcessSample[]
   mem_top: ProcessSample[]
 }
-
-/** 单个挂载点的容量快照（协议 v1.5，只含挂载点/设备名/字节数）。 */
-export interface DiskSample {
-  mount_point: string
-  device: string
-  total: number
-  free: number
-}
-
-/** 单个网卡的吞吐快照（协议 v1.5，采集间隔均值，kbps）。 */
-export interface NicSample {
-  name: string
-  rx_kbps: number
-  tx_kbps: number
-}
-
-/** 实时磁盘/网卡扩展资源快照（服务端内存保留，不落库，90 秒新鲜窗口）。 */
-export interface ServerResourcesSnapshot {
-  server_id: number
-  collected_at: string
-  disks: DiskSample[]
-  nics: NicSample[]
-}
