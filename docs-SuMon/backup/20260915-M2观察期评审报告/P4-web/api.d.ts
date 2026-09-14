@@ -737,63 +737,6 @@ export interface AutoApprovalPolicyRequest {
 }
 
 /**
- * 观察期评审报告单条基线核对项(与 OpenAPI ObservationCriterion 一致)。
- * passed 三态:true/false 判定,null 表示样本不足无法评判。
- */
-export interface ObservationCriterion {
-  key: 'sample_size' | 'auto_failure_rate' | 'timeout_rate' | 'high_risk_auto' | 'expired_rate'
-  value?: number | null
-  threshold: string
-  passed?: boolean | null
-}
-
-/**
- * 观察期评审报告模板用量条目(与 OpenAPI TemplateUsageItem 一致)。
- */
-export interface TemplateUsageItem {
-  template_id: string
-  runs: number
-}
-
-/**
- * 报告携带的当前自动审批策略快照(与 OpenAPI ObservationPolicySnapshot 一致)。
- * note 为 v1 边界说明:窗口内策略变更未追踪。
- */
-export interface ObservationPolicySnapshot {
-  enabled: boolean
-  max_risk_level: CommandRiskLevel
-  updated_at?: string | null
-  updated_by?: number | null
-  note?: string | null
-}
-
-/**
- * M2 观察期评审报告(与 OpenAPI CommandObservationReport 一致)。
- * by_* 分布仅含非零项;overall: pass/fail/insufficient(样本不足)。
- */
-export interface CommandObservationReport {
-  window_days: number
-  window_start: string
-  window_end: string
-  total_runs: number
-  by_status?: Record<string, number>
-  by_approval_mode?: Record<string, number>
-  by_risk_level?: Record<string, number>
-  by_source?: Record<string, number>
-  auto_executed?: number
-  auto_failed?: number
-  manual_executed?: number
-  manual_failed?: number
-  distinct_servers?: number
-  avg_duration_ms?: number | null
-  max_duration_ms?: number | null
-  template_usage?: TemplateUsageItem[]
-  policy?: ObservationPolicySnapshot
-  criteria: ObservationCriterion[]
-  overall: 'pass' | 'fail' | 'insufficient'
-}
-
-/**
  * 管理员个人 AI 服务商配置视图(与 OpenAPI AiProviderConfigView 字段一致)。
  * api_key 只返回掩码,明文永远不离开服务端。
  */

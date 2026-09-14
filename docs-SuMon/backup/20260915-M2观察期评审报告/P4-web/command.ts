@@ -3,7 +3,6 @@ import type {
   ApiResponse,
   AutoApprovalPolicy,
   AutoApprovalPolicyRequest,
-  CommandObservationReport,
   CommandRun,
   CommandRunQuery,
   CommandSuggestionRequest,
@@ -175,26 +174,6 @@ export function updateAutoApprovalPolicy(
   return apiClient
     .put<ApiResponse<AutoApprovalPolicy>>('/ai/commands/auto-approval-policy', req, {
       silent: true
-    })
-    .then((r) => r.data)
-}
-
-/**
- * 调用 GET /api/ai/commands/observation-report 获取 M2 观察期评审报告。
- *
- * 后端对 ai_command_runs 做窗口聚合并按评审基线 v1 出 PASS/FAIL/样本不足结论;
- * 只读查询,不产生任何落库副作用。实际覆盖面受审计保留期(默认 30 天)约束,
- * 报告内 window_start/window_end 为真实覆盖区间。
- *
- * @param windowDays 回看天数(1-90,后端校验;缺省 14)
- * @returns 评审报告(聚合指标 + 基线核对项 + 当前策略快照)
- */
-export function getObservationReport(
-  windowDays: number
-): Promise<ApiResponse<CommandObservationReport>> {
-  return apiClient
-    .get<ApiResponse<CommandObservationReport>>('/ai/commands/observation-report', {
-      params: { window_days: windowDays }
     })
     .then((r) => r.data)
 }

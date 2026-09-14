@@ -454,160 +454,6 @@
             </p>
           </div>
         </el-tab-pane>
-
-        <!-- ==================== 观察期评审报告 ==================== -->
-        <el-tab-pane
-          label="评审报告"
-          name="observation"
-        >
-          <div
-            v-loading="observationLoading"
-            class="ai-commands-view__observation"
-          >
-            <div class="ai-commands-view__obs-toolbar">
-              <el-radio-group
-                v-model="observationWindowDays"
-                @change="loadObservationReport"
-              >
-                <el-radio-button :value="7">
-                  近 7 天
-                </el-radio-button>
-                <el-radio-button :value="14">
-                  近 14 天
-                </el-radio-button>
-                <el-radio-button :value="30">
-                  近 30 天
-                </el-radio-button>
-              </el-radio-group>
-              <el-button
-                class="ai-commands-view__obs-refresh"
-                :loading="observationLoading"
-                @click="loadObservationReport"
-              >
-                刷新
-              </el-button>
-            </div>
-
-            <template v-if="observationReport">
-              <el-alert
-                v-if="observationReport.overall === 'pass'"
-                type="success"
-                :closable="false"
-                show-icon
-                class="ai-commands-view__obs-banner"
-                title="评审基线全部达标"
-                :description="obsWindowRangeText"
-              />
-              <el-alert
-                v-else-if="observationReport.overall === 'fail'"
-                type="error"
-                :closable="false"
-                show-icon
-                class="ai-commands-view__obs-banner"
-                title="评审基线存在未达标项:暂不建议扩大自动审批范围"
-                :description="obsWindowRangeText"
-              />
-              <el-alert
-                v-else
-                type="info"
-                :closable="false"
-                show-icon
-                class="ai-commands-view__obs-banner"
-                title="观察样本不足:暂无法给出评审结论,建议继续积累审计数据"
-                :description="obsWindowRangeText"
-              />
-
-              <div class="ai-commands-view__obs-stats">
-                <div class="ai-commands-view__obs-stat">
-                  <span class="ai-commands-view__obs-stat-value">{{ observationReport.total_runs }}</span>
-                  <span class="ai-commands-view__obs-stat-label">总运行数</span>
-                </div>
-                <div class="ai-commands-view__obs-stat">
-                  <span class="ai-commands-view__obs-stat-value">{{ observationReport.auto_executed ?? 0 }}</span>
-                  <span class="ai-commands-view__obs-stat-label">自动执行</span>
-                </div>
-                <div class="ai-commands-view__obs-stat">
-                  <span class="ai-commands-view__obs-stat-value">{{ observationReport.auto_failed ?? 0 }}</span>
-                  <span class="ai-commands-view__obs-stat-label">自动执行失败</span>
-                </div>
-                <div class="ai-commands-view__obs-stat">
-                  <span class="ai-commands-view__obs-stat-value">{{ observationReport.distinct_servers ?? 0 }}</span>
-                  <span class="ai-commands-view__obs-stat-label">涉及服务器</span>
-                </div>
-                <div class="ai-commands-view__obs-stat">
-                  <span class="ai-commands-view__obs-stat-value">{{ durationText(observationReport.avg_duration_ms) }}</span>
-                  <span class="ai-commands-view__obs-stat-label">平均耗时</span>
-                </div>
-                <div class="ai-commands-view__obs-stat">
-                  <span class="ai-commands-view__obs-stat-value">{{ durationText(observationReport.max_duration_ms) }}</span>
-                  <span class="ai-commands-view__obs-stat-label">最大耗时</span>
-                </div>
-              </div>
-
-              <h4 class="ai-commands-view__section-title">
-                评审基线核对(v1)
-              </h4>
-              <el-table
-                :data="observationCriteria"
-                size="small"
-              >
-                <el-table-column label="基线项">
-                  <template #default="{ row }">
-                    {{ criterionLabel((row as ObservationCriterion).key) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="数值">
-                  <template #default="{ row }">
-                    {{ criterionValueText(row as ObservationCriterion) }}
-                  </template>
-                </el-table-column>
-                <el-table-column
-                  prop="threshold"
-                  label="基线"
-                />
-                <el-table-column label="结论">
-                  <template #default="{ row }">
-                    {{ criterionPassedText((row as ObservationCriterion).passed) }}
-                  </template>
-                </el-table-column>
-              </el-table>
-
-              <h4 class="ai-commands-view__section-title">
-                模板用量 Top {{ observationReport.template_usage?.length ?? 0 }}
-              </h4>
-              <el-table
-                v-if="observationReport.template_usage?.length"
-                :data="observationReport.template_usage"
-                size="small"
-              >
-                <el-table-column
-                  prop="template_id"
-                  label="模板"
-                />
-                <el-table-column
-                  prop="runs"
-                  label="运行次数"
-                />
-              </el-table>
-              <p
-                v-else
-                class="ai-commands-view__obs-empty"
-              >
-                窗口内暂无命令运行记录
-              </p>
-
-              <p class="ai-commands-view__obs-meta">
-                状态分布:{{ distributionText(observationReport.by_status) }}
-              </p>
-              <p
-                v-if="observationReport.policy"
-                class="ai-commands-view__obs-meta"
-              >
-                {{ policyMetaText(observationReport.policy) }}
-              </p>
-            </template>
-          </div>
-        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -742,7 +588,6 @@ import {
   createManualCommandRun,
   getAutoApprovalPolicy,
   getCommandRun,
-  getObservationReport,
   listCommandRuns,
   listCommandTemplates,
   rejectCommandRun,
@@ -754,19 +599,16 @@ import { listServers } from '@/api/server'
 import { formatDateTime } from '@/utils/format'
 import type {
   AutoApprovalPolicy,
-  CommandObservationReport,
   CommandRiskLevel,
   CommandRun,
   CommandRunStatus,
   CommandTemplate,
   CommandTemplateParam,
-  ObservationCriterion,
-  ObservationPolicySnapshot,
   Server
 } from '@/types/api'
 
 /**
- * AI 命令域页面(M1 审批制 + 策略自动审批 + M2 观察期评审报告)。
+ * AI 命令域页面(M1 审批制 + 策略自动审批)。
  *
  * - 运行记录:分页查询 + 待审批记录的通过 / 拒绝;详情中对 approved/executing
  *   状态每 2 秒轮询一次直到终态(后端无执行进度推送)。
@@ -774,8 +616,6 @@ import type {
  *   两者都先产生 pending_approval 记录;若自动审批策略开启且风险达标,
  *   服务端会立即自动审批并下发,前端对建议结果轮询跟进。
  * - 自动审批:实例级策略(开关 + 风险阈值),仅影响 AI 建议来源命令。
- * - 评审报告:窗口聚合审计数据并按后端基线 v1 输出核对结论,
- *   供 M2 自动审批出口评审使用(只读,窗口可切换 7/14/30 天)。
  */
 
 /** 命令运行终态集合;轮询到达终态即停止。 */
@@ -798,7 +638,7 @@ const STATUS_OPTIONS: Array<{ value: CommandRunStatus; label: string }> = [
   { value: 'timeout', label: '已超时' }
 ]
 
-const activeTab = ref<'runs' | 'create' | 'policy' | 'observation'>('runs')
+const activeTab = ref<'runs' | 'create' | 'policy'>('runs')
 
 /** 服务器下拉选项(两个 Tab 共用)。 */
 const serverOptions = ref<Server[]>([])
@@ -844,21 +684,6 @@ const policyForm = reactive<{ enabled: boolean; max_risk_level: 'low' | 'medium'
 })
 const policyUpdatedAt = ref<string | null>(null)
 
-/* ------------------------------ 观察期评审报告 ------------------------------ */
-const observationLoading = ref(false)
-const observationReport = ref<CommandObservationReport | null>(null)
-/** 评审窗口天数(后端允许 1-90,UI 收敛为 7/14/30 三档)。 */
-const observationWindowDays = ref<number>(14)
-
-/** 基线项 key → 中文标签映射(后端契约只输出稳定 key)。 */
-const CRITERION_LABELS: Record<string, string> = {
-  sample_size: '样本量(总运行数)',
-  auto_failure_rate: '自动执行失败率(含超时)',
-  timeout_rate: '执行超时率',
-  high_risk_auto: '高风险自动执行数',
-  expired_rate: '审批过期率'
-}
-
 /** 建议结果的独立轮询:自动审批后命令已在执行,跟进到终态。 */
 let suggestPollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -871,7 +696,6 @@ onMounted(async () => {
   await reloadRuns()
   await loadTemplates()
   await loadPolicy()
-  await loadObservationReport()
 })
 
 onBeforeUnmount(() => {
@@ -1132,84 +956,6 @@ async function loadPolicy(): Promise<void> {
   } finally {
     policyLoading.value = false
   }
-}
-
-/* ------------------------------ 评审报告逻辑 ------------------------------ */
-
-/** 评审报告核对项(报告未加载时为空数组,避免模板判空)。 */
-const observationCriteria = computed<ObservationCriterion[]>(
-  () => observationReport.value?.criteria ?? []
-)
-
-/** 窗口区间文案(横幅描述行);覆盖面受审计保留期约束需向读者说明。 */
-const obsWindowRangeText = computed<string>(() => {
-  const report = observationReport.value
-  if (!report) return ''
-  return (
-    `统计窗口:${formatDateTime(report.window_start)} ~ ${formatDateTime(report.window_end)}` +
-    `(窗口 ${report.window_days} 天,实际覆盖面受审计保留期约束)`
-  )
-})
-
-/** 加载评审报告;窗口切换与刷新共用,失败仅提示不阻塞其他 Tab。 */
-async function loadObservationReport(): Promise<void> {
-  observationLoading.value = true
-  try {
-    const res = await getObservationReport(observationWindowDays.value)
-    observationReport.value = res.data ?? null
-  } catch (error) {
-    ElMessage.error(describeAiError(error, '评审报告加载失败'))
-  } finally {
-    observationLoading.value = false
-  }
-}
-
-/** 基线项 key → 中文标签;未知 key 原样回显(契约演进的兜底)。 */
-function criterionLabel(key: string): string {
-  return CRITERION_LABELS[key] ?? key
-}
-
-/** 数值列:比率类以百分比呈现(0-1 → %),计数类原样,空值显示 —。 */
-function criterionValueText(criterion: ObservationCriterion): string {
-  if (criterion.value === null || criterion.value === undefined) return '—'
-  if (
-    criterion.key === 'auto_failure_rate'
-    || criterion.key === 'timeout_rate'
-    || criterion.key === 'expired_rate'
-  ) {
-    return `${(Number(criterion.value) * 100).toFixed(2)}%`
-  }
-  return String(criterion.value)
-}
-
-/** 结论列三态文案(与后端 passed 三态语义一一对应)。 */
-function criterionPassedText(passed: boolean | null | undefined): string {
-  if (passed === true) return '达标'
-  if (passed === false) return '未达标'
-  return '样本不足'
-}
-
-/** 耗时列:毫秒整数展示,空值显示 —。 */
-function durationText(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '—'
-  return `${Math.round(Number(value))} ms`
-}
-
-/** 策略快照文案:开启态附阈值,尾注携带 v1 边界说明。 */
-function policyMetaText(policy: ObservationPolicySnapshot): string {
-  const state = policy.enabled
-    ? `已开启(阈值:${riskLabel(policy.max_risk_level)})`
-    : '未开启'
-  return `当前自动审批策略:${state};${policy.note ?? ''}`
-}
-
-/** 状态分布文案:按既有状态中文标签拼接,空映射显式说明。 */
-function distributionText(map: Record<string, number> | undefined): string {
-  const entries = Object.entries(map ?? {})
-  if (entries.length === 0) return '窗口内无记录'
-  return entries
-    .map(([key, count]) => `${statusLabel(key as CommandRunStatus)} ${count}`)
-    .join(' · ')
 }
 
 async function handleSavePolicy(): Promise<void> {
@@ -1493,69 +1239,6 @@ function riskTagType(risk: CommandRiskLevel | undefined): 'success' | 'warning' 
     justify-content: flex-start;
     flex-wrap: wrap;
     row-gap: 8px;
-  }
-}
-</style>
-
-<style scoped>
-/* 评审报告:工具栏(窗口切换 + 刷新)横排布局。 */
-.ai-commands-view__obs-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-/* 评审报告:结论横幅与下方内容的间距。 */
-.ai-commands-view__obs-banner {
-  margin-bottom: 16px;
-}
-
-/* 评审报告:核心指标行,六格均匀分布。 */
-.ai-commands-view__obs-stats {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-/* 评审报告:单格指标(数值在上、标签在下)。 */
-.ai-commands-view__obs-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 0;
-  border-radius: 8px;
-  background: rgba(127, 127, 127, 0.08);
-}
-
-.ai-commands-view__obs-stat-value {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.ai-commands-view__obs-stat-label {
-  font-size: 12px;
-  opacity: 0.72;
-}
-
-.ai-commands-view__obs-empty {
-  margin: 8px 0;
-  font-size: 13px;
-  opacity: 0.72;
-}
-
-.ai-commands-view__obs-meta {
-  margin: 12px 0 0;
-  font-size: 13px;
-  opacity: 0.85;
-}
-
-/* 窄屏下指标行退化为三列,避免数值挤压。 */
-@media (max-width: 900px) {
-  .ai-commands-view__obs-stats {
-    grid-template-columns: repeat(3, 1fr);
   }
 }
 </style>

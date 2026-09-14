@@ -7,18 +7,11 @@ import {
   approveCommandRun,
   createManualCommandRun,
   getAutoApprovalPolicy,
-  getObservationReport,
   listCommandRuns,
   listCommandTemplates,
   updateAutoApprovalPolicy
 } from '@/api/command'
-import type {
-  AutoApprovalPolicy,
-  CommandObservationReport,
-  CommandRun,
-  CommandTemplate,
-  PageResult
-} from '@/types/api'
+import type { AutoApprovalPolicy, CommandRun, CommandTemplate, PageResult } from '@/types/api'
 
 /**
  * AiCommandsView 关键交互回归。
@@ -27,7 +20,6 @@ import type {
  * - 运行记录:待审批行渲染「通过 / 拒绝」;审批走 ElMessageBox 二次确认后调用接口并刷新列表
  * - 手动创建:选择服务器与模板后提交,仅携带 server_id + template_id(无参数时不带 params 字段)
  * - 自动审批:策略 Tab 回显快照;保存调用 PUT;自动审批行渲染「自动」徽标
- * - 评审报告:挂载即加载;overall 三态横幅与基线核对项三态文案;刷新按钮按当前窗口重查
  *
  * 策略:mock @/api/command、@/api/server、@/api/ai;ElMessageBox.confirm spy;
  * el-table/el-table-column 通过 provide/inject 让列的 scoped slot 拿到 row。
@@ -38,7 +30,6 @@ vi.mock('@/api/command', () => ({
   createManualCommandRun: vi.fn(),
   getAutoApprovalPolicy: vi.fn(),
   getCommandRun: vi.fn(),
-  getObservationReport: vi.fn(),
   listCommandRuns: vi.fn(),
   listCommandTemplates: vi.fn(),
   rejectCommandRun: vi.fn(),
@@ -64,49 +55,12 @@ const createManualCommandRunMock = vi.mocked(createManualCommandRun)
 const listCommandTemplatesMock = vi.mocked(listCommandTemplates)
 const getAutoApprovalPolicyMock = vi.mocked(getAutoApprovalPolicy)
 const updateAutoApprovalPolicyMock = vi.mocked(updateAutoApprovalPolicy)
-const getObservationReportMock = vi.mocked(getObservationReport)
 
 const makePolicy = (overrides: Partial<AutoApprovalPolicy> = {}): AutoApprovalPolicy => ({
   enabled: false,
   max_risk_level: 'medium',
   updated_at: null,
   updated_by: null,
-  ...overrides
-})
-
-/** 构造评审报告;默认基线全达标(pass),用例按需覆盖三态与核对项。 */
-const makeReport = (overrides: Partial<CommandObservationReport> = {}): CommandObservationReport => ({
-  window_days: 14,
-  window_start: '2026-09-01T02:00:00Z',
-  window_end: '2026-09-15T02:00:00Z',
-  total_runs: 100,
-  by_status: { succeeded: 93, failed: 2, expired: 5 },
-  by_approval_mode: { manual: 80, auto: 20 },
-  by_risk_level: { low: 100 },
-  by_source: { ai: 60, manual: 40 },
-  auto_executed: 20,
-  auto_failed: 1,
-  manual_executed: 75,
-  manual_failed: 1,
-  distinct_servers: 4,
-  avg_duration_ms: 812.3456,
-  max_duration_ms: 4300,
-  template_usage: [{ template_id: 'disk_free', runs: 40 }],
-  policy: {
-    enabled: true,
-    max_risk_level: 'medium',
-    updated_at: '2026-09-10T00:00:00Z',
-    updated_by: 2,
-    note: '当前单行策略快照;窗口内策略变更未追踪(v1 限制)'
-  },
-  criteria: [
-    { key: 'sample_size', value: 100, threshold: '>= 30', passed: true },
-    { key: 'auto_failure_rate', value: 0.05, threshold: '<= 0.05 且 auto 样本 >= 10', passed: true },
-    { key: 'timeout_rate', value: 0, threshold: '<= 0.02', passed: true },
-    { key: 'high_risk_auto', value: 0, threshold: '= 0', passed: true },
-    { key: 'expired_rate', value: 0.05, threshold: '<= 0.20', passed: true }
-  ],
-  overall: 'pass',
   ...overrides
 })
 
@@ -194,7 +148,7 @@ const ElInputStub = {
 
 const ElRadioGroupStub = {
   name: 'ElRadioGroupStub',
-  props: { modelValue: { type: [Number, String] as PropType<number | string>, default: '' } },
+  props: { modelValue: { type: String, default: '' } },
   emits: ['update:modelValue'],
   template: '<div class="el-radio-group-stub"><slot /></div>'
 }
@@ -297,12 +251,6 @@ describe('AiCommandsView', () => {
       code: 0,
       message: 'success',
       data: makePolicy()
-    })
-    // 评审报告随挂载加载,所有既有用例都需要默认成功响应。
-    getObservationReportMock.mockResolvedValue({
-      code: 0,
-      message: 'success',
-      data: makeReport()
     })
   })
 
@@ -418,81 +366,5 @@ describe('AiCommandsView', () => {
     const tagTexts = wrapper.findAll('.el-tag-stub').map((tag) => tag.text().trim())
     expect(tagTexts).toContain('自动')
     expect(tagTexts).toContain('低')
-  })
-
-  it('评审报告:挂载即按缺省 14 天窗口加载,基线全达标渲染通过横幅', async () => {
-    const wrapper = await mountView()
-
-    expect(getObservationReportMock).toHaveBeenCalledWith(14)
-    const alertTexts = wrapper.findAll('.el-alert-stub').map((alert) => alert.text())
-    expect(alertTexts.join('\n')).toContain('评审基线全部达标')
-    // 核心指标与基线核对项渲染:计数原样、比率转百分比、结论三态文案。
-    expect(wrapper.text()).toContain('总运行数')
-    expect(wrapper.text()).toContain('100')
-    expect(wrapper.text()).toContain('自动执行失败率(含超时)')
-    expect(wrapper.text()).toContain('5.00%')
-    expect(wrapper.text()).toContain('达标')
-  })
-
-  it('评审报告:overall=fail 渲染未达标横幅与未达标核对项', async () => {
-    getObservationReportMock.mockResolvedValue({
-      code: 0,
-      message: 'success',
-      data: makeReport({
-        overall: 'fail',
-        criteria: [
-          { key: 'sample_size', value: 100, threshold: '>= 30', passed: true },
-          { key: 'auto_failure_rate', value: 0.15, threshold: '<= 0.05 且 auto 样本 >= 10', passed: false },
-          { key: 'timeout_rate', value: null, threshold: '<= 0.02', passed: null }
-        ]
-      })
-    })
-
-    const wrapper = await mountView()
-
-    const alertTexts = wrapper.findAll('.el-alert-stub').map((alert) => alert.text())
-    expect(alertTexts.join('\n')).toContain('评审基线存在未达标项')
-    expect(wrapper.text()).toContain('未达标')
-    // passed=null 的核对项显示「样本不足」而非误判为达标/未达标。
-    expect(wrapper.text()).toContain('样本不足')
-    // 数值为 null 的比率项显示占位符。
-    expect(wrapper.text()).toContain('—')
-  })
-
-  it('评审报告:overall=insufficient 渲染样本不足横幅', async () => {
-    getObservationReportMock.mockResolvedValue({
-      code: 0,
-      message: 'success',
-      data: makeReport({ overall: 'insufficient', total_runs: 5 })
-    })
-
-    const wrapper = await mountView()
-
-    const alertTexts = wrapper.findAll('.el-alert-stub').map((alert) => alert.text())
-    expect(alertTexts.join('\n')).toContain('观察样本不足')
-  })
-
-  it('评审报告:刷新按钮按当前窗口重新拉取报告', async () => {
-    const wrapper = await mountView()
-    expect(getObservationReportMock).toHaveBeenCalledTimes(1)
-
-    // 运行记录 Tab 同名「刷新」在前,须用评审报告工具栏的专属 class 定位。
-    const refreshButton = wrapper.find('.el-button-stub.ai-commands-view__obs-refresh')
-    expect(refreshButton.exists()).toBe(true)
-    await refreshButton.trigger('click')
-    await flush()
-
-    expect(getObservationReportMock).toHaveBeenCalledTimes(2)
-    expect(getObservationReportMock).toHaveBeenLastCalledWith(14)
-  })
-
-  it('评审报告:加载失败经 describeAiError 映射后提示且不渲染横幅', async () => {
-    getObservationReportMock.mockRejectedValue(new Error('network down'))
-
-    const wrapper = await mountView()
-
-    expect(ElMessage.error).toHaveBeenCalledWith('映射后的错误文案')
-    expect(wrapper.findAll('.el-alert-stub').map((alert) => alert.text()).join('\n'))
-      .not.toContain('评审基线')
   })
 })
