@@ -1,6 +1,6 @@
 # SuSuMonitor WebSocket Protocol
 
-**Version**: 1.4
+**Version**: 1.3
 
 **Time standard**: UTC ISO-8601, for example `2026-07-21T12:00:00Z`
 
@@ -49,8 +49,6 @@ The Agent message limit is 64 KiB. Invalid JSON uses close code `1007`; oversize
 
 `metrics.report` contains one fixed-width `metrics` row, including `server_id`, `collected_at`, `cpu_percent`, `memory_percent`, `memory_used`, `memory_total`, `disk_percent`, `disk_used`, `disk_total`, `net_rx`, `net_tx`, `temperature`, and `load_avg`. Its `message_id` is a required UUID idempotency key. Retrying one report must reuse its original `message_id`; a duplicate is silently accepted without inserting another row or publishing `metrics.update` or `alert.push`. For one server, accepted `collected_at` values must be strictly increasing. A report whose `collected_at` is not strictly greater than the most recently accepted sample is permanently rejected with `metrics.nack` (reason `stale_collected_at`); it is not persisted and emits no event.
 
-Since v1.4 (2026-09-15) the `metrics.report` payload may additionally carry two **optional** top-process arrays, `process_cpu_top` and `process_mem_top`. Each array holds at most 20 entries of `{"pid": <int>=1, "name": "<string> 1-128 chars", "cpu_percent": <0-100>, "mem_percent": <0-100>}`, sorted descending by the ranking metric. Both fields are optional and may be omitted entirely (older Agents, process collection disabled via `SUSUMONITOR_PROCESS_TOP_N=0`, or unsupported platforms); a server must accept their absence and presence independently. Process samples share the metrics row's `collected_at` and are **not persisted**: the server keeps only the latest in-memory snapshot per server (90-second freshness window) for `GET /api/servers/{id}/processes/latest` and relays the snapshot to Monitor subscribers inside `metrics.update`. Process names are OS process names only; clients and Agents must never include command lines, environment variables, or credentials in these fields.
-
 After the metrics ingress transaction has committed, the server returns `metrics.ack` with the request `message_id` and payload `{"server_id": <id>, "collected_at": "<accepted UTC ISO-8601>"}`. The acknowledgement confirms only that the server accepted the ingress transaction (including idempotent duplicate acceptance). It does **not** confirm RabbitMQ publication, Monitor frame delivery, or asynchronous alert evaluation. A failed validation or persistence transaction returns the standard `error` frame and never returns `metrics.ack`. Agents that do not consume this optional frame remain compatible. An Agent that has not received `metrics.ack` by its configured acknowledgement deadline may retransmit the unchanged complete `metrics.report` frame with its original `message_id`; the ingress idempotency key makes this retry safe.
 
 A report that the server can correlate and classifies as deterministically permanent is rejected with `metrics.nack` carrying the original `message_id` and payload `{"server_id": <id>, "code": <int>, "reason": "invalid_metrics_payload|stale_collected_at|server_not_found", "message": "<string>"}`. The server returns `metrics.nack` **only** for permanent rejections; uncertain or transient failures (database, internal, rate limit) still return the generic `error` frame. On a correlated `metrics.nack` the Agent moves the rejected FIFO head into its local durable dead-letter and never retries it; generic `error` frames never remove the queue head. Agents that do not consume `metrics.nack` remain compatible but keep retrying a permanently rejected head until they upgrade.
@@ -82,22 +80,6 @@ After a committed Metrics transaction, subscribers receive:
   }
 }
 ```
-
-Since v1.4 (2026-09-15) the `metrics.update` payload may additionally carry an **optional** `processes` node, present only when the triggering `metrics.report` carried top-process arrays:
-
-```json
-{
-  "server_id": 1,
-  "metrics": {"cpu_percent": 35.2, "collected_at": "2026-07-21T11:59:58Z"},
-  "processes": {
-    "collected_at": "2026-07-21T11:59:58Z",
-    "cpu_top": [{"pid": 1204, "name": "java", "cpu_percent": 41.2, "mem_percent": 18.4}],
-    "mem_top": [{"pid": 901, "name": "mysqld", "cpu_percent": 0.6, "mem_percent": 32.1}]
-  }
-}
-```
-
-Clients must treat `processes` as absent on older deployments and render an empty state. The snapshot is best-effort real-time data: it is never persisted, and a REST fallback exists at `GET /api/servers/{id}/processes/latest` (404 when no fresh snapshot exists).
 
 After a successful Agent online/offline state transition, subscribers of the affected server receive `server.status.update`:
 
@@ -241,5 +223,3 @@ The first version does not provide cross-JVM connection state, Ticket sharing, s
 **2026-08-29 安全审计新增授权边界**：终端通道（`terminal.*` 帧）与 REST 面 SSH 一致，仅 admin 可打开交互式会话；普通用户发送终端帧回 `40302` error 帧并保留连接（`MonitorWebSocketHandler`，含 `nonAdminTerminalOpenShouldReturnForbiddenWithoutRelaying`）。
 
 **2026-09-03 命令域契约冻结（实现待 Develop-log 证据）**：`command.execute`/`command.result` 帧契约已冻结于 `command-protocol-v1.md`（M1 审批制、L1 只读模板白名单、`AI_COMMAND_ENABLED` 默认 `false`）；截至该日 Java 侧尚未实现，落地后以 `docs-SuMon/Develop-log/` 对应日志为验证证据并在契约文档补记实现确认。AI 永不使用 `terminal.*` 帧的既有边界不变，命令执行只走 `command.*` 独立通道（详见上文 Command Messages 节与 `ai-command-domain-threat-model.md`）。
-
-**2026-09-15 v1.4 进程快照（additive）**：`metrics.report` 增可选 `process_cpu_top`/`process_mem_top` 数组，`metrics.update` 增可选 `processes` 节点，均为纯增量字段——旧 Agent 与旧服务端互不感知、行为不变；进程快照不落库，服务端仅保留 90 秒内存新鲜窗口并经 `GET /api/servers/{id}/processes/latest` 暴露。实现记录见 `docs-SuMon/Develop-log/20260915-进程级监控三端实现.md`。

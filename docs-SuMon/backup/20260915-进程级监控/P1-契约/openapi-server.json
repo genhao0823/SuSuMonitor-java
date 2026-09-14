@@ -3,7 +3,7 @@
   "info": {
     "title": "SuSuMonitor Server Management API",
     "description": "Authoritative contract for secure server management. JSON property names use snake_case. Credential plaintext and ciphertext are request-only implementation concerns and are never returned by any response.",
-    "version": "0.2.0"
+    "version": "0.1.1"
   },
   "servers": [
     {
@@ -760,49 +760,6 @@
         }
       }
     },
-    "/api/servers/{id}/processes/latest": {
-      "get": {
-        "tags": [
-          "servers"
-        ],
-        "summary": "Get latest in-memory top-process snapshot",
-        "operationId": "getLatestProcesses",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ServerId"
-          },
-          {
-            "$ref": "#/components/parameters/XCorrelationId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Latest top-process snapshot (90-second freshness window)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProcessSnapshotResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      }
-    },
     "/api/servers/{id}/metrics": {
       "get": {
         "tags": [
@@ -1496,88 +1453,6 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/MetricsResult"
-              }
-            }
-          }
-        ]
-      },
-      "ProcessSample": {
-        "type": "object",
-        "description": "One top-process entry. Names are OS process names only; never command lines or credentials.",
-        "required": [
-          "pid",
-          "name",
-          "cpu_percent",
-          "mem_percent"
-        ],
-        "properties": {
-          "pid": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 1
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "cpu_percent": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100
-          },
-          "mem_percent": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100
-          }
-        }
-      },
-      "ProcessSnapshot": {
-        "type": "object",
-        "description": "Best-effort real-time top-process snapshot; never persisted server-side.",
-        "required": [
-          "server_id",
-          "collected_at",
-          "cpu_top",
-          "mem_top"
-        ],
-        "properties": {
-          "server_id": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 1
-          },
-          "collected_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "cpu_top": {
-            "type": "array",
-            "maxItems": 20,
-            "items": {
-              "$ref": "#/components/schemas/ProcessSample"
-            }
-          },
-          "mem_top": {
-            "type": "array",
-            "maxItems": 20,
-            "items": {
-              "$ref": "#/components/schemas/ProcessSample"
-            }
-          }
-        }
-      },
-      "ProcessSnapshotResponse": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ApiResponse"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "data": {
-                "$ref": "#/components/schemas/ProcessSnapshot"
               }
             }
           }
