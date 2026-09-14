@@ -24,13 +24,18 @@ func registerTestTemplates(t *testing.T) {
 		templates["echo"] = Template{ID: "echo", Argv: []string{"echo", "{message}"},
 			Params: []ParamSpec{{Name: "message", Pattern: regexp.MustCompile(`^.{0,64}$`)}}}
 		templates["sleeper"] = Template{ID: "sleeper", Argv: []string{"sleep", "30"}}
+		// 2026-09-15：golang:1.23-alpine 中 busybox dd 位于 /bin/dd（无 /usr/bin/dd），
+		// 硬编码 /usr/bin/dd 令截断用例在容器门禁内必失败，此处改为 /bin/dd。
 		templates["flood"] = Template{ID: "flood",
-			Argv: []string{"/usr/bin/dd", "if=/dev/zero", "bs=1024", "count=4"}}
+			Argv: []string{"/bin/dd", "if=/dev/zero", "bs=1024", "count=4"}}
 		templates["leaker"] = Template{ID: "leaker",
 			Argv: []string{"/usr/bin/printf", "password=hunter2\n"}}
 	})
 	if _, err := exec.LookPath("sleep"); err != nil {
 		t.Skip("sleep not available on this platform")
+	}
+	if _, err := exec.LookPath("dd"); err != nil {
+		t.Skip("dd not available on this platform")
 	}
 }
 

@@ -117,6 +117,10 @@ func (e *Executor) Execute(parent context.Context, templateID string, params map
 	started := time.Now()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	var stdout, stderr cappedBuffer
+	// 接线配置的输出上限：NewExecutor 已把 <=0 归一化为 64 KiB 默认值；
+	// 此前未把该值传入 cappedBuffer，导致自定义 MaxOutputBytes 被静默忽略。
+	stdout.max = e.config.MaxOutputBytes
+	stderr.max = e.config.MaxOutputBytes
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	runErr := cmd.Run()
