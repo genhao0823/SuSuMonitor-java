@@ -3,7 +3,7 @@
   "info": {
     "title": "SuSuMonitor Server Management API",
     "description": "Authoritative contract for secure server management. JSON property names use snake_case. Credential plaintext and ciphertext are request-only implementation concerns and are never returned by any response.",
-    "version": "0.3.0"
+    "version": "0.2.0"
   },
   "servers": [
     {
@@ -803,49 +803,6 @@
         }
       }
     },
-    "/api/servers/{id}/resources/latest": {
-      "get": {
-        "tags": [
-          "servers"
-        ],
-        "summary": "Get latest in-memory per-disk and per-nic resource snapshot",
-        "operationId": "getLatestResources",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ServerId"
-          },
-          {
-            "$ref": "#/components/parameters/XCorrelationId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Latest extended-resource snapshot (90-second freshness window)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServerResourcesSnapshotResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      }
-    },
     "/api/servers/{id}/metrics": {
       "get": {
         "tags": [
@@ -1621,112 +1578,6 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/ProcessSnapshot"
-              }
-            }
-          }
-        ]
-      },
-      "DiskSample": {
-        "type": "object",
-        "description": "One per-mount-point disk capacity entry. Identifiers only; never filesystem contents or credentials.",
-        "required": [
-          "mount_point",
-          "device",
-          "total",
-          "free"
-        ],
-        "properties": {
-          "mount_point": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "device": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "total": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "free": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          }
-        }
-      },
-      "NicSample": {
-        "type": "object",
-        "description": "One per-interface throughput entry averaged over the collection interval.",
-        "required": [
-          "name",
-          "rx_kbps",
-          "tx_kbps"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          },
-          "rx_kbps": {
-            "type": "number",
-            "minimum": 0
-          },
-          "tx_kbps": {
-            "type": "number",
-            "minimum": 0
-          }
-        }
-      },
-      "ServerResourcesSnapshot": {
-        "type": "object",
-        "description": "Best-effort real-time per-disk and per-nic resource snapshot; never persisted server-side.",
-        "required": [
-          "server_id",
-          "collected_at",
-          "disks",
-          "nics"
-        ],
-        "properties": {
-          "server_id": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 1
-          },
-          "collected_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "disks": {
-            "type": "array",
-            "maxItems": 32,
-            "items": {
-              "$ref": "#/components/schemas/DiskSample"
-            }
-          },
-          "nics": {
-            "type": "array",
-            "maxItems": 64,
-            "items": {
-              "$ref": "#/components/schemas/NicSample"
-            }
-          }
-        }
-      },
-      "ServerResourcesSnapshotResponse": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ApiResponse"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "data": {
-                "$ref": "#/components/schemas/ServerResourcesSnapshot"
               }
             }
           }

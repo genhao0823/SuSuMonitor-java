@@ -1,6 +1,6 @@
 # SuSuMonitor WebSocket Protocol
 
-**Version**: 1.5
+**Version**: 1.4
 
 **Time standard**: UTC ISO-8601, for example `2026-07-21T12:00:00Z`
 
@@ -51,8 +51,6 @@ The Agent message limit is 64 KiB. Invalid JSON uses close code `1007`; oversize
 
 Since v1.4 (2026-09-15) the `metrics.report` payload may additionally carry two **optional** top-process arrays, `process_cpu_top` and `process_mem_top`. Each array holds at most 20 entries of `{"pid": <int>=1, "name": "<string> 1-128 chars", "cpu_percent": <0-100>, "mem_percent": <0-100>}`, sorted descending by the ranking metric. Both fields are optional and may be omitted entirely (older Agents, process collection disabled via `SUSUMONITOR_PROCESS_TOP_N=0`, or unsupported platforms); a server must accept their absence and presence independently. Process samples share the metrics row's `collected_at` and are **not persisted**: the server keeps only the latest in-memory snapshot per server (90-second freshness window) for `GET /api/servers/{id}/processes/latest` and relays the snapshot to Monitor subscribers inside `metrics.update`. Process names are OS process names only; clients and Agents must never include command lines, environment variables, or credentials in these fields.
 
-Since v1.5 (2026-09-15) the `metrics.report` payload may additionally carry two **optional** extended-resource arrays, `disks` and `nics`. `disks` holds at most 32 entries of `{"mount_point": "<string> 1-128 chars", "device": "<string> 1-128 chars", "total": <int>=0 bytes, "free": <int>=0 bytes>}`; `nics` holds at most 64 entries of `{"name": "<string> 1-128 chars", "rx_kbps": <number>=0, "tx_kbps": <number>=0}`, where rates are kilobits per second averaged over the collection interval (Agent default 5 seconds), rounded to 2 decimals. The Agent derives `disks` from physical partitions only (pseudo filesystems such as `tmpfs`/`devtmpfs`/`proc`/`sysfs`/`overlay`/`squashfs`/`loop`/`ramfs` are excluded, duplicates by mount point collapsed, sorted descending by total), and `nics` from per-interface byte counters excluding the loopback interface, sorted descending by receive rate. Both fields are optional and may be omitted independently (older Agents, `SUSUMONITOR_EXTENDED_RESOURCES=0`, or unsupported platforms); on the Agent's first collection cycle `nics` is omitted because no differential baseline exists yet, while `disks` is point-in-time and may be present. Resource samples share the metrics row's `collected_at` and are **not persisted**: the server keeps only the latest in-memory snapshot per server (90-second freshness window) for `GET /api/servers/{id}/resources/latest` and relays the snapshot to Monitor subscribers inside `metrics.update`. Unlike the strictly validated v1.4 top-process fields, an extended-resource array that exceeds its entry limit or contains any invalid entry (blank or over-length names, negative or missing numbers) causes the server to **drop the whole `resources` snapshot and log a warning while still persisting the core metrics row and returning `metrics.ack`** — an optional extension must never break the core telemetry chain. Mount points, device names, and interface names are identifiers only; clients and Agents must never include filesystem contents, network connection details, or credentials in these fields.
-
 After the metrics ingress transaction has committed, the server returns `metrics.ack` with the request `message_id` and payload `{"server_id": <id>, "collected_at": "<accepted UTC ISO-8601>"}`. The acknowledgement confirms only that the server accepted the ingress transaction (including idempotent duplicate acceptance). It does **not** confirm RabbitMQ publication, Monitor frame delivery, or asynchronous alert evaluation. A failed validation or persistence transaction returns the standard `error` frame and never returns `metrics.ack`. Agents that do not consume this optional frame remain compatible. An Agent that has not received `metrics.ack` by its configured acknowledgement deadline may retransmit the unchanged complete `metrics.report` frame with its original `message_id`; the ingress idempotency key makes this retry safe.
 
 A report that the server can correlate and classifies as deterministically permanent is rejected with `metrics.nack` carrying the original `message_id` and payload `{"server_id": <id>, "code": <int>, "reason": "invalid_metrics_payload|stale_collected_at|server_not_found", "message": "<string>"}`. The server returns `metrics.nack` **only** for permanent rejections; uncertain or transient failures (database, internal, rate limit) still return the generic `error` frame. On a correlated `metrics.nack` the Agent moves the rejected FIFO head into its local durable dead-letter and never retries it; generic `error` frames never remove the queue head. Agents that do not consume `metrics.nack` remain compatible but keep retrying a permanently rejected head until they upgrade.
@@ -100,23 +98,6 @@ Since v1.4 (2026-09-15) the `metrics.update` payload may additionally carry an *
 ```
 
 Clients must treat `processes` as absent on older deployments and render an empty state. The snapshot is best-effort real-time data: it is never persisted, and a REST fallback exists at `GET /api/servers/{id}/processes/latest` (404 when no fresh snapshot exists).
-
-Since v1.5 (2026-09-15) the `metrics.update` payload may additionally carry an **optional** `resources` node, present only when the triggering `metrics.report` carried extended-resource arrays:
-
-```json
-{
-  "server_id": 1,
-  "metrics": {"cpu_percent": 35.2, "collected_at": "2026-07-21T11:59:58Z"},
-  "resources": {
-    "server_id": 1,
-    "collected_at": "2026-07-21T11:59:58Z",
-    "disks": [{"mount_point": "/", "device": "/dev/sda1", "total": 102005473280, "free": 41092091904}],
-    "nics": [{"name": "eth0", "rx_kbps": 8421.55, "tx_kbps": 1204.5}]
-  }
-}
-```
-
-Clients must treat `resources` as absent on older deployments and render an empty state. The snapshot is best-effort real-time data: it is never persisted, and a REST fallback exists at `GET /api/servers/{id}/resources/latest` (404 when no fresh snapshot exists).
 
 After a successful Agent online/offline state transition, subscribers of the affected server receive `server.status.update`:
 
@@ -262,5 +243,3 @@ The first version does not provide cross-JVM connection state, Ticket sharing, s
 **2026-09-03 命令域契约冻结（实现待 Develop-log 证据）**：`command.execute`/`command.result` 帧契约已冻结于 `command-protocol-v1.md`（M1 审批制、L1 只读模板白名单、`AI_COMMAND_ENABLED` 默认 `false`）；截至该日 Java 侧尚未实现，落地后以 `docs-SuMon/Develop-log/` 对应日志为验证证据并在契约文档补记实现确认。AI 永不使用 `terminal.*` 帧的既有边界不变，命令执行只走 `command.*` 独立通道（详见上文 Command Messages 节与 `ai-command-domain-threat-model.md`）。
 
 **2026-09-15 v1.4 进程快照（additive）**：`metrics.report` 增可选 `process_cpu_top`/`process_mem_top` 数组，`metrics.update` 增可选 `processes` 节点，均为纯增量字段——旧 Agent 与旧服务端互不感知、行为不变；进程快照不落库，服务端仅保留 90 秒内存新鲜窗口并经 `GET /api/servers/{id}/processes/latest` 暴露。实现记录见 `docs-SuMon/Develop-log/20260915-进程级监控三端实现.md`。
-
-**2026-09-15 v1.5 资源扩展快照（additive）**：`metrics.report` 增可选 `disks`/`nics` 数组（每挂载点容量与分网卡速率），`metrics.update` 增可选 `resources` 节点，均为纯增量字段——旧 Agent 与旧服务端互不感知、行为不变；资源快照不落库，服务端仅保留 90 秒内存新鲜窗口并经 `GET /api/servers/{id}/resources/latest` 暴露。扩展字段校验语义与 v1.4 进程字段刻意不同：超限或元素非法丢弃整个资源快照并告警日志，核心指标行照常入库与 ack（可选增强不断核心遥测链）。实现记录见 `docs-SuMon/Develop-log/20260915-多盘多网卡资源下钻三端实现.md`。
