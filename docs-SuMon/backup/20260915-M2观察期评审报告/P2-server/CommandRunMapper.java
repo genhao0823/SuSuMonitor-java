@@ -1,8 +1,6 @@
 package com.susumonitor.server.module.command.mapper;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.susumonitor.server.module.command.dto.CommandObservationAggregate;
-import com.susumonitor.server.module.command.dto.TemplateUsageAggregate;
 import com.susumonitor.server.module.command.entity.CommandRunEntity;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -102,26 +100,4 @@ public interface CommandRunMapper {
 
     /** 按保留期分批删除审计行。 */
     int deleteExpiredBatch(@Param("cutoffTime") LocalDateTime cutoffTime, @Param("batchSize") int batchSize);
-
-    /**
-     * 观察期评审报告聚合：在 created_at 窗口上按状态/审批方式/风险等级/来源
-     * 条件聚合计数，并计算执行质量组合指标。
-     *
-     * <p>无 GROUP BY 的条件聚合恒返回一行；SUM(CASE) 在窗口无行时返回 NULL，
-     * 由服务层按 0 处理。命中 idx_ai_command_runs_created_at 索引。</p>
-     *
-     * @param windowStart 窗口起点（created_at &gt;= windowStart）
-     * @return 单行聚合结果，永不为 null（SQL 层保证）
-     */
-    CommandObservationAggregate selectObservationAggregate(@Param("windowStart") LocalDateTime windowStart);
-
-    /**
-     * 观察期评审报告的模板用量 Top N（按窗口内运行次数降序）。
-     *
-     * @param windowStart 窗口起点（created_at &gt;= windowStart）
-     * @param limit 返回条数上限（服务层固定传入，防深分页）
-     * @return 模板用量聚合行列表（窗口无数据时为空列表）
-     */
-    List<TemplateUsageAggregate> selectTemplateUsage(@Param("windowStart") LocalDateTime windowStart,
-            @Param("limit") int limit);
 }

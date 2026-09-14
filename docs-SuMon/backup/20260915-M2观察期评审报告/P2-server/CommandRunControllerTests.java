@@ -92,11 +92,6 @@ class CommandRunControllerTests {
     @MockitoBean
     private CommandAutoApprovalPolicyMapper autoApprovalPolicyMapper;
 
-    // 观察期评审报告服务为控制器构造依赖，切片需一并替代。
-    @MockitoBean
-    private com.susumonitor.server.module.command.CommandObservationReportService
-            observationReportService;
-
     @MockitoBean
     private AiProvider aiProvider;
 
@@ -305,66 +300,6 @@ class CommandRunControllerTests {
         mockMvc.perform(get("/api/ai/commands/auto-approval-policy").header(AUTHORIZATION, USER_BEARER))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(40300));
-    }
-
-    /** admin 可获取观察期评审报告，响应走统一 ApiResponse 包裹。 */
-    @Test
-    void adminShouldGetObservationReport() throws Exception {
-        authenticateAdmin();
-        com.susumonitor.server.module.command.vo.CommandObservationReportVo report =
-                new com.susumonitor.server.module.command.vo.CommandObservationReportVo();
-        report.setWindowDays(14);
-        report.setTotalRuns(100L);
-        report.setOverall("pass");
-        when(observationReportService.generate(14)).thenReturn(report);
-
-        mockMvc.perform(get("/api/ai/commands/observation-report").header(AUTHORIZATION, ADMIN_BEARER))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.window_days").value(14))
-                .andExpect(jsonPath("$.data.total_runs").value(100))
-                .andExpect(jsonPath("$.data.overall").value("pass"));
-        verify(observationReportService).generate(14);
-    }
-
-    /** window_days 缺省按 14 天处理。 */
-    @Test
-    void observationReportShouldDefaultTo14Days() throws Exception {
-        authenticateAdmin();
-        com.susumonitor.server.module.command.vo.CommandObservationReportVo report =
-                new com.susumonitor.server.module.command.vo.CommandObservationReportVo();
-        report.setWindowDays(14);
-        report.setOverall("insufficient");
-        when(observationReportService.generate(14)).thenReturn(report);
-
-        mockMvc.perform(get("/api/ai/commands/observation-report").header(AUTHORIZATION, ADMIN_BEARER))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.overall").value("insufficient"));
-    }
-
-    /** window_days 越界（0 或 91）在校验阶段拒绝，服务不被调用。 */
-    @Test
-    void observationReportShouldRejectOutOfRangeWindow() throws Exception {
-        authenticateAdmin();
-        mockMvc.perform(get("/api/ai/commands/observation-report")
-                        .queryParam("window_days", "0").header(AUTHORIZATION, ADMIN_BEARER))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(40002));
-        mockMvc.perform(get("/api/ai/commands/observation-report")
-                        .queryParam("window_days", "91").header(AUTHORIZATION, ADMIN_BEARER))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(40002));
-        verify(observationReportService, never()).generate(org.mockito.ArgumentMatchers.anyInt());
-    }
-
-    /** 非 admin 不能读取观察期评审报告。 */
-    @Test
-    void nonAdminShouldBeForbiddenOnObservationReport() throws Exception {
-        authenticateUser();
-        mockMvc.perform(get("/api/ai/commands/observation-report").header(AUTHORIZATION, USER_BEARER))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value(40300));
-        verify(observationReportService, never()).generate(org.mockito.ArgumentMatchers.anyInt());
     }
 
     private void authenticateAdmin() {

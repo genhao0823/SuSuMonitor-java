@@ -5,7 +5,6 @@ import com.susumonitor.server.common.ApiResponse;
 import com.susumonitor.server.common.vo.PageResult;
 import com.susumonitor.server.module.command.AiCommandSuggestionService;
 import com.susumonitor.server.module.command.CommandAutoApprovalPolicyService;
-import com.susumonitor.server.module.command.CommandObservationReportService;
 import com.susumonitor.server.module.command.CommandRunService;
 import com.susumonitor.server.module.command.CommandRunVos;
 import com.susumonitor.server.module.command.CommandTemplateRegistry;
@@ -13,7 +12,6 @@ import com.susumonitor.server.module.command.dto.AutoApprovalPolicyRequest;
 import com.susumonitor.server.module.command.dto.CommandSuggestionRequest;
 import com.susumonitor.server.module.command.dto.ManualCommandRequest;
 import com.susumonitor.server.module.command.entity.CommandRunEntity;
-import com.susumonitor.server.module.command.vo.CommandObservationReportVo;
 import com.susumonitor.server.module.command.vo.CommandRunVo;
 import com.susumonitor.server.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,8 +53,6 @@ public class CommandRunController {
     private final CommandTemplateRegistry templateRegistry;
     private final AiCommandSuggestionService suggestionService;
     private final CommandAutoApprovalPolicyService autoApprovalPolicyService;
-    // 观察期评审报告服务：只读聚合，随命令域开关同生灭（关闭时端点 404）。
-    private final CommandObservationReportService observationReportService;
     private final ObjectMapper objectMapper;
 
     /** AI 根据意图生成建议并逐条创建待审批运行（返回可能为空列表）。 */
@@ -164,22 +160,6 @@ public class CommandRunController {
     @GetMapping("/auto-approval-policy")
     public ApiResponse<Map<String, Object>> getAutoApprovalPolicy() {
         return ApiResponse.success(toPolicyVo(autoApprovalPolicyService.get()));
-    }
-
-    /**
-     * M2 观察期评审报告：窗口聚合 ai_command_runs 并按评审基线 v1 出结论（只读）。
-     *
-     * <p>window_days 缺省 14 天，允许 1-90；实际覆盖受审计保留期（默认 30 天）约束，
-     * 报告内携带窗口起止时间供核对。</p>
-     */
-    @Operation(summary = "Get the M2 observation review report",
-            security = @SecurityRequirement(name = "bearerAuth"))
-    @GetMapping("/observation-report")
-    public ApiResponse<CommandObservationReportVo> observationReport(
-            @RequestParam(value = "window_days", defaultValue = "14")
-            @Min(value = 1, message = "window_days 不能小于 1")
-            @Max(value = 90, message = "window_days 不能大于 90") Integer windowDays) {
-        return ApiResponse.success(observationReportService.generate(windowDays));
     }
 
     /** 更新自动审批策略（admin 专属；阈值仅允许 low/medium）。 */
