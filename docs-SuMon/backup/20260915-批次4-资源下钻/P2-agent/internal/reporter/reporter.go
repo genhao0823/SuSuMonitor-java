@@ -82,12 +82,6 @@ func (r *Reporter) Report(metrics collector.Metrics) error {
 	if metrics.ProcessMemTop != nil {
 		payload.ProcessMemTop = processPayloads(*metrics.ProcessMemTop)
 	}
-	if metrics.Disks != nil {
-		payload.Disks = diskPayloads(*metrics.Disks)
-	}
-	if metrics.Nics != nil {
-		payload.Nics = nicPayloads(*metrics.Nics)
-	}
 	message := wsclient.NewMessage("metrics.report", payload)
 	if err := r.queue.Enqueue(message); err != nil {
 		return fmt.Errorf("queue metrics: %w", err)
@@ -106,33 +100,6 @@ func processPayloads(samples []collector.ProcessSample) []wsclient.ProcessPayloa
 			Name:       sample.Name,
 			CPUPercent: sample.CPUPercent,
 			MemPercent: sample.MemPercent,
-		})
-	}
-	return payloads
-}
-
-// diskPayloads 将采集层磁盘容量快照转换为协议载荷条目（协议 v1.5）。
-func diskPayloads(samples []collector.DiskSample) []wsclient.DiskPayload {
-	payloads := make([]wsclient.DiskPayload, 0, len(samples))
-	for _, sample := range samples {
-		payloads = append(payloads, wsclient.DiskPayload{
-			MountPoint: sample.MountPoint,
-			Device:     sample.Device,
-			TotalBytes: sample.TotalBytes,
-			FreeBytes:  sample.FreeBytes,
-		})
-	}
-	return payloads
-}
-
-// nicPayloads 将采集层网卡吞吐快照转换为协议载荷条目（协议 v1.5）。
-func nicPayloads(samples []collector.NicSample) []wsclient.NicPayload {
-	payloads := make([]wsclient.NicPayload, 0, len(samples))
-	for _, sample := range samples {
-		payloads = append(payloads, wsclient.NicPayload{
-			Name:   sample.Name,
-			RxKbps: sample.RxKbps,
-			TxKbps: sample.TxKbps,
 		})
 	}
 	return payloads

@@ -107,24 +107,6 @@ type ProcessPayload struct {
 	MemPercent float64 `json:"mem_percent"`
 }
 
-// DiskPayload 是单个挂载点的容量条目（websocket-protocol.md v1.5）。
-//
-// 只携带挂载点、设备名与字节数，绝不携带文件系统内容。
-type DiskPayload struct {
-	MountPoint string `json:"mount_point"`
-	Device     string `json:"device"`
-	TotalBytes uint64 `json:"total"`
-	FreeBytes  uint64 `json:"free"`
-}
-
-// NicPayload 是单个网卡的吞吐条目（websocket-protocol.md v1.5）：
-// 采集间隔内的平均收发速率，单位 kbps，保留 2 位小数。
-type NicPayload struct {
-	Name   string  `json:"name"`
-	RxKbps float64 `json:"rx_kbps"`
-	TxKbps float64 `json:"tx_kbps"`
-}
-
 // MetricsPayload 是 metrics.report 消息的指标载荷，与后端固定宽表一一对应。
 //
 // 指针类型字段表示可空；Windows 上 temperature 和 load_avg 通常为 nil。
@@ -146,10 +128,6 @@ type MetricsPayload struct {
 	// 未启用进程采集或首周期无差分基线时为 nil，整体省略字段。
 	ProcessCPUTop []ProcessPayload `json:"process_cpu_top,omitempty"`
 	ProcessMemTop []ProcessPayload `json:"process_mem_top,omitempty"`
-	// Disks/Nics 是 v1.5 可选扩展资源快照；未启用扩展采集、首周期无差分
-	// 基线（nics）或采集失败时为 nil，整体省略字段。
-	Disks []DiskPayload `json:"disks,omitempty"`
-	Nics  []NicPayload  `json:"nics,omitempty"`
 }
 
 // TerminalOpenPayload 是服务端要求 Agent 创建本地 PTY 的固定参数。

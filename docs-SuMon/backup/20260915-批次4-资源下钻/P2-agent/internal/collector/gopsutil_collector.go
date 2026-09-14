@@ -27,8 +27,6 @@ type GopsutilCollector struct {
 	loadAvg             func() (*load.AvgStat, error)
 	// processSampler 为 nil 时不采集 Top 进程。
 	processSampler *ProcessSampler
-	// extendedSampler 为 nil 时不采集每挂载点/分网卡扩展资源（协议 v1.5）。
-	extendedSampler *ExtendedSampler
 }
 
 // sensorTemperature 是 SensorsTemperatures 的最小测试替身，避免测试依赖平台实现细节。
@@ -51,11 +49,6 @@ func NewGopsutilCollector() *GopsutilCollector {
 // SetProcessSampler 挂载 Top 进程采样器；nil 表示关闭进程采集。
 func (c *GopsutilCollector) SetProcessSampler(sampler *ProcessSampler) {
 	c.processSampler = sampler
-}
-
-// SetExtendedSampler 挂载磁盘/网卡扩展资源采样器；nil 表示关闭扩展采集。
-func (c *GopsutilCollector) SetExtendedSampler(sampler *ExtendedSampler) {
-	c.extendedSampler = sampler
 }
 
 // Collect 采集一次系统指标快照。
@@ -109,17 +102,6 @@ func (c *GopsutilCollector) Collect() (Metrics, error) {
 			// 进程采样失败或首个周期尚无差分基线时不携带进程字段，不影响指标主流程。
 			metrics.ProcessCPUTop = &cpuTop
 			metrics.ProcessMemTop = &memTop
-		}
-	}
-	if c.extendedSampler != nil {
-		disks, nics := c.extendedSampler.Sample()
-		if disks != nil {
-			// 磁盘容量是点值，首周期即可携带；采集失败时为 nil 整体省略，不影响指标主流程。
-			metrics.Disks = &disks
-		}
-		if nics != nil {
-			// 网卡速率首个周期尚无差分基线，为 nil 整体省略。
-			metrics.Nics = &nics
 		}
 	}
 	return metrics, nil

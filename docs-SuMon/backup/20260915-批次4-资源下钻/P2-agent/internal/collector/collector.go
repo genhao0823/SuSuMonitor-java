@@ -24,12 +24,6 @@ type Metrics struct {
 	ProcessCPUTop *[]ProcessSample
 	// ProcessMemTop 是按内存占比降序的 Top 进程；nil 含义同 ProcessCPUTop。
 	ProcessMemTop *[]ProcessSample
-	// Disks 是按总容量降序的每挂载点容量快照；nil 表示本周期未采集
-	//（未启用扩展资源采集或采集失败），不进入上报载荷（协议 v1.5）。
-	Disks *[]DiskSample
-	// Nics 是按接收速率降序的分网卡吞吐快照；nil 含义同 Disks，
-	// 且首个差分周期必然为 nil（尚无字节计数基线）。
-	Nics *[]NicSample
 }
 
 // ProcessSample 是单个进程的占用快照，用于 Top 进程排行。

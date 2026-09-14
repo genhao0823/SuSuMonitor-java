@@ -134,54 +134,6 @@ func TestReportCarriesProcessTopArrays(t *testing.T) {
 	}
 }
 
-// TestReportCarriesExtendedResources verifies optional per-disk and per-nic
-// arrays are serialized as protocol v1.5 fields and omitted entirely when absent.
-func TestReportCarriesExtendedResources(t *testing.T) {
-	sender := &recordingSender{}
-	reporter, _ := newTestReporter(t, sender, retryOptions())
-	disks := []collector.DiskSample{{MountPoint: "/", Device: "/dev/sda1", TotalBytes: 1000, FreeBytes: 250}}
-	nics := []collector.NicSample{{Name: "eth0", RxKbps: 640, TxKbps: 12.8}}
-	if err := reporter.Report(collector.Metrics{Disks: &disks, Nics: &nics}); err != nil {
-		t.Fatalf("Report() error = %v", err)
-	}
-	var raw map[string]json.RawMessage
-	message := waitForMessages(t, sender, 1)[0]
-	if err := json.Unmarshal(message.Payload, &raw); err != nil {
-		t.Fatalf("unmarshal metrics payload: %v", err)
-	}
-	var diskList []wsclient.DiskPayload
-	if err := json.Unmarshal(raw["disks"], &diskList); err != nil {
-		t.Fatalf("unmarshal disks: %v", err)
-	}
-	if len(diskList) != 1 || diskList[0].MountPoint != "/" || diskList[0].Device != "/dev/sda1" ||
-		diskList[0].TotalBytes != 1000 || diskList[0].FreeBytes != 250 {
-		t.Fatalf("unexpected disks payload: %+v", diskList)
-	}
-	var nicList []wsclient.NicPayload
-	if err := json.Unmarshal(raw["nics"], &nicList); err != nil {
-		t.Fatalf("unmarshal nics: %v", err)
-	}
-	if len(nicList) != 1 || nicList[0].Name != "eth0" || nicList[0].RxKbps != 640 || nicList[0].TxKbps != 12.8 {
-		t.Fatalf("unexpected nics payload: %+v", nicList)
-	}
-
-	sender2 := &recordingSender{}
-	reporter2, _ := newTestReporter(t, sender2, retryOptions())
-	if err := reporter2.Report(collector.Metrics{}); err != nil {
-		t.Fatalf("Report() error = %v", err)
-	}
-	var absent map[string]json.RawMessage
-	if err := json.Unmarshal(waitForMessages(t, sender2, 1)[0].Payload, &absent); err != nil {
-		t.Fatalf("unmarshal metrics payload: %v", err)
-	}
-	if _, ok := absent["disks"]; ok {
-		t.Fatal("disks should be omitted when no samples collected")
-	}
-	if _, ok := absent["nics"]; ok {
-		t.Fatal("nics should be omitted when no samples collected")
-	}
-}
-
 // TestReporterKeepsFifoUntilAcknowledged verifies later metrics do not bypass
 // the first unacknowledged frame.
 func TestReporterKeepsFifoUntilAcknowledged(t *testing.T) {

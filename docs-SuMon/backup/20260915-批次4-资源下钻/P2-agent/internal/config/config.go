@@ -82,8 +82,6 @@ type Config struct {
 	CommandRatePerMinute int
 	// ProcessTopN 是每周期上报的 CPU/内存 Top 进程条数；0 表示关闭进程采集。
 	ProcessTopN int
-	// ExtendedResources 控制是否采集每挂载点容量与分网卡速率（协议 v1.5），默认开启。
-	ExtendedResources bool
 }
 
 // Load 从环境变量加载配置并校验。
@@ -189,10 +187,6 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.ProcessTopN, err = getenvIntDefault("SUSUMONITOR_PROCESS_TOP_N", 10); err != nil {
-		return nil, err
-	}
-	// 扩展资源采集默认开启；显式置 0/false 关闭，与进程采集开关同一套运维语义。
-	if cfg.ExtendedResources, err = getenvBoolDefault("SUSUMONITOR_EXTENDED_RESOURCES", true); err != nil {
 		return nil, err
 	}
 

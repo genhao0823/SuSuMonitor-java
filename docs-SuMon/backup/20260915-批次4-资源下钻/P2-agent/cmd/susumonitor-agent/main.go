@@ -89,10 +89,6 @@ func main() {
 	if sampler := collector.NewProcessSampler(cfg.ProcessTopN); sampler != nil {
 		metricsCollector.SetProcessSampler(sampler)
 	}
-	// 扩展资源采集（每挂载点容量与分网卡速率）默认开启，SUSUMONITOR_EXTENDED_RESOURCES=0 关闭。
-	if cfg.ExtendedResources {
-		metricsCollector.SetExtendedSampler(collector.NewExtendedSampler())
-	}
 	if err := runWithDependencies(ctx, cfg, logger, client, metricsCollector, metricsReporter); err != nil {
 		logger.Error("agent exited with error", "error", err)
 		os.Exit(1)

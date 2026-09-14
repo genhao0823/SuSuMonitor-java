@@ -163,25 +163,3 @@ func TestLoadUsesProcessTopNDefaultsAndOverride(t *testing.T) {
 		t.Fatalf("ProcessTopN = %d, want 0", cfg.ProcessTopN)
 	}
 }
-
-// TestLoadExtendedResourcesDefaultsAndOverride 验证扩展资源采集默认开启、
-// 显式置 0 可关闭（协议 v1.5 的运行时开关）。
-func TestLoadExtendedResourcesDefaultsAndOverride(t *testing.T) {
-	setValidEnvironment(t)
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if !cfg.ExtendedResources {
-		t.Fatal("ExtendedResources should default to true")
-	}
-
-	t.Setenv("SUSUMONITOR_EXTENDED_RESOURCES", "0")
-	cfg, err = Load()
-	if err != nil {
-		t.Fatalf("Load() with disabled extended resources error = %v", err)
-	}
-	if cfg.ExtendedResources {
-		t.Fatal("ExtendedResources = true, want false when SUSUMONITOR_EXTENDED_RESOURCES=0")
-	}
-}
