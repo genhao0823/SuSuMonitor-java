@@ -97,16 +97,6 @@ type MetricsNack struct {
 	Message  string `json:"message"`
 }
 
-// ProcessPayload 是单个 Top 进程条目（websocket-protocol.md v1.4）。
-//
-// 只携带 pid、进程名与占用比例，绝不携带命令行与环境变量。
-type ProcessPayload struct {
-	PID        int32   `json:"pid"`
-	Name       string  `json:"name"`
-	CPUPercent float64 `json:"cpu_percent"`
-	MemPercent float64 `json:"mem_percent"`
-}
-
 // MetricsPayload 是 metrics.report 消息的指标载荷，与后端固定宽表一一对应。
 //
 // 指针类型字段表示可空；Windows 上 temperature 和 load_avg 通常为 nil。
@@ -124,10 +114,6 @@ type MetricsPayload struct {
 	NetTx         *uint64  `json:"net_tx"`
 	Temperature   *float64 `json:"temperature"`
 	LoadAvg       *float64 `json:"load_avg"`
-	// ProcessCPUTop/ProcessMemTop 是 v1.4 可选 Top 进程排行；
-	// 未启用进程采集或首周期无差分基线时为 nil，整体省略字段。
-	ProcessCPUTop []ProcessPayload `json:"process_cpu_top,omitempty"`
-	ProcessMemTop []ProcessPayload `json:"process_mem_top,omitempty"`
 }
 
 // TerminalOpenPayload 是服务端要求 Agent 创建本地 PTY 的固定参数。

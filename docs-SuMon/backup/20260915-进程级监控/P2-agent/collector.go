@@ -19,21 +19,6 @@ type Metrics struct {
 	NetTx         *uint64
 	Temperature   *float64
 	LoadAvg       *float64
-	// ProcessCPUTop 是按 CPU 占用降序的 Top 进程；nil 表示本周期未采集
-	//（未启用、首个采样周期尚无差分基线或采集失败）。
-	ProcessCPUTop *[]ProcessSample
-	// ProcessMemTop 是按内存占比降序的 Top 进程；nil 含义同 ProcessCPUTop。
-	ProcessMemTop *[]ProcessSample
-}
-
-// ProcessSample 是单个进程的占用快照，用于 Top 进程排行。
-//
-// 只携带进程名与占用比例，绝不包含命令行与环境变量（websocket-protocol.md v1.4）。
-type ProcessSample struct {
-	PID        int32
-	Name       string
-	CPUPercent float64
-	MemPercent float64
 }
 
 // Collector 是系统指标采集接口。

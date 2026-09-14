@@ -80,8 +80,6 @@ type Config struct {
 	CommandMaxOutputBytes int
 	// CommandRatePerMinute 是本机命令执行频次上限（固定窗口，默认 10/分钟）。
 	CommandRatePerMinute int
-	// ProcessTopN 是每周期上报的 CPU/内存 Top 进程条数；0 表示关闭进程采集。
-	ProcessTopN int
 }
 
 // Load 从环境变量加载配置并校验。
@@ -184,9 +182,6 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.CommandRatePerMinute, err = getenvIntDefault("SUSUMONITOR_COMMAND_RATE_PER_MINUTE", 10); err != nil {
-		return nil, err
-	}
-	if cfg.ProcessTopN, err = getenvIntDefault("SUSUMONITOR_PROCESS_TOP_N", 10); err != nil {
 		return nil, err
 	}
 
@@ -293,9 +288,6 @@ func (c *Config) validate() error {
 	}
 	if c.CommandRatePerMinute < 1 || c.CommandRatePerMinute > 600 {
 		return fmt.Errorf("command rate per minute must be between 1 and 600")
-	}
-	if c.ProcessTopN < 0 || c.ProcessTopN > 50 {
-		return fmt.Errorf("process top N must be between 0 and 50, got %d", c.ProcessTopN)
 	}
 	return nil
 }

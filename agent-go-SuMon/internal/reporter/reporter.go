@@ -76,6 +76,12 @@ func (r *Reporter) Report(metrics collector.Metrics) error {
 		Temperature:   metrics.Temperature,
 		LoadAvg:       metrics.LoadAvg,
 	}
+	if metrics.ProcessCPUTop != nil {
+		payload.ProcessCPUTop = processPayloads(*metrics.ProcessCPUTop)
+	}
+	if metrics.ProcessMemTop != nil {
+		payload.ProcessMemTop = processPayloads(*metrics.ProcessMemTop)
+	}
 	message := wsclient.NewMessage("metrics.report", payload)
 	if err := r.queue.Enqueue(message); err != nil {
 		return fmt.Errorf("queue metrics: %w", err)
@@ -83,6 +89,20 @@ func (r *Reporter) Report(metrics collector.Metrics) error {
 	r.logger.Debug("metrics queued", "server_id", r.serverID, "message_id", message.MessageID,
 		"collected_at", payload.CollectedAt)
 	return r.TrySend()
+}
+
+// processPayloads 将采集层进程采样转换为协议载荷条目。
+func processPayloads(samples []collector.ProcessSample) []wsclient.ProcessPayload {
+	payloads := make([]wsclient.ProcessPayload, 0, len(samples))
+	for _, sample := range samples {
+		payloads = append(payloads, wsclient.ProcessPayload{
+			PID:        sample.PID,
+			Name:       sample.Name,
+			CPUPercent: sample.CPUPercent,
+			MemPercent: sample.MemPercent,
+		})
+	}
+	return payloads
 }
 
 // TrySend attempts the oldest queued frame when no prior frame is awaiting its

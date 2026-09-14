@@ -85,11 +85,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	metricsCollector := collector.NewGopsutilCollector()
-	if sampler := collector.NewProcessSampler(cfg.ProcessTopN); sampler != nil {
-		metricsCollector.SetProcessSampler(sampler)
-	}
-	if err := runWithDependencies(ctx, cfg, logger, client, metricsCollector, metricsReporter); err != nil {
+	if err := runWithDependencies(ctx, cfg, logger, client, collector.NewGopsutilCollector(), metricsReporter); err != nil {
 		logger.Error("agent exited with error", "error", err)
 		os.Exit(1)
 	}

@@ -87,6 +87,53 @@ func TestReportQueuesBeforeAcknowledgement(t *testing.T) {
 	}
 }
 
+// TestReportCarriesProcessTopArrays verifies optional top-process arrays are
+// serialized as protocol v1.4 fields and omitted entirely when absent.
+func TestReportCarriesProcessTopArrays(t *testing.T) {
+	sender := &recordingSender{}
+	reporter, _ := newTestReporter(t, sender, retryOptions())
+	processCPUTop := []collector.ProcessSample{{PID: 9, Name: "java", CPUPercent: 60, MemPercent: 40}}
+	processMemTop := []collector.ProcessSample{{PID: 5, Name: "mysqld", CPUPercent: 1.5, MemPercent: 72.25}}
+	if err := reporter.Report(collector.Metrics{ProcessCPUTop: &processCPUTop, ProcessMemTop: &processMemTop}); err != nil {
+		t.Fatalf("Report() error = %v", err)
+	}
+	messages := waitForMessages(t, sender, 1)
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(messages[0].Payload, &raw); err != nil {
+		t.Fatalf("unmarshal metrics payload: %v", err)
+	}
+	var cpuTop, memTop []wsclient.ProcessPayload
+	if err := json.Unmarshal(raw["process_cpu_top"], &cpuTop); err != nil {
+		t.Fatalf("unmarshal process_cpu_top: %v", err)
+	}
+	if err := json.Unmarshal(raw["process_mem_top"], &memTop); err != nil {
+		t.Fatalf("unmarshal process_mem_top: %v", err)
+	}
+	if len(cpuTop) != 1 || cpuTop[0].PID != 9 || cpuTop[0].Name != "java" ||
+		cpuTop[0].CPUPercent != 60 || cpuTop[0].MemPercent != 40 {
+		t.Fatalf("unexpected process_cpu_top: %+v", cpuTop)
+	}
+	if len(memTop) != 1 || memTop[0].PID != 5 || memTop[0].Name != "mysqld" || memTop[0].MemPercent != 72.25 {
+		t.Fatalf("unexpected process_mem_top: %+v", memTop)
+	}
+
+	sender2 := &recordingSender{}
+	reporter2, _ := newTestReporter(t, sender2, retryOptions())
+	if err := reporter2.Report(collector.Metrics{}); err != nil {
+		t.Fatalf("Report() error = %v", err)
+	}
+	var absent map[string]json.RawMessage
+	if err := json.Unmarshal(waitForMessages(t, sender2, 1)[0].Payload, &absent); err != nil {
+		t.Fatalf("unmarshal metrics payload: %v", err)
+	}
+	if _, ok := absent["process_cpu_top"]; ok {
+		t.Fatal("process_cpu_top should be omitted when no samples collected")
+	}
+	if _, ok := absent["process_mem_top"]; ok {
+		t.Fatal("process_mem_top should be omitted when no samples collected")
+	}
+}
+
 // TestReporterKeepsFifoUntilAcknowledged verifies later metrics do not bypass
 // the first unacknowledged frame.
 func TestReporterKeepsFifoUntilAcknowledged(t *testing.T) {

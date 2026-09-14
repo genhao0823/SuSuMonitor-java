@@ -25,8 +25,6 @@ type GopsutilCollector struct {
 	netIOCounters       func(bool) ([]net.IOCountersStat, error)
 	sensorsTemperatures func() ([]sensorTemperature, error)
 	loadAvg             func() (*load.AvgStat, error)
-	// processSampler 为 nil 时不采集 Top 进程。
-	processSampler *ProcessSampler
 }
 
 // sensorTemperature 是 SensorsTemperatures 的最小测试替身，避免测试依赖平台实现细节。
@@ -44,11 +42,6 @@ func NewGopsutilCollector() *GopsutilCollector {
 		sensorsTemperatures: sensorTemperatures,
 		loadAvg:             load.Avg,
 	}
-}
-
-// SetProcessSampler 挂载 Top 进程采样器；nil 表示关闭进程采集。
-func (c *GopsutilCollector) SetProcessSampler(sampler *ProcessSampler) {
-	c.processSampler = sampler
 }
 
 // Collect 采集一次系统指标快照。
@@ -95,14 +88,6 @@ func (c *GopsutilCollector) Collect() (Metrics, error) {
 	}
 	if loadInfo, loadErr := c.loadAvg(); loadErr == nil && loadInfo != nil {
 		metrics.LoadAvg = float64Pointer(round(loadInfo.Load1))
-	}
-	if c.processSampler != nil {
-		if cpuTop, memTop, sampleErr := c.processSampler.Sample(); sampleErr == nil &&
-			cpuTop != nil && memTop != nil {
-			// 进程采样失败或首个周期尚无差分基线时不携带进程字段，不影响指标主流程。
-			metrics.ProcessCPUTop = &cpuTop
-			metrics.ProcessMemTop = &memTop
-		}
 	}
 	return metrics, nil
 }

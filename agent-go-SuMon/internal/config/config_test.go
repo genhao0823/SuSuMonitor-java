@@ -116,6 +116,8 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"terminal output rate zero", "SUSUMONITOR_TERMINAL_OUTPUT_RATE_BYTES_PER_SECOND", "0"},
 		{"terminal output burst below output block", "SUSUMONITOR_TERMINAL_OUTPUT_BURST_BYTES", "16383"},
 		{"terminal relative shell", "SUSUMONITOR_TERMINAL_SHELL", "bash"},
+		{"process top N too large", "SUSUMONITOR_PROCESS_TOP_N", "51"},
+		{"process top N negative", "SUSUMONITOR_PROCESS_TOP_N", "-1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -137,5 +139,27 @@ func TestLoadRejectsReconnectMaxBelowInitial(t *testing.T) {
 	t.Setenv("SUSUMONITOR_RECONNECT_MAX_SECONDS", "5")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() error = nil, want reconnect range error")
+	}
+}
+
+// TestLoadUsesProcessTopNDefaultsAndOverride 验证进程采集默认开启 10 条、
+// 显式设 0 表示关闭。
+func TestLoadUsesProcessTopNDefaultsAndOverride(t *testing.T) {
+	setValidEnvironment(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ProcessTopN != 10 {
+		t.Fatalf("default ProcessTopN = %d, want 10", cfg.ProcessTopN)
+	}
+
+	t.Setenv("SUSUMONITOR_PROCESS_TOP_N", "0")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() with disabled process top N error = %v", err)
+	}
+	if cfg.ProcessTopN != 0 {
+		t.Fatalf("ProcessTopN = %d, want 0", cfg.ProcessTopN)
 	}
 }
