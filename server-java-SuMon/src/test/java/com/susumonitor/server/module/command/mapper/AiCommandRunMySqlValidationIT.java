@@ -88,7 +88,8 @@ class AiCommandRunMySqlValidationIT {
 
         assertEquals(1, migrationCount);
         assertEquals(2, riskColumn);
-        assertEquals(0, ((Number) seed.get("enabled")).intValue());
+        // enabled 列为 TINYINT(1)：MySQL Connector/J 默认 tinyInt1isBit 映射为 Boolean。
+        assertEquals(0, tinyintValue(seed.get("enabled")));
         assertEquals("medium", seed.get("max_risk_level"));
     }
 
@@ -113,12 +114,15 @@ class AiCommandRunMySqlValidationIT {
     /** 策略表 upsert：插入与更新单行均生效，CHECK 约束拒绝非法阈值。 */
     @Test
     void policyUpsertShouldReplaceSingleRow() {
-        assertEquals(1, commandAutoApprovalPolicyMapper.upsertPolicy(true, "low", TEST_APPROVER_ID, now()));
-        assertEquals(1, commandAutoApprovalPolicyMapper.upsertPolicy(false, "medium", TEST_APPROVER_ID, now()));
+        // ODKU 命中种子行（V33 已插入 id=1）走更新路径，MySQL affected rows=2、新插入=1，
+        // 与 AiHealthReportMySqlValidationIT.upsertShouldOverwriteSameDateWithoutDuplicates 同口径断言 >=1。
+        assertTrue(commandAutoApprovalPolicyMapper.upsertPolicy(true, "low", TEST_APPROVER_ID, now()) >= 1);
+        assertTrue(commandAutoApprovalPolicyMapper.upsertPolicy(false, "medium", TEST_APPROVER_ID, now()) >= 1);
 
         Map<String, Object> row = jdbcTemplate.queryForMap(
                 "SELECT enabled, max_risk_level FROM ai_command_auto_approval_policies WHERE id = 1");
-        assertEquals(0, ((Number) row.get("enabled")).intValue());
+        // enabled 列为 TINYINT(1)：MySQL Connector/J 默认 tinyInt1isBit 映射为 Boolean。
+        assertEquals(0, tinyintValue(row.get("enabled")));
         assertEquals("medium", row.get("max_risk_level"));
 
         assertEquals(1, jdbcTemplate.queryForObject(
@@ -141,13 +145,16 @@ class AiCommandRunMySqlValidationIT {
         assertNotNull(run.getId());
 
         Map<String, Object> row = jdbcTemplate.queryForMap("SELECT execution_id, proposer_id, server_id, "
-                + "template_id, status, source FROM ai_command_runs WHERE id = ?", run.getId());
+                + "template_id, status, source, risk_level, approval_mode FROM ai_command_runs WHERE id = ?",
+                run.getId());
         assertEquals(run.getExecutionId(), row.get("execution_id"));
         assertEquals(TEST_PROPOSER_ID, ((Number) row.get("proposer_id")).longValue());
         assertEquals(TEST_SERVER_ID, ((Number) row.get("server_id")).longValue());
         assertEquals("service_status", row.get("template_id"));
         assertEquals("pending_approval", row.get("status"));
         assertEquals("manual", row.get("source"));
+        assertEquals("low", row.get("risk_level"));
+        assertEquals("manual", row.get("approval_mode"));
     }
 
     /** approveRun 只在 pending_approval 且未过期时成功，过期行 CAS 失败。 */
@@ -273,9 +280,20 @@ class AiCommandRunMySqlValidationIT {
         run.setRenderedCommand("systemctl status x");
         run.setSource("manual");
         run.setStatus(status);
+        // V33 起两列为 NOT NULL 审计快照，insertRun 显式列值，缺省即违反约束。
+        run.setRiskLevel("low");
+        run.setApprovalMode("manual");
         run.setCreatedAt(createdAt);
         run.setExpiresAt(expiresAt);
         return run;
+    }
+
+    /** TINYINT(1) 在 MySQL Connector/J 默认 tinyInt1isBit 下映射 Boolean，H2 映射数值，统一取 0/1。 */
+    private static int tinyintValue(Object cell) {
+        if (cell instanceof Boolean bool) {
+            return bool ? 1 : 0;
+        }
+        return ((Number) cell).intValue();
     }
 
     /** 在 Spring 创建数据源前拒绝非本机或非隔离验证库。 */

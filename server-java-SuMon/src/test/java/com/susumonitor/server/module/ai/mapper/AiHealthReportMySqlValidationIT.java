@@ -131,11 +131,12 @@ class AiHealthReportMySqlValidationIT {
                     ((Number) inventory.get("total_count")).intValue() >= 1);
 
             Map<String, Object> metrics = reportMapper.selectMetricAggregates(start, end);
-            // 软删服务器的 30% 采样不计入：AVG=(90)/1，MAX=90。
+            // 软删服务器（gone-server）的采样被 JOIN deleted=0 排除：AVG/MAX CPU 取 live 的 90，
+            // 磁盘同样不计入软删的 70%，MAX 取 live 的 50%。
             assertEquals(90.0, ((Number) metrics.get("avg_cpu_percent")).doubleValue(), 0.01);
             assertEquals(90.0, ((Number) metrics.get("max_cpu_percent")).doubleValue(), 0.01);
             assertEquals(TEST_SERVER_ID, reportMapper.selectMaxCpuServerId(start, end));
-            assertEquals(70.0, ((Number) metrics.get("max_disk_percent")).doubleValue(), 0.01);
+            assertEquals(50.0, ((Number) metrics.get("max_disk_percent")).doubleValue(), 0.01);
 
             Map<String, Object> alerts = reportMapper.selectAlertStatistics(start, end);
             assertEquals(2, ((Number) alerts.get("total_triggered")).intValue());
@@ -159,12 +160,22 @@ class AiHealthReportMySqlValidationIT {
     /** 预算聚合：窗口内 total_tokens 求和，窗外行不计入。 */
     @Test
     void totalTokensAggregateShouldSumWithinWindow() {
-        AiHealthReportEntity inWindow = newEntity("succeeded", "a", null);
-        inWindow.setTotalTokens(25);
+        // 窗外行：created_at 显式置于窗口起点之前，不应计入求和
+        // （newEntity 默认 created_at 恰落在本用例窗口内，需覆盖以构造真窗外样本）。
+        AiHealthReportEntity outOfWindow = newEntity("succeeded", "a", null);
+        outOfWindow.setTotalTokens(25);
+        outOfWindow.setCreatedAt(REPORT_DATE.atStartOfDay());
+        reportMapper.upsertReport(outOfWindow);
+
+        // 窗内行：report_date 唯一键错开一天避开窗外行，created_at 落在窗口内。
+        AiHealthReportEntity inWindow = newEntity("succeeded", "b", null);
+        inWindow.setReportDate(REPORT_DATE.plusDays(1));
+        inWindow.setTotalTokens(7);
+        inWindow.setCreatedAt(REPORT_DATE.plusDays(1).atStartOfDay().plusHours(8));
         reportMapper.upsertReport(inWindow);
 
         LocalDateTime start = REPORT_DATE.plusDays(1).atStartOfDay();
-        assertEquals(0L, reportMapper.sumTotalTokensBetween(start, start.plusDays(1)));
+        assertEquals(7L, reportMapper.sumTotalTokensBetween(start, start.plusDays(1)));
     }
 
     /** 过期清理只删除严格早于 cutoff 的行；批量大小限制单轮删除量。 */
