@@ -1,44 +1,35 @@
 import { describe, it, expect, vi } from 'vitest'
-import { computed, h, inject, provide } from 'vue'
-import type { ComputedRef, PropType, SetupContext } from 'vue'
 import { mount } from '@vue/test-utils'
+import { defineComponent, h, inject, provide } from 'vue'
 import ResourcesCard from '@/components/ResourcesCard.vue'
 import type { ServerResourcesSnapshot } from '@/types/metrics'
-
-/* 此处按项目既有 spec 约定使用"普通对象"形式定义 stub 组件，
- * 避免 defineComponent 触发 vue/one-component-per-file（--max-warnings 0 门禁）。 */
 
 /**
  * el-table 桩：向后代列桩提供行数据，自身渲染默认插槽（列桩序列）。
  * 真实 Element Plus 的 el-table 同样经内部上下文把行数据交给 el-table-column，
  * 桩用 provide/inject 复刻这一协作，使作用域插槽 #default="{ row }" 可渲染。
  */
-const ElTableStub = {
-  name: 'ElTableStub',
-  props: { data: { type: Array as PropType<Record<string, unknown>[]>, default: () => [] } },
-  setup(props: Record<string, unknown>, { slots }: SetupContext) {
-    provide('stubTableRows', computed(() => (props.data ?? []) as Record<string, unknown>[]))
+const ElTableStub = defineComponent({
+  props: { data: { type: Array, default: () => [] } },
+  setup(props, { slots }) {
+    provide('stubTableRows', props.data)
     return () => h('div', { class: 'el-table-stub' }, slots.default?.())
   }
-}
+})
 
 /** el-table-column 桩：对每行渲染作用域插槽；无插槽时渲染 prop 字段文本。 */
-const ElTableColumnStub = {
-  name: 'ElTableColumnStub',
+const ElTableColumnStub = defineComponent({
   props: { prop: { type: String, default: '' } },
-  setup(props: Record<string, unknown>, { slots }: SetupContext) {
-    const rows = inject<ComputedRef<Record<string, unknown>[]>>(
-      'stubTableRows',
-      computed<Record<string, unknown>[]>(() => [])
-    )
+  setup(props, { slots }) {
+    const rows = inject<Record<string, unknown>[]>('stubTableRows', [])
     return () =>
       h(
         'div',
         { class: 'el-table-column-stub' },
-        rows.value.map((row) => slots.default?.({ row }) ?? String(row[props.prop as string] ?? ''))
+        rows.map((row) => slots.default?.({ row }) ?? String(row[props.prop] ?? ''))
       )
   }
-}
+})
 
 /**
  * el-card / el-empty / el-tabs / el-tab-pane / el-progress 全局组件 stub，
