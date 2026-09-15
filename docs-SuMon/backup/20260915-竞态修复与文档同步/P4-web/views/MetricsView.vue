@@ -154,10 +154,6 @@ const alertRules = ref<AlertRule[]>([])
 const processSnapshot = ref<ProcessSnapshot | null>(null)
 /** 实时磁盘/网卡资源快照：REST 初载后由 metrics.update 捎带的 resources 节点覆盖（协议 v1.5）。 */
 const resourcesSnapshot = ref<ServerResourcesSnapshot | null>(null)
-/** WS 是否已推送过对应快照：REST 初载仅在该标志为 false 时落值，
- * 防止挂载期并发的 REST 响应晚于 WS 推送返回时，用更旧的快照覆盖新数据。 */
-let processSnapshotViaWs = false
-let resourcesSnapshotViaWs = false
 let latestHeartbeatAt: string | null = null
 let socket: MonitorWebSocket | null = null
 
@@ -247,7 +243,7 @@ async function loadAlertRules(): Promise<void> {
 async function loadProcessSnapshot(): Promise<void> {
   try {
     const response = await getLatestProcesses(serverId)
-    if (!processSnapshotViaWs) processSnapshot.value = response.data
+    processSnapshot.value = response.data
   } catch {
     // 无快照（Agent 未上报或版本过旧）时展示空态即可，不阻断页面。
   }
@@ -256,7 +252,6 @@ async function loadProcessSnapshot(): Promise<void> {
 /** 应用 WS 推送的进程快照；仅在当前订阅服务器上应用。 */
 function applyProcessSnapshot(snapshot: ProcessSnapshot): void {
   if (snapshot.server_id !== serverId) return
-  processSnapshotViaWs = true
   processSnapshot.value = snapshot
 }
 
@@ -264,7 +259,7 @@ function applyProcessSnapshot(snapshot: ProcessSnapshot): void {
 async function loadResourcesSnapshot(): Promise<void> {
   try {
     const response = await getResourcesLatest(serverId)
-    if (!resourcesSnapshotViaWs) resourcesSnapshot.value = response.data
+    resourcesSnapshot.value = response.data
   } catch {
     // 无快照（Agent 未上报或版本过旧）时展示空态即可，不阻断页面。
   }
@@ -273,7 +268,6 @@ async function loadResourcesSnapshot(): Promise<void> {
 /** 应用 WS 推送的资源快照；仅在当前订阅服务器上应用。 */
 function applyResourcesSnapshot(snapshot: ServerResourcesSnapshot): void {
   if (snapshot.server_id !== serverId) return
-  resourcesSnapshotViaWs = true
   resourcesSnapshot.value = snapshot
 }
 
