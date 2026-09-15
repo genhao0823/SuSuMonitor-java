@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.susumonitor.server.module.auth.mapper.AuthBootstrapStateMapper">
+
+    <resultMap id="AuthBootstrapStateResultMap"
+               type="com.susumonitor.server.module.auth.entity.AuthBootstrapStateEntity">
+        <id column="id" property="id"/>
+        <result column="admin_initialized" property="adminInitialized"/>
+        <result column="initialized_user_id" property="initializedUserId"/>
+        <result column="initialized_at" property="initializedAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectForUpdate" resultMap="AuthBootstrapStateResultMap">
+        SELECT
+            id,
+            admin_initialized,
+            initialized_user_id,
+            initialized_at,
+            created_at,
+            updated_at
+        FROM auth_bootstrap_state
+        WHERE id = 1
+        FOR UPDATE
+    </select>
+
+    <update id="markAdminInitialized">
+        UPDATE auth_bootstrap_state
+        SET
+            admin_initialized = 1,
+            initialized_user_id = #{initializedUserId},
+            initialized_at = #{initializedAt}
+        WHERE id = 1
+          AND admin_initialized = 0
+    </update>
+</mapper>

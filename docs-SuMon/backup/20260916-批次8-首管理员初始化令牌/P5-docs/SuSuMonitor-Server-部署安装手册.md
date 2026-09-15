@@ -141,32 +141,11 @@ curl -s http://127.0.0.1:18080/api/health
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/ready   # 期望 200
 ```
 
-## 五点五、首管理员一次性初始化令牌（批次 8，2026-09-16）
-
-系统尚未创建首管理员时，`POST /api/auth/register` **必须携带一次性初始化令牌**（缺失 40310 / 不匹配 40311），杜绝公网部署「先到先得抢管理员」。首个携带有效令牌注册的用户成为 `admin/approved`，令牌随即作废；此后注册恢复为普通 `user/pending`，不再需要令牌。
-
-**令牌获取（三选一）：**
-
-1. **自动生成（推荐，默认）**：服务启动时若检测到首管理员未初始化且未配置环境变量，自动生成 256-bit 随机令牌并打印到启动日志横幅：
-
-   ```bash
-   # systemd 部署
-   journalctl -u susumonitor-server | grep -A 5 "一次性初始化令牌"
-   # Docker Compose 部署
-   docker compose logs server | grep -A 5 "一次性初始化令牌"
-   ```
-
-   令牌以 AES-256-GCM 密文落库（明文不落库），重启且未消费时会重新打印；消费后立即失效。
-2. **环境变量预置（IaC 场景）**：在环境文件设置 `AUTH_BOOTSTRAP_TOKEN`（32-128 字符，可用 `openssl rand -base64 32` 生成）；长度非法会直接阻止启动（fail-fast）。
-3. **数据库侧应急**：密文列 `auth_bootstrap_state.bootstrap_token_cipher` 可由运维在持有 `AES_GCM_KEY` 时解密找回（仅限泄露处置等应急场景）。
-
-**注册流程：** 打开 Web 登录页（页面会提示「系统尚未初始化管理员」）→ 注册页输入用户名/密码与初始化令牌 → 注册成功即成为管理员 → 用该账号登录并在「用户管理」审核后续用户。
-
 ## 六、首次验收清单（部署后必须执行）
 
 | # | 检查项 | 命令/资产 |
 |---|---|---|
-| 1 | 后端启动 + Flyway V1-V37 迁移成功 | `journalctl -u susumonitor-server` 无 ERROR |
+| 1 | 后端启动 + Flyway V1-V30 迁移成功 | `journalctl -u susumonitor-server` 无 ERROR |
 | 2 | health/ready 正常 | 见 §五 |
 | 3 | RabbitMQ 拓扑已声明 | `rabbitmqctl list_queues` 见 `susumonitor.alert.metrics`（durable） |
 | 4 | 告警全链路 24 项 | `node api-test/verify-alert-ws.mjs`（需验证库 + 管理员账号） |

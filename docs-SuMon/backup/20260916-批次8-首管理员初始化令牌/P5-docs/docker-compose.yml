@@ -66,8 +66,6 @@ services:
       SERVER_PORT: 18080
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       AES_GCM_KEY: ${AES_GCM_KEY:?set AES_GCM_KEY in .env}
-      # 首管理员一次性初始化令牌（批次 8）：留空则未初始化时启动自动生成并经启动横幅投递。
-      AUTH_BOOTSTRAP_TOKEN: ${AUTH_BOOTSTRAP_TOKEN:-}
       APP_ENV: prod
       SPRING_PROFILES_ACTIVE: prod
       OUTBOX_ENABLED: ${OUTBOX_ENABLED:-true}
