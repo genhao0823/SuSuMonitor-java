@@ -27,10 +27,19 @@ class AuthRepository @Inject constructor(
         return loginVo.user
     }
 
-    /** 注册（不自动登录）。 */
-    suspend fun register(username: String, password: String): CurrentUser {
-        val response = authApi.register(RegisterRequest(username, password))
+    /** 注册（不自动登录）。bootstrapToken 仅在首管理员未初始化时由调用方传入。 */
+    suspend fun register(username: String, password: String, bootstrapToken: String? = null): CurrentUser {
+        val response = authApi.register(RegisterRequest(username, password, bootstrapToken))
         return response.data ?: throw ApiException.Business(response.code, response.message)
+    }
+
+    /**
+     * 查询系统是否仍待初始化首管理员（批次 8）。
+     * 查询失败按 false 降级，避免网络异常阻塞注册表单渲染。
+     */
+    suspend fun getBootstrapPending(): Boolean {
+        return runCatching { authApi.bootstrapStatus().data?.bootstrapPending == true }
+            .getOrDefault(false)
     }
 
     /** 获取当前用户最新状态（用于刷新会话角色/审核状态）。 */

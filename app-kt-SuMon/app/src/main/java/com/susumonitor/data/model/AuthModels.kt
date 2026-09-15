@@ -2,11 +2,23 @@ package com.susumonitor.data.model
 
 import kotlinx.serialization.Serializable
 
-/** 注册请求，与 OpenAPI `RegisterRequest` 对齐。 */
+/**
+ * 注册请求，与 OpenAPI `RegisterRequest` 对齐。
+ * bootstrapToken 仅在首管理员未初始化时必填（缺失 40310/无效 40311），
+ * 经服务器启动日志横幅或 AUTH_BOOTSTRAP_TOKEN 获取；首管理员存在后服务端忽略。
+ * 默认 null 在 kotlinx.serialization 默认配置下不参与序列化，保持存量请求体不变。
+ */
 @Serializable
 data class RegisterRequest(
     val username: String,
     val password: String,
+    val bootstrapToken: String? = null,
+)
+
+/** 首管理员初始化状态，与 OpenAPI `BootstrapStatus` 对齐（auth 契约 camelCase）。 */
+@Serializable
+data class BootstrapStatus(
+    val bootstrapPending: Boolean,
 )
 
 /** 登录请求，与 OpenAPI `LoginRequest` 对齐。 */

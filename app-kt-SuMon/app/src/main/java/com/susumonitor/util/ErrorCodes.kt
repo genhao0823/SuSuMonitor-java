@@ -15,6 +15,10 @@ object ErrorCodes {
     const val FORBIDDEN = 40300
     const val SSH_TARGET_FORBIDDEN = 40301
     const val TERMINAL_ACCESS_DENIED = 40302
+    // 首管理员未初始化时注册未携带一次性初始化令牌（批次 8）。
+    const val AUTH_BOOTSTRAP_REQUIRED = 40310
+    // 首管理员未初始化时注册携带的初始化令牌无效（批次 8）。
+    const val AUTH_BOOTSTRAP_TOKEN_INVALID = 40311
     const val RESOURCE_NOT_FOUND = 40400
     const val TERMINAL_SESSION_NOT_FOUND = 40403
     const val COMMAND_RUN_NOT_FOUND = 40404
