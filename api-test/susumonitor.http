@@ -14,6 +14,10 @@ X-Correlation-ID: local-health-request
 GET {{baseUrl}}/api/ready
 X-Correlation-ID: local-ready-request
 
+### Auth: bootstrap status（公开端点：true 表示注册需携带一次性初始化令牌）
+GET {{baseUrl}}/api/auth/bootstrap-status
+X-Correlation-ID: local-bootstrap-status-request
+
 ### Auth: register first admin or normal user
 POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
@@ -22,6 +26,18 @@ X-Correlation-ID: local-register-request
 {
   "username": "admin",
   "password": "REPLACE_WITH_PASSWORD"
+}
+
+### Auth: register first admin while bootstrap pending（批次 8：待初始化实例须携带令牌，
+### 取值见服务器启动横幅或 AUTH_BOOTSTRAP_TOKEN 预置，32-128 字符，成功后立即失效）
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+X-Correlation-ID: local-register-bootstrap-request
+
+{
+  "username": "admin",
+  "password": "REPLACE_WITH_PASSWORD",
+  "bootstrapToken": "REPLACE_WITH_ONE_TIME_BOOTSTRAP_TOKEN"
 }
 
 ### Auth: login

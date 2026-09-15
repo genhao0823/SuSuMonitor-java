@@ -59,8 +59,23 @@ function envelope(eventId, serverId, index) {
 }
 
 assertLocalValidationTarget()
+// 批次 8：目标实例仍待初始化首管理员时，兜底注册必须携带一次性初始化令牌（缺失 403/40310）；
+// 令牌经 SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN 传入（服务器启动横幅或 AUTH_BOOTSTRAP_TOKEN 预置值）。
+async function registerAdmin() {
+  const bootstrapStatus = await api('/api/auth/bootstrap-status')
+  const bootstrapPending = bootstrapStatus.status === 200 && bootstrapStatus.body?.data?.bootstrapPending === true
+  let registerBody = { username: adminUsername, password: adminPassword }
+  if (bootstrapPending) {
+    const bootstrapToken = process.env.SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN
+    assert(typeof bootstrapToken === 'string' && bootstrapToken.length >= 32 && bootstrapToken.length <= 128,
+      'Target stack awaits first-admin bootstrap: set SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN ' +
+      '(one-time token from the server startup banner or the preset AUTH_BOOTSTRAP_TOKEN).')
+    registerBody = { username: adminUsername, password: adminPassword, bootstrapToken }
+  }
+  return api('/api/auth/register', { method: 'POST', body: registerBody })
+}
 let login = await api('/api/auth/login', { method: 'POST', body: { username: adminUsername, password: adminPassword } })
-if (login.status !== 200) { await api('/api/auth/register', { method: 'POST', body: { username: adminUsername, password: adminPassword } }); login = await api('/api/auth/login', { method: 'POST', body: { username: adminUsername, password: adminPassword } }) }
+if (login.status !== 200) { await registerAdmin(); login = await api('/api/auth/login', { method: 'POST', body: { username: adminUsername, password: adminPassword } }) }
 assert(login.status === 200, 'Admin login failed')
 const token = login.body.data.token
 const suffix = Date.now()

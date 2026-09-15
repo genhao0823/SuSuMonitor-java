@@ -28,6 +28,17 @@ $originalMySqlPwd = [Environment]::GetEnvironmentVariable('MYSQL_PWD', 'Process'
 $originalBaseUrl = $env:SUSUMONITOR_RELIABLE_E2E_BASE_URL
 $originalUsername = $env:SUSUMONITOR_RELIABLE_E2E_ADMIN_USERNAME
 $originalPassword = $env:SUSUMONITOR_RELIABLE_E2E_ADMIN_PASSWORD
+$originalBootstrapToken = $env:SUSUMONITOR_RELIABLE_E2E_BOOTSTRAP_TOKEN
+
+# 批次 8：隔离空库实例注册管理员必须携带一次性初始化令牌（缺失 403/40310）。
+# 本编排器生成 32 字节随机令牌（base64url 43 字符，与服务器自动生成口径一致），
+# 同一值双路注入：服务器 env AUTH_BOOTSTRAP_TOKEN + 验证器 SUSUMONITOR_RELIABLE_E2E_BOOTSTRAP_TOKEN。
+$bootstrapTokenBytes = New-Object 'byte[]' 32
+$bootstrapTokenRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$bootstrapTokenRng.GetBytes($bootstrapTokenBytes)
+$bootstrapTokenRng.Dispose()
+$bootstrapToken = [Convert]::ToBase64String($bootstrapTokenBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+$bootstrapTokenBytes.Clear()
 
 New-Item -ItemType Directory -Path $workspace -Force | Out-Null
 try {
@@ -44,6 +55,7 @@ try {
         JWT_SECRET = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY='; AES_GCM_KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY='
         OUTBOX_ENABLED = 'false'; AGENT_METRICS_RATE_PER_MINUTE = '600'; AGENT_METRICS_BURST = '100'
         AGENT_HEARTBEAT_RATE_PER_MINUTE = '60'; AGENT_HEARTBEAT_BURST = '10'
+        AUTH_BOOTSTRAP_TOKEN = $bootstrapToken
     }
     $saved = @{}
     foreach ($entry in $serverEnvironment.GetEnumerator()) {
@@ -62,6 +74,7 @@ try {
         $env:SUSUMONITOR_RELIABLE_E2E_BASE_URL = "http://127.0.0.1:$port"
         $env:SUSUMONITOR_RELIABLE_E2E_ADMIN_USERNAME = "reliable$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
         $env:SUSUMONITOR_RELIABLE_E2E_ADMIN_PASSWORD = [Guid]::NewGuid().ToString('N')
+        $env:SUSUMONITOR_RELIABLE_E2E_BOOTSTRAP_TOKEN = $bootstrapToken
         $env:SUSUMONITOR_AGENT_EXECUTABLE = $agentExecutable
         node (Join-Path $PSScriptRoot 'verify-agent-reliable-delivery-e2e.mjs')
         if ($LASTEXITCODE -ne 0) { throw "Reliable delivery E2E failed; workspace retained at $workspace" }
@@ -76,6 +89,7 @@ try {
     $env:SUSUMONITOR_RELIABLE_E2E_BASE_URL = $originalBaseUrl
     $env:SUSUMONITOR_RELIABLE_E2E_ADMIN_USERNAME = $originalUsername
     $env:SUSUMONITOR_RELIABLE_E2E_ADMIN_PASSWORD = $originalPassword
+    $env:SUSUMONITOR_RELIABLE_E2E_BOOTSTRAP_TOKEN = $originalBootstrapToken
     if (-not $keepArtifacts -and $LASTEXITCODE -eq 0) { Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue }
     elseif (Test-Path -LiteralPath $workspace) { Write-Host "Reliable E2E artifacts retained: $workspace" }
 }

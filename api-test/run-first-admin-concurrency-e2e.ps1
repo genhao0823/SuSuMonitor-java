@@ -38,6 +38,17 @@ $runSucceeded = $false
 $originalMySqlPwd = [Environment]::GetEnvironmentVariable('MYSQL_PWD', 'Process')
 $originalBaseUrl = $env:SUSUMONITOR_VALIDATION_BASE_URL
 $originalConfirm = $env:SUSUMONITOR_VALIDATION_CONFIRM
+$originalBootstrapToken = $env:SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN
+
+# 批次 8：为空库实例预置一次性初始化令牌（32 字节随机 → base64url 43 字符，与服务器自动生成口径一致）。
+# 同一值双路注入：服务器 env AUTH_BOOTSTRAP_TOKEN + Node 验证器 SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN，
+# 缺任一路都会在注册时收到 403/40310。令牌只存在于本次运行的环境变量与服务器进程内存/密文库，不落盘。
+$bootstrapTokenBytes = New-Object 'byte[]' 32
+$bootstrapTokenRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$bootstrapTokenRng.GetBytes($bootstrapTokenBytes)
+$bootstrapTokenRng.Dispose()
+$bootstrapToken = [Convert]::ToBase64String($bootstrapTokenBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+$bootstrapTokenBytes.Clear()
 
 # 捕获未预期异常的完整内容，供失败路径报告根因。
 
@@ -54,7 +65,7 @@ try {
         DB_HOST = '127.0.0.1'; DB_PORT = '3306'; DB_NAME = $databaseName; DB_USER = 'susumonitor'; DB_PASSWORD = $databasePassword
         SERVER_ADDRESS = '127.0.0.1'; SERVER_PORT = "$port"; APP_ENV = 'test'; SPRING_PROFILES_ACTIVE = 'test'
         JWT_SECRET = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY='; AES_GCM_KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY='
-        OUTBOX_ENABLED = 'false'
+        OUTBOX_ENABLED = 'false'; AUTH_BOOTSTRAP_TOKEN = $bootstrapToken
     }
     $saved = @{}
     foreach ($entry in $serverEnvironment.GetEnumerator()) {
@@ -67,6 +78,8 @@ try {
         $serverProcess = Start-Process -FilePath 'java.exe' -ArgumentList '-jar', 'target\server-java-SuMon-0.0.1-SNAPSHOT.jar' -WorkingDirectory $serverDirectory -RedirectStandardOutput $serverLog -RedirectStandardError $serverErrorLog -PassThru
         $env:SUSUMONITOR_VALIDATION_BASE_URL = "http://127.0.0.1:$port"
         $env:SUSUMONITOR_VALIDATION_CONFIRM = 'FIRST_ADMIN_CONCURRENCY'
+        # 批次 8 一次性初始化令牌经本环境变量传给 Node 验证器（与服务器 env 同值，见上方双路注入说明）。
+        $env:SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN = $bootstrapToken
         # 并发数由编排器统一从环境变量读取，并作为子进程环境传给 Node；Node 侧与 PowerShell 复用同一值，
         # 无需跨进程传递文件/路径（实测跨“& node”读写同一 PowerShell 变量在 5.1 下偶发读到 null）。
         & node (Join-Path $PSScriptRoot 'verify-first-admin-concurrency.mjs')
@@ -109,6 +122,7 @@ try {
 } finally {
     $env:SUSUMONITOR_VALIDATION_BASE_URL = $originalBaseUrl
     $env:SUSUMONITOR_VALIDATION_CONFIRM = $originalConfirm
+    $env:SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN = $originalBootstrapToken
     if ($runSucceeded) {
         $env:MYSQL_PWD = $databaseAdminPassword
         & mysql -h 127.0.0.1 -P 3306 -u $databaseAdminUser -e "DROP DATABASE IF EXISTS ``$databaseName``;" | Out-Null

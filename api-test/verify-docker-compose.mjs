@@ -3,7 +3,9 @@
  * mysql + rabbitmq + server + web 四服务闭环，以及可选 agent 容器上报链路。
  *
  * 检查项：
- *   P0  空库首管理员 bootstrap（register 自动 ADMIN/approved → login 拿 token）
+ *   P0  空库首管理员 bootstrap（批次 8 起注册须携带一次性初始化令牌：
+ *       SUSUMONITOR_DOCKER_BOOTSTRAP_TOKEN 与部署 .env 的 AUTH_BOOTSTRAP_TOKEN 同值；
+ *       实例已初始化时可不传，脚本按 bootstrap-status 自动判断）
  *   C1  /api/health 与 /api/ready 经 nginx 反代 200
  *   C2  创建 server（WS 订阅与 agent 注册都依赖真实 serverId）
  *   C3  /ws/monitor ticket 握手 + metrics.subscribe 真实 server（无 error 帧）
@@ -11,7 +13,9 @@
  *   C5  agent 容器上报后：monitor 收到 metrics.update 帧 + API 查询 metrics 可见（120s 轮询）
  *
  * 用法：
- *   SUSUMONITOR_DOCKER_BASE_URL=http://localhost:8080 node verify-docker-compose.mjs
+ *   SUSUMONITOR_DOCKER_BASE_URL=http://localhost:8080 \
+ *   SUSUMONITOR_DOCKER_BOOTSTRAP_TOKEN=<一次性初始化令牌，空库首启时必填> \
+ *     node verify-docker-compose.mjs
  * 编排器（bash）在读到 AGENT_READY=<server_id> <agent_token> 后：
  *   SUSUMONITOR_SERVER_ID=<server_id> SUSUMONITOR_AGENT_TOKEN=<agent_token> \
  *     docker compose --profile agent up -d agent
@@ -106,8 +110,20 @@ async function main() {
   const password = `Docker-${crypto.randomUUID()}!`
   const checks = {}
 
-  // P0：空库首管理员 bootstrap
-  const registered = await api('/api/auth/register', { method: 'POST', body: { username, password } })
+  // P0：空库首管理员 bootstrap。批次 8 起，待初始化实例的注册必须携带一次性初始化令牌
+  // （缺失 403/40310）：先查公开状态端点，pending 时要求以 SUSUMONITOR_DOCKER_BOOTSTRAP_TOKEN
+  // 传入与部署 .env 中 AUTH_BOOTSTRAP_TOKEN 同值的令牌（或服务器启动横幅中的值）。
+  const bootstrapStatus = await api('/api/auth/bootstrap-status')
+  const bootstrapPending = bootstrapStatus.status === 200 && bootstrapStatus.body?.data?.bootstrapPending === true
+  let registerBody = { username, password }
+  if (bootstrapPending) {
+    const bootstrapToken = process.env.SUSUMONITOR_DOCKER_BOOTSTRAP_TOKEN
+    assert(typeof bootstrapToken === 'string' && bootstrapToken.length >= 32 && bootstrapToken.length <= 128,
+      'P0: stack awaits first-admin bootstrap; export SUSUMONITOR_DOCKER_BOOTSTRAP_TOKEN with the one-time token ' +
+      '(32-128 chars, from the server startup banner or the AUTH_BOOTSTRAP_TOKEN preset in .env).')
+    registerBody = { username, password, bootstrapToken }
+  }
+  const registered = await api('/api/auth/register', { method: 'POST', body: registerBody })
   assert(registered.status === 200, `P0 register failed: ${registered.body.code} ${registered.body.message}`)
   const login = await api('/api/auth/login', { method: 'POST', body: { username, password } })
   assert(login.status === 200 && login.body.data?.token, `P0 login failed: ${login.body.code} ${login.body.message}`)

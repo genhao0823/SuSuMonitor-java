@@ -5,12 +5,17 @@
 //   首个成功注册用户 -> role=admin, reviewStatus=approved
 //   后续成功注册用户 -> role=user,   reviewStatus=pending
 //   此前旧脚本断言“只有一个 HTTP 200”与上述契约冲突，已修正。
+//   批次 8 起，空库（待初始化首管理员）注册必须携带一次性初始化令牌（缺失 40310），
+//   并发「恰好一个 admin」语义不变；令牌经环境变量注入，并发请求共用同一有效令牌。
 //
 // 环境变量：
 //   SUSUMONITOR_VALIDATION_CONFIRM=FIRST_ADMIN_CONCURRENCY  （硬性守卫）
 //   SUSUMONITOR_VALIDATION_BASE_URL        （默认 http://127.0.0.1:18183，与正式 bash 编排器端口一致）
 //   SUSUMONITOR_VALIDATION_PREFIX          （注册用户名前缀，默认 first_admin_）
 //   SUSUMONITOR_VALIDATION_CONCURRENCY     （并发数，2-20，默认 8）
+//   SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN （目标实例待初始化首管理员时必填，32-128 字符；
+//       取值为服务器启动横幅或 AUTH_BOOTSTRAP_TOKEN 预置的一次性初始化令牌；
+//       正式编排器会自动生成并双路注入，手工对已初始化实例回归时无需准备）
 //
 // 由 run-first-admin-concurrency-e2e.sh / .ps1 编排：起空库 Java 服务后调用，结束后清理。
 // 服务就绪探测放在 Node 侧用 fetch 完成，避免 PowerShell 5.1 在 $ErrorActionPreference='Stop' 下
@@ -68,7 +73,11 @@ async function register(username) {
     const response = await fetch(`${baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      // 批次 8：待初始化实例的注册必须携带有效一次性令牌；已初始化实例不携带该字段，
+      // 保持与历史请求体一致（服务端在 admin_initialized=1 分支会忽略该字段）。
+      body: JSON.stringify(bootstrapPending
+        ? { username, password, bootstrapToken }
+        : { username, password })
     })
     return { ok: response.ok, status: response.status, body: await response.json() }
   } catch (error) {
@@ -86,6 +95,21 @@ async function login(username) {
 }
 
 await waitForServer()
+
+// 批次 8：目标实例仍待初始化首管理员时，注册必须携带一次性初始化令牌（缺失返回 403/40310）。
+// 令牌经环境变量注入（正式编排器与服务器 env 同值双路注入），长度校验与服务端 @Size 对齐，
+// 提前失败以便给出可操作的修复提示而不是在并发注册后收到一批 40310。
+const bootstrapStatusResponse = await fetch(`${baseUrl}/api/auth/bootstrap-status`)
+assert(bootstrapStatusResponse.status === 200,
+  `Bootstrap status query failed with HTTP ${bootstrapStatusResponse.status}.`)
+const bootstrapPending = (await bootstrapStatusResponse.json())?.data?.bootstrapPending === true
+let bootstrapToken
+if (bootstrapPending) {
+  bootstrapToken = process.env.SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN
+  assert(typeof bootstrapToken === 'string' && bootstrapToken.length >= 32 && bootstrapToken.length <= 128,
+    'Target instance awaits first-admin bootstrap: provide the one-time token (32-128 chars) via ' +
+    'SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN (from the server startup banner or the preset AUTH_BOOTSTRAP_TOKEN).')
+}
 
 const results = await Promise.all(usernames.map((username) => register(username)))
 // 所有合法用户名都应当成功注册，业务 code=0，返回用户名与请求一致。

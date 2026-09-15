@@ -2,7 +2,7 @@
 # 首管理员空库并发真实验收编排器（Git Bash + MySQL CLI）。
 #
 # 用途：在一个独立空库 schema 中并发注册 N 个合法用户，并复核数据库持久化结果，证明：
-#   1) 全部 N 个注册均成功（HTTP 200、业务 code=0）；
+#   1) 全部 N 个注册均成功（HTTP 200、业务 code=0；批次 8 起注册携带本脚本预置的一次性初始化令牌）；
 #   2) 恰好 1 个用户为 admin/approved；
 #   3) 其余 N-1 个用户为 user/pending；
 #   4) 管理员可登录且 /me 为 admin/approved，待审核用户登录返回 403（由 Node 验证器断言）；
@@ -41,6 +41,15 @@ if [ ! -f "$JAR" ]; then echo "Server jar is missing; run mvn package first: $JA
 RUNID="fac_$(date +%s%3N)_$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | head -c6)"
 DB="susumonitor_first_admin_${RUNID}"
 PORT=18183
+
+# 批次 8：为空库实例预置一次性初始化令牌（32 字节随机 → base64url 43 字符，与自动生成口径一致）。
+# 同一值双路注入：服务器 env AUTH_BOOTSTRAP_TOKEN + Node 验证器 SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN，
+# 缺任一路都会在注册时收到 403/40310。令牌只存在于本次运行的环境变量与服务器进程内存/密文库，不落盘。
+BOOTSTRAP_TOKEN="$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')"
+case "$BOOTSTRAP_TOKEN" in
+  ''|*[!A-Za-z0-9_-]*) echo "BOOTSTRAP_TOKEN_GENERATION_FAIL"; exit 4;;
+esac
+
 export MYSQL_PWD="$ADMIN_PASS"
 
 echo "== schema=$DB port=$PORT concurrency=$CONCURRENCY =="
@@ -53,6 +62,7 @@ DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME="$DB" DB_USER=susumonitor DB_PASSWORD="$A
 SERVER_ADDRESS=127.0.0.1 SERVER_PORT=$PORT APP_ENV=test SPRING_PROFILES_ACTIVE=test \
 JWT_SECRET=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= \
 AES_GCM_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= OUTBOX_ENABLED=false \
+AUTH_BOOTSTRAP_TOKEN="$BOOTSTRAP_TOKEN" \
 java -jar "$JAR" > "/tmp/srv-$RUNID.log" 2>&1 &
 JPID=$!
 cd "$PROJECT_ROOT" || exit 4
@@ -84,6 +94,7 @@ SUSUMONITOR_VALIDATION_CONFIRM=FIRST_ADMIN_CONCURRENCY \
 SUSUMONITOR_VALIDATION_BASE_URL="http://127.0.0.1:$PORT" \
 SUSUMONITOR_VALIDATION_CONCURRENCY="$CONCURRENCY" \
 SUSUMONITOR_VALIDATION_PREFIX="${SUSUMONITOR_VALIDATION_PREFIX:-first_admin_}" \
+SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN="$BOOTSTRAP_TOKEN" \
 node "$VERIFIER"
 VERIFIER_EXIT=$?
 echo "VERIFIER_EXIT=$VERIFIER_EXIT"

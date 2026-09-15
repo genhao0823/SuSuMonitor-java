@@ -193,7 +193,19 @@ async function runJavaIngressScenario() {
     })
     return { status: response.status, body: await response.json() }
   }
-  const registration = await api('/api/auth/register', { method: 'POST', body: { username, password } })
+  // 批次 8：隔离空库实例仍待初始化首管理员时，注册必须携带一次性初始化令牌（缺失 403/40310）。
+  // 令牌由编排器生成并双路注入（服务器 env AUTH_BOOTSTRAP_TOKEN + 本环境变量），此处按状态端点决定是否携带。
+  const bootstrapStatus = await api('/api/auth/bootstrap-status')
+  const bootstrapPending = bootstrapStatus.status === 200 && bootstrapStatus.body?.data?.bootstrapPending === true
+  let registerBody = { username, password }
+  if (bootstrapPending) {
+    const bootstrapToken = process.env.SUSUMONITOR_RELIABLE_E2E_BOOTSTRAP_TOKEN
+    assert(typeof bootstrapToken === 'string' && bootstrapToken.length >= 32 && bootstrapToken.length <= 128,
+      'Isolated instance awaits first-admin bootstrap: the orchestrator must inject ' +
+      'SUSUMONITOR_RELIABLE_E2E_BOOTSTRAP_TOKEN (32-128 chars, same value as the server AUTH_BOOTSTRAP_TOKEN).')
+    registerBody = { username, password, bootstrapToken }
+  }
+  const registration = await api('/api/auth/register', { method: 'POST', body: registerBody })
   assert(registration.status === 200, `Isolated administrator registration failed with ${registration.status}.`)
   const login = await api('/api/auth/login', { method: 'POST', body: { username, password } })
   assert(login.status === 200, `Isolated administrator login failed with ${login.status}.`)

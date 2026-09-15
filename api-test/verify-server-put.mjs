@@ -52,16 +52,30 @@ async function api(path, { method = 'GET', body, token } = {}) {
   return { status: response.status, body: await response.json() }
 }
 
-// ---- 准备：管理员（首注册用户自动成为 approved 管理员）----
+// ---- 准备：管理员（批次 8 起空库注册需携带一次性初始化令牌，已初始化实例登录即过）----
+// 待初始化实例的令牌经 SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN 传入
+// （服务器启动横幅或 AUTH_BOOTSTRAP_TOKEN 预置值），缺失时报可操作错误而不是 40310。
+async function registerAdmin() {
+  const bootstrapStatus = await api('/api/auth/bootstrap-status')
+  const bootstrapPending = bootstrapStatus.status === 200 && bootstrapStatus.body?.data?.bootstrapPending === true
+  let registerBody = { username: adminUsername, password: adminPassword }
+  if (bootstrapPending) {
+    const bootstrapToken = process.env.SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN
+    if (typeof bootstrapToken !== 'string' || bootstrapToken.length < 32 || bootstrapToken.length > 128) {
+      throw new Error('Target stack awaits first-admin bootstrap: set SUSUMONITOR_VALIDATION_BOOTSTRAP_TOKEN ' +
+        '(one-time token from the server startup banner or the preset AUTH_BOOTSTRAP_TOKEN).')
+    }
+    registerBody = { username: adminUsername, password: adminPassword, bootstrapToken }
+  }
+  return api('/api/auth/register', { method: 'POST', body: registerBody })
+}
+
 let adminLogin = await api('/api/auth/login', {
   method: 'POST',
   body: { username: adminUsername, password: adminPassword }
 })
 if (adminLogin.status !== 200) {
-  const registration = await api('/api/auth/register', {
-    method: 'POST',
-    body: { username: adminUsername, password: adminPassword }
-  })
+  const registration = await registerAdmin()
   if (registration.status !== 200) {
     throw new Error('Admin registration failed in the isolated validation database')
   }
