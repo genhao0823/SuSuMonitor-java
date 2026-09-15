@@ -1,12 +1,15 @@
 import apiClient from '@/api/client'
-import type { ApiResponse, CurrentUser, LoginResult } from '@/types/api'
+import type { ApiResponse, BootstrapStatus, CurrentUser, LoginResult } from '@/types/api'
 
 /**
  * 用户注册请求体,字段命名与 OpenAPI RegisterRequest schema 对齐。
+ * bootstrapToken 仅在首管理员未初始化时必填(缺失 40310/无效 40311),
+ * 经服务器启动日志横幅或 AUTH_BOOTSTRAP_TOKEN 获取;首管理员存在后忽略。
  */
 export interface RegisterRequestBody {
   username: string
   password: string
+  bootstrapToken?: string
 }
 
 /**
@@ -18,8 +21,20 @@ export interface LoginRequestBody {
 }
 
 /**
+ * 调用 GET /api/auth/bootstrap-status 查询首管理员初始化状态(公开端点)。
+ * 注册页/登录页据此决定是否展示一次性初始化令牌输入框与初始化提示。
+ * 请求失败时由调用方按 false 降级处理(不阻塞注册表单渲染)。
+ *
+ * @returns 首管理员初始化状态
+ */
+export function getBootstrapStatus(): Promise<ApiResponse<BootstrapStatus>> {
+  return apiClient.get<ApiResponse<BootstrapStatus>>('/auth/bootstrap-status').then((r) => r.data)
+}
+
+/**
  * 调用 POST /api/auth/register 注册用户。
- * 首个注册用户自动成为 admin/approved,后续用户为 user/pending。
+ * 首管理员未初始化时须携带 bootstrapToken,首个用户成为 admin/approved;
+ * 后续用户为 user/pending,bootstrapToken 被忽略。
  *
  * @param body 注册请求
  * @returns 注册成功的用户数据

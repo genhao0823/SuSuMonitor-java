@@ -67,6 +67,14 @@ export interface CurrentUser {
 }
 
 /**
+ * 首管理员初始化状态(与 OpenAPI BootstrapStatus schema 字段一致)。
+ * true 表示注册需要携带一次性初始化令牌(批次 8)。
+ */
+export interface BootstrapStatus {
+  bootstrapPending: boolean
+}
+
+/**
  * 管理员用户列表分页查询参数(与 OpenAPI listUsers parameters 对齐)。
  */
 export interface AdminUserQuery {

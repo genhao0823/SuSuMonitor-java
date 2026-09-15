@@ -18,12 +18,14 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushSpy })
 }))
 
-// 与 auth.spec.ts 相同的工厂形态:store 会解构全部四个导出,缺一会破坏导入。
+// 与 auth.spec.ts 相同的工厂形态:store 与 LoginView 会解构全部导出,缺一会破坏导入。
+// getBootstrapStatus 默认返回非 pending,初始化引导条仅在显式用例中开启。
 vi.mock('@/api/auth', () => ({
   loginUser: vi.fn(),
   registerUser: vi.fn(),
   getCurrentUser: vi.fn(),
-  logoutUser: vi.fn()
+  logoutUser: vi.fn(),
+  getBootstrapStatus: vi.fn()
 }))
 
 vi.mock('element-plus', async () => {
@@ -56,7 +58,8 @@ const globalStubs = {
     emits: ['update:modelValue'],
     template:
       '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" />'
-  }
+  },
+  ElAlert: { template: '<div class="el-alert-stub"><slot name="title" /><slot name="description" /></div>' }
 }
 
 async function mountLoginView(): Promise<VueWrapper> {
@@ -89,6 +92,29 @@ describe('LoginView / 登录失败单提示', () => {
     messageErrorSpy.mockReset()
     messageSuccessSpy.mockReset()
     vi.mocked(authApi.loginUser).mockReset()
+    // 每个用例默认非 pending;pending 场景用例自行覆盖返回值。
+    vi.mocked(authApi.getBootstrapStatus).mockResolvedValue({
+      code: 0,
+      message: 'success',
+      data: { bootstrapPending: false }
+    })
+  })
+
+  it('pending 状态下登录页顶部展示初始化引导条', async () => {
+    vi.mocked(authApi.getBootstrapStatus).mockResolvedValue({
+      code: 0,
+      message: 'success',
+      data: { bootstrapPending: true }
+    })
+    const wrapper = await mountLoginView()
+    expect(wrapper.find('.login-view__bootstrap-alert').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('非 pending 状态下不展示初始化引导条', async () => {
+    const wrapper = await mountLoginView()
+    expect(wrapper.find('.login-view__bootstrap-alert').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('登录失败(40001)仅弹一条"用户名或密码错误",且不发生跳转', async () => {

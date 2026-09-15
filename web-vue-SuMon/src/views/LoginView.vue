@@ -10,6 +10,15 @@
     hero-alt="涂山苏苏"
   >
     <template #default>
+      <el-alert
+        v-if="bootstrapPending"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="系统尚未初始化管理员"
+        description="请先到注册页,凭服务器启动日志中的一次性初始化令牌完成首管理员注册。"
+        class="login-view__bootstrap-alert"
+      />
       <el-form
         ref="formRef"
         :model="form"
@@ -75,18 +84,32 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
 import AuthLayout from '@/views/AuthLayout.vue'
 import { ApiBusinessError } from '@/api/client'
+import { getBootstrapStatus } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { ErrorCode } from '@/types/error-code'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+// 首管理员初始化状态:pending 时在表单顶部展示初始化引导(查询失败按 false 降级)。
+const bootstrapPending = ref(false)
+
+// 页面挂载时查询初始化状态(批次 8)。
+onMounted(async () => {
+  try {
+    const status = await getBootstrapStatus()
+    bootstrapPending.value = status.data?.bootstrapPending === true
+  } catch {
+    bootstrapPending.value = false
+  }
+})
 
 /**
  * 登录页专属引言池。每次进入页面随机抽一句展示,
@@ -200,6 +223,10 @@ function handleForgot(): void {
 </script>
 
 <style scoped>
+.login-view__bootstrap-alert {
+  margin-bottom: 12px;
+}
+
 .login-view__options {
   display: flex;
   align-items: center;

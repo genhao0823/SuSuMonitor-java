@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import apiClient from '@/api/client'
-import { getCurrentUser, loginUser, logoutUser, registerUser } from '@/api/auth'
+import { getCurrentUser, getBootstrapStatus, loginUser, logoutUser, registerUser } from '@/api/auth'
 
 /**
  * auth HTTP wrapper 单测:聚焦 URL / Method / body / 配置,
@@ -44,6 +44,15 @@ describe('auth api / HTTP wrappers', () => {
     })
     await getCurrentUser()
     expect(spy).toHaveBeenCalledWith('/auth/me')
+  })
+
+  it('getBootstrapStatus 调 GET /auth/bootstrap-status(公开端点)', async () => {
+    const spy = vi.spyOn(apiClient, 'get').mockResolvedValue({
+      data: { code: 0, message: 'success', data: { bootstrapPending: true } }
+    })
+    const result = await getBootstrapStatus()
+    expect(spy).toHaveBeenCalledWith('/auth/bootstrap-status')
+    expect(result.data?.bootstrapPending).toBe(true)
   })
 
   it('logoutUser 调 POST /auth/logout', async () => {

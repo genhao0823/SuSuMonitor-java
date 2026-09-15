@@ -4,7 +4,9 @@
     :stage-quotes="registerStageQuotes"
     panel-title="创建账户"
     panel-sub="加入 SuSu 监控的运维小队"
-    footer-hint="首个注册用户自动 admin/approved"
+    :footer-hint="bootstrapPending
+      ? '待初始化:凭服务器日志中的一次性令牌注册首管理员'
+      : '首个注册用户自动 admin/approved'"
     hero-image="https://java-ai-genhaosan.oss-cn-beijing.aliyuncs.com/0dc3f6ad-d7df-4e11-a388-8c5f79804c89.jpg"
     hero-image-fallback="/tushansusu-hero.jpg"
     hero-alt="涂山苏苏"
@@ -43,6 +45,24 @@
           />
         </el-form-item>
         <el-form-item
+          v-if="bootstrapPending"
+          label="初始化令牌"
+          prop="bootstrapToken"
+        >
+          <el-input
+            v-model="form.bootstrapToken"
+            type="password"
+            autocomplete="off"
+            show-password
+            placeholder="见服务器启动日志的一次性令牌"
+            :prefix-icon="Key"
+          />
+          <div class="register-view__bootstrap-hint">
+            系统尚未初始化管理员:请从服务器启动日志(docker logs / journalctl)
+            获取一次性初始化令牌,注册成功后令牌立即失效。
+          </div>
+        </el-form-item>
+        <el-form-item
           label="确认密码"
           prop="confirmPassword"
         >
@@ -55,15 +75,15 @@
             :prefix-icon="Lock"
           />
         </el-form-item>
-        <el-button
-          type="primary"
-          native-type="submit"
-          :loading="submitting"
-          class="register-view__submit"
-          @click="handleSubmit"
+        <button
+          type="button"
+          :disabled="submitting"
+          class="el-button el-button--primary register-view__submit"
+          @click.prevent="handleSubmit"
         >
-          注册
-        </el-button>
+          <span v-if="submitting">注册中...</span>
+          <span v-else>注册</span>
+        </button>
         <div class="register-view__footer">
           <span>已有账户?</span>
           <router-link :to="{ name: 'login' }">
@@ -76,12 +96,13 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Lock, User } from '@element-plus/icons-vue'
+import { Key, Lock, User } from '@element-plus/icons-vue'
 import AuthLayout from '@/views/AuthLayout.vue'
 import { ApiBusinessError } from '@/api/client'
+import { getBootstrapStatus } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { ErrorCode } from '@/types/error-code'
 
@@ -117,12 +138,26 @@ const registerStageQuotes: string[] = [
 ]
 const auth = useAuthStore()
 
+// 首管理员初始化状态:pending 时渲染初始化令牌输入框(查询失败按 false 降级,不阻塞表单)。
+const bootstrapPending = ref(false)
+
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const form = reactive({
   username: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  bootstrapToken: ''
+})
+
+// 页面挂载时查询初始化状态,决定令牌输入框显隐(批次 8)。
+onMounted(async () => {
+  try {
+    const status = await getBootstrapStatus()
+    bootstrapPending.value = status.data?.bootstrapPending === true
+  } catch {
+    bootstrapPending.value = false
+  }
 })
 
 function validateConfirmPassword(
@@ -154,6 +189,21 @@ const rules: FormRules = {
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     { validator: validateConfirmPassword, trigger: 'blur' }
+  ],
+  // 令牌仅在待初始化时必填;长度与后端签发值 32-128 一致。
+  bootstrapToken: [
+    {
+      validator: (_rule: unknown, value: string, callback: (err?: Error) => void): void => {
+        if (bootstrapPending.value && !value) {
+          callback(new Error('请输入初始化令牌'))
+        } else if (value && (value.length < 32 || value.length > 128)) {
+          callback(new Error('初始化令牌长度 32 到 128'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
@@ -164,6 +214,12 @@ function explainRegisterError(error: unknown): string {
     }
     if (error.code === ErrorCode.INVALID_REQUEST_PARAMETER) {
       return '用户名或密码不符合要求'
+    }
+    if (error.code === ErrorCode.AUTH_BOOTSTRAP_REQUIRED) {
+      return '系统尚未初始化管理员,请输入服务器启动日志中的一次性初始化令牌'
+    }
+    if (error.code === ErrorCode.AUTH_BOOTSTRAP_TOKEN_INVALID) {
+      return '初始化令牌无效,请核对服务器启动日志中的令牌'
     }
     if (error.code === ErrorCode.INTERNAL_SERVER_ERROR) {
       return '服务器内部错误,请稍后重试'
@@ -184,9 +240,11 @@ async function handleSubmit(): Promise<void> {
   }
   submitting.value = true
   try {
+    // 仅在待初始化时携带令牌字段,常规注册保持与历史一致的请求体。
     await auth.register({
       username: form.username,
-      password: form.password
+      password: form.password,
+      ...(bootstrapPending.value ? { bootstrapToken: form.bootstrapToken.trim() } : {})
     })
     ElMessage.success('注册成功,请使用新账户登录')
     await router.push({ name: 'login' })
@@ -199,6 +257,13 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <style scoped>
+.register-view__bootstrap-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--auth-ink-muted);
+}
+
 .register-view__submit {
   width: 100%;
   height: 44px;
