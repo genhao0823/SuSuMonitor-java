@@ -1,0 +1,1 @@
+bc84deac7d88590fafd0b6d3fc06e8efc1f8fb504622be4c942b18209fcaa0b2 *openapi-auth.json
