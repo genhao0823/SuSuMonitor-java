@@ -94,6 +94,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(registry -> registry
                         .requestMatchers(HttpMethod.GET, "/api/health", "/api/ready").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        // 首管理员初始化状态查询（批次 8）：公开只读，仅返回一个布尔值，
+                        // 供注册页决定是否展示一次性初始化令牌输入框。
+                        .requestMatchers(HttpMethod.GET, "/api/auth/bootstrap-status").permitAll()
                         // Swagger UI 与 OpenAPI 文档为只读开发/联调资产，公开放行（仅 GET）。
                         .requestMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**",
                                 "/api-docs", "/api-docs/**", "/webjars/**").permitAll()

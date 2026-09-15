@@ -39,4 +39,16 @@ public class RegisterRequest {
     @Schema(description = "密码（8-64 字符）", format = "password", minLength = 8, maxLength = 64,
             writeOnly = true)
     private String password;
+
+    // 一次性初始化令牌为条件必填：仅在首管理员未初始化时由服务层强制校验，
+    // 因此这里只约束长度范围（与签发值 32-128 字符一致）而不做 @NotBlank。
+    @Size(min = 32, max = 128,
+            message = "Bootstrap token must be between 32 and 128 characters")
+    // 防止 Lombok 生成的 toString 方法输出初始化令牌明文。
+    @ToString.Exclude
+    // 描述初始化令牌字段；format=password 避免文档与调试工具回显明文，writeOnly 表示只入不出。
+    @Schema(description = "一次性初始化令牌（仅首管理员未初始化时必填，"
+            + "经服务器启动横幅或 AUTH_BOOTSTRAP_TOKEN 投递；首管理员存在后忽略）",
+            format = "password", minLength = 32, maxLength = 128, writeOnly = true)
+    private String bootstrapToken;
 }

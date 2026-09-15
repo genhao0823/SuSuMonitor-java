@@ -17,6 +17,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 用户认证业务实现，承载注册、登录、分页查询与审核状态管理逻辑。
  */
+// 输出首管理员初始化等关键认证事件日志（不含任何凭据明文）。
+@Slf4j
 @Service
 public class UserServiceImpl implements UserService {
 
@@ -49,6 +52,9 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
 
     private final JwtTokenService jwtTokenService;
+
+    // 首管理员一次性初始化令牌服务（批次 8）：注册事务内完成校验，消费写由本类执行。
+    private final BootstrapTokenService bootstrapTokenService;
 
     private final String dummyPasswordHash;
 
@@ -122,21 +128,28 @@ public class UserServiceImpl implements UserService {
      * @param authBootstrapStateMapper 首管理员初始化状态 Mapper
      * @param passwordEncoder 密码编码器
      * @param jwtTokenService JWT 服务
+     * @param bootstrapTokenService 首管理员初始化令牌服务
      */
     public UserServiceImpl(
             UserMapper userMapper,
             AuthBootstrapStateMapper authBootstrapStateMapper,
             PasswordEncoder passwordEncoder,
-            JwtTokenService jwtTokenService) {
+            JwtTokenService jwtTokenService,
+            BootstrapTokenService bootstrapTokenService) {
         this.userMapper = userMapper;
         this.authBootstrapStateMapper = authBootstrapStateMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
+        this.bootstrapTokenService = bootstrapTokenService;
         this.dummyPasswordHash = passwordEncoder.encode(DUMMY_LOGIN_PASSWORD);
     }
 
     /**
      * 在事务中锁定初始化状态并创建用户，保证并发注册最多产生一个首管理员。
+     *
+     * <p>批次 8 起：首管理员未初始化时注册必须携带有效一次性初始化令牌——
+     * 校验与令牌消费都在 selectForUpdate 行锁事务内完成，令牌至多被使用一次；
+     * 首管理员已存在时令牌字段被忽略，行为与历史版本一致。</p>
      *
      * @param request 注册请求
      * @return 当前用户公开信息
@@ -154,6 +167,11 @@ public class UserServiceImpl implements UserService {
         }
 
         boolean firstUser = !bootstrapState.getAdminInitialized();
+        if (firstUser) {
+            // 令牌校验在行锁事务内进行：未携带 40310、不匹配 40311，均直接中断注册。
+            bootstrapTokenService.verifyAgainst(bootstrapState, request.getBootstrapToken());
+        }
+
         UserEntity userEntity = new UserEntity();
         userEntity.setUsername(request.getUsername());
         userEntity.setPasswordHash(passwordEncoder.encode(request.getPassword()));
@@ -170,11 +188,30 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.RESOURCE_CONFLICT, exception);
         }
 
-        if (firstUser && authBootstrapStateMapper.markAdminInitialized(
-                userEntity.getId(), userEntity.getCreatedAt()) != 1) {
-            throw new BusinessException(ErrorCode.DATABASE_ERROR);
+        if (firstUser) {
+            if (authBootstrapStateMapper.markAdminInitialized(
+                    userEntity.getId(), userEntity.getCreatedAt()) != 1) {
+                throw new BusinessException(ErrorCode.DATABASE_ERROR);
+            }
+            // 与初始化标记同事务消费令牌：置空密文并记录消费时间，令牌就此作废。
+            if (authBootstrapStateMapper.consumeBootstrapToken(
+                    LocalDateTime.now(ZoneOffset.UTC)) != 1) {
+                throw new BusinessException(ErrorCode.DATABASE_ERROR);
+            }
+            log.info("first admin registered (userId={}); bootstrap token consumed",
+                    userEntity.getId());
         }
         return toCurrentUserVo(userEntity);
+    }
+
+    /**
+     * 查询系统是否仍待初始化首管理员（无锁读，公开状态端点用）。
+     *
+     * @return true 表示注册需要一次性初始化令牌；状态行缺失按 false 防御处理
+     */
+    public boolean getBootstrapPending() {
+        AuthBootstrapStateEntity bootstrapState = authBootstrapStateMapper.selectState();
+        return bootstrapState != null && !Boolean.TRUE.equals(bootstrapState.getAdminInitialized());
     }
 
     /**

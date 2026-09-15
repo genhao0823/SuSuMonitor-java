@@ -14,6 +14,12 @@ public enum ErrorCode {
     TERMINAL_INVALID_PAYLOAD(40003, "terminal invalid payload", HttpStatus.BAD_REQUEST),
     UNAUTHORIZED(40100, "unauthorized", HttpStatus.UNAUTHORIZED),
     FORBIDDEN(40300, "forbidden", HttpStatus.FORBIDDEN),
+    // 首管理员未初始化时注册未携带一次性初始化令牌（批次 8），
+    // 仅在 auth_bootstrap_state.admin_initialized=0 的注册路径产生。
+    AUTH_BOOTSTRAP_REQUIRED(40310, "bootstrap token required", HttpStatus.FORBIDDEN),
+    // 首管理员未初始化时注册携带的初始化令牌与服务器签发值不匹配（批次 8），
+    // 同一错误码也覆盖「状态行尚无令牌密文」的防御性拒绝（fail-closed）。
+    AUTH_BOOTSTRAP_TOKEN_INVALID(40311, "bootstrap token invalid", HttpStatus.FORBIDDEN),
     TERMINAL_ACCESS_DENIED(40302, "terminal access denied", HttpStatus.FORBIDDEN),
     RESOURCE_NOT_FOUND(40400, "resource not found", HttpStatus.NOT_FOUND),
     TERMINAL_SESSION_NOT_FOUND(40403, "terminal session not found", HttpStatus.NOT_FOUND),

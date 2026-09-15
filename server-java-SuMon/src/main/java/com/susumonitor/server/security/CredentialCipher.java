@@ -33,6 +33,13 @@ public class CredentialCipher {
     /** 用户维度当前唯一支持的凭据类型：管理员个人 AI 服务商 API Key。 */
     private static final String USER_CREDENTIAL_TYPE_AI_API_KEY = "ai_api_key";
 
+    /**
+     * 系统维度固定 AAD：首管理员一次性初始化令牌（批次 8）。
+     * 与服务器/用户维度严格隔离——同一密文换上下文均无法解密；
+     * 初始化令牌是单行全局凭据，因此 AAD 不绑定任何可变 ID。
+     */
+    private static final String BOOTSTRAP_AAD = "susumonitor:bootstrap:token:v1";
+
     private static final int IV_BYTES = 12;
 
     private static final int TAG_BITS = 128;
@@ -210,6 +217,36 @@ public class CredentialCipher {
 
     private String userAad(Long userId) {
         return USER_AAD_TEMPLATE.formatted(userId, USER_CREDENTIAL_TYPE_AI_API_KEY);
+    }
+
+    /**
+     * 使用随机 IV 和系统维度固定上下文加密首管理员初始化令牌，并生成 v1 信封。
+     *
+     * <p>与服务器/用户维度共用 v1 信封与加密通道，仅 AAD 不同：
+     * 密文落库于 auth_bootstrap_state.bootstrap_token_cipher，明文只在
+     * 启动横幅回显，其余任何日志/响应不得出现。</p>
+     *
+     * @param plaintext 非空初始化令牌明文
+     * @return v1 格式密文信封
+     */
+    public String encryptForBootstrap(String plaintext) {
+        if (plaintext == null || plaintext.isBlank()) {
+            throw new IllegalArgumentException("Bootstrap token plaintext must not be blank");
+        }
+        return encryptWithAad(BOOTSTRAP_AAD, plaintext);
+    }
+
+    /**
+     * 校验 v1 信封后按系统维度固定上下文解密首管理员初始化令牌。
+     *
+     * @param envelope v1 格式密文信封
+     * @return 初始化令牌明文（调用方应即用即弃，不得写入日志）
+     */
+    public String decryptForBootstrap(String envelope) {
+        if (envelope == null || envelope.isBlank()) {
+            throw new IllegalArgumentException("Bootstrap token envelope must not be blank");
+        }
+        return decryptWithAad(BOOTSTRAP_AAD, envelope);
     }
 
     private void validateUserContext(Long userId) {

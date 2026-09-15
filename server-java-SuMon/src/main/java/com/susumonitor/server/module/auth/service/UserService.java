@@ -18,10 +18,20 @@ public interface UserService {
     /**
      * 注册用户，并在首用户场景完成管理员初始化。
      *
+     * <p>首管理员未初始化时要求请求携带有效一次性初始化令牌（批次 8），
+     * 校验失败抛 40310/40311；首管理员已存在时令牌字段被忽略。</p>
+     *
      * @param request 注册请求
      * @return 当前用户公开信息
      */
     CurrentUserVo register(RegisterRequest request);
+
+    /**
+     * 查询系统是否仍待初始化首管理员（公开状态端点用，无锁读）。
+     *
+     * @return true 表示注册需要一次性初始化令牌；状态行缺失按 false 防御处理
+     */
+    boolean getBootstrapPending();
 
     /**
      * 校验用户凭据并签发访问令牌。

@@ -190,6 +190,31 @@ class AuthControllerTests {
     }
 
     @Test
+    // 验证初始化状态端点公开可访问且返回待初始化标记（批次 8）。
+    void bootstrapStatusShouldReturnPendingWithoutAuth() throws Exception {
+        when(userService.getBootstrapPending()).thenReturn(true);
+
+        mockMvc.perform(get("/api/auth/bootstrap-status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.bootstrapPending").value(true));
+    }
+
+    @Test
+    // 验证注册在首管理员未初始化且缺令牌时透传 403/40310 业务错误。
+    void registerShouldReturn403WhenBootstrapTokenRequired() throws Exception {
+        RegisterRequest request = request("admin", "Password123");
+        when(userService.register(any(RegisterRequest.class)))
+                .thenThrow(new BusinessException(ErrorCode.AUTH_BOOTSTRAP_REQUIRED));
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(40310));
+    }
+
+    @Test
     // 验证 DTO 校验拒绝不符合用户名规则的注册请求。
     void registerShouldRejectInvalidUsername() throws Exception {
         RegisterRequest request = request("bad-name", "Password123");

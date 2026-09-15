@@ -196,6 +196,10 @@ susumonitor:
     # 注册防滥用（2026-08-29）：与登录独立计数，阈值更高以兼容首管理员并发验收（上限 20 并发）。
     register-limit-max-attempts: ${REGISTER_LIMIT_MAX_ATTEMPTS:60}
     register-limit-window-seconds: ${REGISTER_LIMIT_WINDOW_SECONDS:60}
+    # 首管理员一次性初始化令牌（批次 8）：预置时须 32-128 字符（IaC 场景），
+    # 留空则首管理员未初始化时启动自动生成并经启动横幅（控制台/日志）一次性投递；
+    # 令牌消费后立即失效，已初始化实例不再读取本配置。
+    bootstrap-token: ${AUTH_BOOTSTRAP_TOKEN:}
   agent:
     register-key: ${AGENT_REGISTER_KEY:}
     max-connections: ${AGENT_MAX_CONNECTIONS:128}

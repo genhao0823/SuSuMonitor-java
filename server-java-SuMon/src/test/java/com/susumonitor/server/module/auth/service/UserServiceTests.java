@@ -1,11 +1,14 @@
 package com.susumonitor.server.module.auth.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
@@ -50,19 +53,26 @@ class UserServiceTests {
     @Mock
     private JwtTokenService jwtTokenService;
 
+    // 创建初始化令牌服务模拟对象，隔离注册事务与令牌加解密校验（批次 8）。
+    @Mock
+    private BootstrapTokenService bootstrapTokenService;
+
     private UserService userService;
 
     // 在每个测试方法执行前创建待测试的 UserService 实例。
     @BeforeEach
     void setUp() {
         when(passwordEncoder.encode("SUSUMONITOR_DUMMY_LOGIN_PASSWORD")).thenReturn("dummy-bcrypt-hash");
-        userService = new UserServiceImpl(userMapper, authBootstrapStateMapper, passwordEncoder, jwtTokenService);
+        userService = new UserServiceImpl(
+                userMapper, authBootstrapStateMapper, passwordEncoder, jwtTokenService, bootstrapTokenService);
     }
 
-    // 验证第一个用户注册后成为已审核的管理员。
+    // 验证第一个用户（携带有效初始化令牌）注册后成为已审核的管理员。
     @Test
     void registerFirstUserShouldCreateApprovedAdmin() {
         RegisterRequest request = registerRequest("admin", "Password123");
+        // 首管理员未初始化路径必须携带初始化令牌（批次 8）。
+        request.setBootstrapToken("A".repeat(43));
         when(userMapper.selectByUsername("admin")).thenReturn(null);
         when(authBootstrapStateMapper.selectForUpdate()).thenReturn(bootstrapState(false));
         when(passwordEncoder.encode("Password123")).thenReturn("bcrypt-hash");
@@ -73,6 +83,7 @@ class UserServiceTests {
             return 1;
         });
         when(authBootstrapStateMapper.markAdminInitialized(any(), any())).thenReturn(1);
+        when(authBootstrapStateMapper.consumeBootstrapToken(any())).thenReturn(1);
 
         CurrentUserVo result = userService.register(request);
 
@@ -81,6 +92,9 @@ class UserServiceTests {
         assertEquals("approved", result.getReviewStatus());
         assertNotNull(result.getCreatedAt());
         verify(passwordEncoder).encode("Password123");
+        // 令牌校验发生在行锁事务内且消费写随后执行（批次 8）。
+        verify(bootstrapTokenService).verifyAgainst(any(AuthBootstrapStateEntity.class), any());
+        verify(authBootstrapStateMapper).consumeBootstrapToken(any());
     }
 
     // 验证后续用户注册后成为待审核的普通用户。
@@ -96,6 +110,97 @@ class UserServiceTests {
 
         assertEquals("user", result.getRole());
         assertEquals("pending", result.getReviewStatus());
+    }
+
+    // 验证首管理员未初始化时注册未携带令牌返回 40310，且不创建用户。
+    @Test
+    void registerBootstrapPendingWithoutTokenShouldThrow40310() {
+        RegisterRequest request = registerRequest("admin", "Password123");
+        when(userMapper.selectByUsername("admin")).thenReturn(null);
+        when(authBootstrapStateMapper.selectForUpdate()).thenReturn(bootstrapState(false));
+        // 模拟令牌服务对空候选令牌的判定结果。
+        doThrow(new BusinessException(ErrorCode.AUTH_BOOTSTRAP_REQUIRED))
+                .when(bootstrapTokenService).verifyAgainst(any(AuthBootstrapStateEntity.class), any());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.register(request));
+
+        assertEquals(ErrorCode.AUTH_BOOTSTRAP_REQUIRED, exception.getErrorCode());
+        verify(userMapper, never()).insert(any(UserEntity.class));
+        verify(authBootstrapStateMapper, never()).markAdminInitialized(any(), any());
+    }
+
+    // 验证初始化令牌不匹配时返回 40311，且不创建用户。
+    @Test
+    void registerBootstrapTokenInvalidShouldThrow40311() {
+        RegisterRequest request = registerRequest("admin", "Password123");
+        request.setBootstrapToken("B".repeat(43));
+        when(userMapper.selectByUsername("admin")).thenReturn(null);
+        when(authBootstrapStateMapper.selectForUpdate()).thenReturn(bootstrapState(false));
+        doThrow(new BusinessException(ErrorCode.AUTH_BOOTSTRAP_TOKEN_INVALID))
+                .when(bootstrapTokenService).verifyAgainst(any(AuthBootstrapStateEntity.class), any());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.register(request));
+
+        assertEquals(ErrorCode.AUTH_BOOTSTRAP_TOKEN_INVALID, exception.getErrorCode());
+        verify(userMapper, never()).insert(any(UserEntity.class));
+    }
+
+    // 验证首管理员创建后令牌消费写失败同样使注册事务回滚（数据库错误）。
+    @Test
+    void registerBootstrapConsumeFailureShouldThrowDatabaseError() {
+        RegisterRequest request = registerRequest("admin", "Password123");
+        request.setBootstrapToken("A".repeat(43));
+        when(userMapper.selectByUsername("admin")).thenReturn(null);
+        when(authBootstrapStateMapper.selectForUpdate()).thenReturn(bootstrapState(false));
+        when(passwordEncoder.encode("Password123")).thenReturn("bcrypt-hash");
+        when(userMapper.insert(any(UserEntity.class))).thenAnswer(invocation -> {
+            UserEntity userEntity = invocation.getArgument(0);
+            userEntity.setId(1L);
+            return 1;
+        });
+        when(authBootstrapStateMapper.markAdminInitialized(any(), any())).thenReturn(1);
+        when(authBootstrapStateMapper.consumeBootstrapToken(any())).thenReturn(0);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.register(request));
+
+        assertEquals(ErrorCode.DATABASE_ERROR, exception.getErrorCode());
+    }
+
+    // 验证首管理员已初始化时令牌字段被忽略（存量部署行为不变）。
+    @Test
+    void registerFollowingUserShouldIgnoreBootstrapToken() {
+        RegisterRequest request = registerRequest("user", "Password123");
+        request.setBootstrapToken("A".repeat(43));
+        when(userMapper.selectByUsername("user")).thenReturn(null);
+        when(authBootstrapStateMapper.selectForUpdate()).thenReturn(bootstrapState(true));
+        when(passwordEncoder.encode("Password123")).thenReturn("bcrypt-hash");
+        when(userMapper.insert(any(UserEntity.class))).thenReturn(1);
+
+        CurrentUserVo result = userService.register(request);
+
+        assertEquals("user", result.getRole());
+        assertEquals("pending", result.getReviewStatus());
+        verify(bootstrapTokenService, never()).verifyAgainst(any(), any());
+        verify(authBootstrapStateMapper, never()).consumeBootstrapToken(any());
+    }
+
+    // 验证初始化状态查询的三种取值：待初始化 / 已初始化 / 状态行缺失（防御 false）。
+    @Test
+    void getBootstrapPendingShouldReflectStateRow() {
+        when(authBootstrapStateMapper.selectState()).thenReturn(bootstrapState(false));
+        assertTrue(userService.getBootstrapPending());
+
+        when(authBootstrapStateMapper.selectState()).thenReturn(bootstrapState(true));
+        assertFalse(userService.getBootstrapPending());
+
+        when(authBootstrapStateMapper.selectState()).thenReturn(null);
+        assertFalse(userService.getBootstrapPending());
     }
 
     // 验证重复用户名返回资源冲突异常。
@@ -132,6 +237,7 @@ class UserServiceTests {
     @Test
     void registerShouldNotReturnPasswordHash() {
         RegisterRequest request = registerRequest("admin", "Password123");
+        request.setBootstrapToken("A".repeat(43));
         when(userMapper.selectByUsername(anyString())).thenReturn(null);
         when(authBootstrapStateMapper.selectForUpdate()).thenReturn(bootstrapState(false));
         when(passwordEncoder.encode(anyString())).thenReturn("bcrypt-hash");
@@ -141,6 +247,7 @@ class UserServiceTests {
             return 1;
         });
         when(authBootstrapStateMapper.markAdminInitialized(any(), any())).thenReturn(1);
+        when(authBootstrapStateMapper.consumeBootstrapToken(any())).thenReturn(1);
 
         CurrentUserVo result = userService.register(request);
 
@@ -168,6 +275,7 @@ class UserServiceTests {
     @Test
     void registerBootstrapUpdateFailureShouldThrowDatabaseError() {
         RegisterRequest request = registerRequest("admin", "Password123");
+        request.setBootstrapToken("A".repeat(43));
         when(userMapper.selectByUsername("admin")).thenReturn(null);
         when(authBootstrapStateMapper.selectForUpdate()).thenReturn(bootstrapState(false));
         when(passwordEncoder.encode("Password123")).thenReturn("bcrypt-hash");

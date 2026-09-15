@@ -315,6 +315,20 @@ public class AppProperties {
         public void setRegisterLimitWindowSeconds(int registerLimitWindowSeconds) {
             this.registerLimitWindowSeconds = registerLimitWindowSeconds;
         }
+
+        // 首管理员一次性初始化令牌预置值（批次 8）：默认空表示由服务器自动生成并经启动横幅投递。
+        // 非空时长度必须在 32-128 之间，非法长度由 BootstrapTokenInitializer 在启动阶段 fail-fast。
+        private String bootstrapToken = "";
+
+        /** 获取首管理员初始化令牌预置值（未预置时为空串）。 */
+        public String getBootstrapToken() {
+            return bootstrapToken;
+        }
+
+        /** 设置首管理员初始化令牌预置值。 */
+        public void setBootstrapToken(String bootstrapToken) {
+            this.bootstrapToken = bootstrapToken;
+        }
     }
 
     public static class Agent {

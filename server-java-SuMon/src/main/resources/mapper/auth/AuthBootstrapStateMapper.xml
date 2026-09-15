@@ -10,22 +10,62 @@
         <result column="admin_initialized" property="adminInitialized"/>
         <result column="initialized_user_id" property="initializedUserId"/>
         <result column="initialized_at" property="initializedAt"/>
+        <result column="bootstrap_token_cipher" property="bootstrapTokenCipher"/>
+        <result column="bootstrap_token_generated_at" property="bootstrapTokenGeneratedAt"/>
+        <result column="bootstrap_token_consumed_at" property="bootstrapTokenConsumedAt"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
+    <!-- 列清单为 selectState 与 selectForUpdate 共用，避免两处字段漂移。 -->
+    <sql id="StateColumns">
+        id,
+        admin_initialized,
+        initialized_user_id,
+        initialized_at,
+        bootstrap_token_cipher,
+        bootstrap_token_generated_at,
+        bootstrap_token_consumed_at,
+        created_at,
+        updated_at
+    </sql>
+
     <select id="selectForUpdate" resultMap="AuthBootstrapStateResultMap">
         SELECT
-            id,
-            admin_initialized,
-            initialized_user_id,
-            initialized_at,
-            created_at,
-            updated_at
+            <include refid="StateColumns"/>
         FROM auth_bootstrap_state
         WHERE id = 1
         FOR UPDATE
     </select>
+
+    <!-- 无锁读：仅用于状态查询端点与启动期令牌装配，写路径必须走 selectForUpdate。 -->
+    <select id="selectState" resultMap="AuthBootstrapStateResultMap">
+        SELECT
+            <include refid="StateColumns"/>
+        FROM auth_bootstrap_state
+        WHERE id = 1
+    </select>
+
+    <!-- 覆写令牌密文：admin_initialized=0 守卫防止已初始化实例被覆写。 -->
+    <update id="saveBootstrapToken">
+        UPDATE auth_bootstrap_state
+        SET
+            bootstrap_token_cipher = #{cipher},
+            bootstrap_token_generated_at = #{generatedAt},
+            bootstrap_token_consumed_at = NULL
+        WHERE id = 1
+          AND admin_initialized = 0
+    </update>
+
+    <!-- 消费令牌：置空密文并记录消费时间；与 markAdminInitialized 同事务保证至多消费一次。 -->
+    <update id="consumeBootstrapToken">
+        UPDATE auth_bootstrap_state
+        SET
+            bootstrap_token_cipher = NULL,
+            bootstrap_token_consumed_at = #{consumedAt}
+        WHERE id = 1
+          AND admin_initialized = 0
+    </update>
 
     <update id="markAdminInitialized">
         UPDATE auth_bootstrap_state

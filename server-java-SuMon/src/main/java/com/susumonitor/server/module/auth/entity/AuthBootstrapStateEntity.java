@@ -18,6 +18,16 @@ public class AuthBootstrapStateEntity {
 
     private LocalDateTime initializedAt;
 
+    // 首管理员一次性初始化令牌的 AES-256-GCM 密文信封（批次 8）；
+    // 明文永不落库，消费后由 consumeBootstrapToken 置空。
+    private String bootstrapTokenCipher;
+
+    // 当前令牌的生成或载入时间（环境变量预置视为载入）。
+    private LocalDateTime bootstrapTokenGeneratedAt;
+
+    // 令牌消费时间，即首管理员创建时刻；NULL 表示令牌仍待使用或未签发。
+    private LocalDateTime bootstrapTokenConsumedAt;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
