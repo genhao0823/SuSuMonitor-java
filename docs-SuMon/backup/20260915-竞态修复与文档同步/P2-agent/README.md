@@ -77,12 +77,6 @@ cp .env.example .env
 | `SUSUMONITOR_NACK_RETRY_MAX` | 可重试 nack（`retriable_server_error`）的最大重试次数，默认 3，达到上限后移入本地死信 |
 | `SUSUMONITOR_NACK_RETRY_INITIAL_SECONDS` | 可重试 nack 的首次退避间隔，默认 2 秒（指数翻倍至上限） |
 | `SUSUMONITOR_NACK_RETRY_MAX_SECONDS` | 可重试 nack 的最大退避间隔，默认 60 秒 |
-| `SUSUMONITOR_PROCESS_TOP_N` | 每周期上报的 CPU/内存 Top 进程条数，默认 10，0 关闭，上限 50（协议 v1.4） |
-| `SUSUMONITOR_EXTENDED_RESOURCES` | 每挂载点磁盘容量与分网卡速率采集开关，默认开启，`0`/`false` 显式关闭（协议 v1.5） |
-| `SUSUMONITOR_COMMAND_ENABLED` | 受限命令执行域开关，默认 `false`；服务端命令域（`AI_COMMAND_ENABLED`）关闭时不下发命令帧 |
-| `SUSUMONITOR_COMMAND_MAX_TIMEOUT_SECONDS` | 单次命令执行超时上限，默认 120 秒 |
-| `SUSUMONITOR_COMMAND_MAX_OUTPUT_BYTES` | 命令 stdout/stderr 截断上限，默认 65536 字节（64KiB） |
-| `SUSUMONITOR_COMMAND_RATE_PER_MINUTE` | 命令执行频控，默认 10 次/分钟（1-600） |
 | `SUSUMONITOR_TERMINAL_ENABLED` | 终端功能开关，默认 `false` |
 | `SUSUMONITOR_TERMINAL_SHELL` | PTY 启动的 shell，默认 `/bin/bash` |
 | `SUSUMONITOR_TERMINAL_MAX_SESSIONS` | 终端会话数上限，默认 4 |
