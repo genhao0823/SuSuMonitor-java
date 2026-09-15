@@ -2,11 +2,9 @@
 
 > 本目录是 SuSuMonitor 后端 REST API 的权威 OpenAPI 3.0 契约源，供 Apifox 导入、前端类型生成、CI 校验与人工查阅使用。
 >
-> 契约基线：`main`（2026-09-16 批次 6 访问矩阵契约收口后，openapi-server 0.3.1）。`openapi:check` 只校验 JSON 结构、本地 `$ref` 与 Java Controller 路径/操作映射，不代表 DTO/VO 字段语义与前端类型完全一致。
+> 契约基线：`main`（2026-08-29 安全审计后）。`openapi:check` 只校验 JSON 结构、本地 `$ref` 与 Java Controller 路径/操作映射，不代表 DTO/VO 字段语义与前端类型完全一致。
 >
 > **漂移状态（2026-08-29）**：2026-08-28 列出的前端/契约漂移（PUT 全量语义、指标历史 `page_size` 上限、错误码 `42905/50301/50302`、`resolved_at`、`status` 排序）**均已修复**；2026-08-29 新增行为变更：`GET /api/alerts/rules` 的通知渠道详情（`notify_email/notify_dingtalk/notify_webhook`）仅 admin 可见，非 admin 返回 null（前端 TS 类型 `string | null` 兼容，渠道标签对非 admin 隐藏）；注册接口增加 IP 限流（HTTP 429 + 42905，独立于登录计数）。
->
-> **漂移状态（2026-09-16，批次 6）**：`openapi-server.json` 升 0.3.1——`POST /api/ws/monitor-ticket` 与 `GET /api/servers/{id}/metrics/latest`、`/processes/latest`、`/resources/latest`、`/metrics` 五个 operation 删除不可达的 403「非 admin」声明（`SecurityConfig` 对上述路径仅要求 `authenticated()`，访问矩阵口径固化为「任一认证用户可读」，见 `Develop-log/20260916-批次6-访问矩阵契约收口.md`）；文件清单表路径/端点统计同步为实测值。
 >
 > 校验命令：`cd web-vue-SuMon && npm run openapi:check`（CI 友好，退出 0 表示 JSON 结构、`$ref` 与 Controller 路径/操作映射一致；不校验 DTO/VO 字段语义、security、响应头和前端类型）。
 >
@@ -19,12 +17,12 @@
 | `openapi-system.json` | 系统健康 / 就绪探针 / RabbitMQ consumers 与 queues（公开 + ROLE_ADMIN） | 4 |
 | `openapi-auth.json` | 注册 / 登录 / 当前用户 / 登出 | 4 |
 | `openapi-admin.json` | 管理员用户分页/搜索与单个、批量审核（ROLE_ADMIN） | 5 |
-| `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹与观察 / SSH 测试与历史 / Agent Token / Monitor Ticket / 指标最新值 / 进程快照 / 扩展资源快照 / 指标历史 | 15 路径 / 18 端点操作 |
+| `openapi-server.json` | 服务器 CRUD / 状态 / SSH 主机指纹与观察 / SSH 测试与历史 / Agent Token / Monitor Ticket / 指标最新值 / 指标历史 | 13 路径 / 16 端点操作 |
 | `openapi-alert.json` | 告警规则 CRUD / 告警记录分页 / 标记已读 / 通知投递历史 / 告警智能解释回看（ROLE_ADMIN + 已认证） | 6 路径 / 8 端点操作 |
 | `openapi-ai.json` | 大模型只读诊断 MVP + 运维问答 F2 + AI 服务商配置 + 告警解释回看 + 定时健康报告 F3（已实现·代码级；admin Bearer；诊断仅白名单脱敏监控摘要，问答仅平台注册只读工具；运行期由 `susumonitor.ai.enabled` / `susumonitor.ai.qa.enabled` / `susumonitor.ai.report.enabled` 门控，默认关闭） | 7 路径 / 9 端点操作 |
-| `openapi-command.json` | AI 命令域 M1 审批制 + M2 自动审批策略 + M2 观察期评审报告（admin Bearer；白名单模板 + 审批状态机 + 审计；运行期由 `susumonitor.ai.command.enabled` 门控，默认关闭） | 8 路径 / 10 端点操作 |
+| `openapi-command.json` | AI 命令域 M1 审批制 + M2 自动审批策略（admin Bearer；白名单模板 + 审批状态机 + 审计；运行期由 `susumonitor.ai.command.enabled` 门控，默认关闭） | 7 路径 / 9 端点操作 |
 
-合计 49 条文档路径 / 58 个端点操作，全部与当前 Java Controller 声明 1:1 对齐（`openapi:check` 严格双向校验）。代码级实现不等于生产验收：命令域 M1 已完成真实 Agent E2E（2026-09-04，见 `Develop-log/20260904-AI命令域M1后端先行与真实AgentE2E.md`）；隔离库 MySQL IT 执行与 RC1 门槛仍待完成。
+合计 46 条文档路径 / 55 个端点操作，全部与当前 Java Controller 声明 1:1 对齐（`openapi:check` 严格双向校验）。代码级实现不等于生产验收：命令域 M1 已完成真实 Agent E2E（2026-09-04，见 `Develop-log/20260904-AI命令域M1后端先行与真实AgentE2E.md`）；隔离库 MySQL IT 执行与 RC1 门槛仍待完成。
 
 ## 端点索引
 

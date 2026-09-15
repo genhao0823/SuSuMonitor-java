@@ -7,13 +7,12 @@
 [![Status](https://img.shields.io/badge/Polish--7%20%2B%20%E8%BF%90%E7%BB%B4%E6%94%B6%E5%8F%A3%E5%AE%8C%E6%88%90-brightgreen)](#%E5%BD%93%E5%89%8D%E8%BF%9B%E5%BA%A6)
 [![Docs](https://img.shields.io/badge/docs--alignment-2026--08--27-blue)](docs-SuMon/Develop-log/20260824-首管理员空库并发真实验收.md)
 
-## 🚀 当前进度快照（2026-09-16）
+## 🚀 当前进度快照（2026-09-15）
 
 | 项 | 状态 / 值 |
 |---|---|
 | GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-jvav-> |
-| 当前基线 | `main @ 5ca5a36`（2026-09-16；批次 6 metrics 面访问矩阵契约收口 3a1716c(契约 0.3.1)→5ca5a36(server 修约+测试固化)；此前基线 cf93816（2026-09-15）覆盖批次 4 多盘/多网卡资源下钻三端 db464e8(契约 v1.5)→3137e68(agent)→5528a2e(server)→57ed0ae(web)→cf93816(api-test)、批次 5 M3 门禁评审文档 a12a378、批次 2 联调 UX 修复 509a193、批次 3 L2 变更类模板 d106674、M2 观察期评审报告 45f508b、进程级监控、安全加固与全功能联调 0914 批次） |
-| 契约与访问矩阵 | **批次 6（2026-09-16）**：openapi-server 0.3.1——`monitor-ticket` 与 `metrics/latest`、`processes/latest`、`resources/latest`、`metrics` 历史五个端点删除不可达的 403「非 admin」响应声明（七日审计留痕的「需专项决策」项已拍板：维持「任一认证用户可读」口径，修契约不收紧代码）；新增 `MonitorTicketControllerTests` 2 例固化访问矩阵（非 admin 200 + 未认证 401）；全量契约 **49 路径 / 58 端点操作**与 Java Controller 1:1 对齐（openapi:check 7/7）；后端 `./mvnw test` **855/855** 全绿；修改前文件全部备份至 `docs-SuMon/backup/20260916-批次6-访问矩阵契约收口/` |
+| 当前基线 | `main @ cf93816`（2026-09-15；批次 4 多盘/多网卡资源下钻三端 db464e8(契约 v1.5)→3137e68(agent)→5528a2e(server)→57ed0ae(web)→cf93816(api-test) 与批次 5 M3 门禁评审文档 a12a378 提交；期间已并入批次 2 联调 UX 修复 509a193、批次 3 L2 变更类模板 d106674、M2 观察期评审报告 45f508b、进程级监控、安全加固与全功能联调 0914 批次） |
 | 认证方式 | Git Credential Manager(Windows 凭据管理器缓存,无需明文 token) |
 | 基本功能闭环 | 鉴权(JWT 72h)/服务器 CRUD/SSH 测试/Web 终端/Dashboard 真实指标/告警评估(MVP-6)/Metrics Outbox(MVP-10)/告警消息消费(MVP-11)/Agent 指标可靠投递 M1-M4（ACK/FIFO/退避重传 + NACK 死信 + 投递遥测）/告警外部通知（邮件+钉钉+Webhook，含退避重试）/监控页 ECharts 图表+阈值线/Agent 队列字节上限/增长表保留期清理（幂等接收记录 7 天、消费记录 30 天、告警记录 90 天、SSH 测试历史 90 天、**通知投递记录 90 天（V27）**、**Outbox 已发布 30 天（默认开启）**，Flyway V22/V24/V27）/告警消费多消费者并发（V15 唯一键幂等，本地 broker 验收并发 4 消费 100 条零重复）/Agent nack 有限重试（retriable_server_error + snapshot v3 持久化预算）/告警事件 Broker 发布+消费（alert.triggered.v1：Outbox 按行路由 V25 发布，alert-notifier 幂等消费并驱动外部通知，Broker 中断恢复可补发触发）/**告警恢复事件链路（alert.resolved.v1：评估器恢复时同事务登记 V26 resolved_at 落库 + Outbox 发布，alert-resolved-notifier 幂等消费驱动恢复通知，真实 broker 验收 11/11）**/**终端断线中继（Agent 断开时服务端推送 terminal.closed(agent_disconnected)，20260814 WSL E2E 真实验收）**/**心跳超时路径终端收口修复（90s 心跳超时同样收口，AGENT_HEARTBEAT_TIMEOUT_SECONDS 参数化）**/**MVP-14 监控收尾（队列积压探测与阈值告警 + 消费耗时/失败率窗口统计，ADMIN 端点 /api/system/rabbitmq/queues|consumers，真实 broker 验收 9/9）**/Docker 资产 已实现；既有本机与真实 Broker 验收通过 |
 | Web 前端 | 2026-08-21 完成克制玻璃设计系统、应用壳层、Dashboard 与列表页收口；恢复服务器列表 URL/防抖/自动刷新/SSH 错误映射，搜索收敛为 OpenAPI 的 keyword 契约；移动端表格不再被固定操作列覆盖；静态测试声明 133 个（22 个 spec），历史运行记录曾 133/133；工作区改动已随 `d8eb375` 提交收口，测试需在新基线干净提交重新执行。真实账号 UI E2E 待运行时隔离凭据与后端环境。**2026-09-15 批次 2 联调 UX 修复（509a193）**：登录请求携带 silent+authAttempt（失败单条提示、不再误触发登录态回调跳转），路由守卫判定顺序改为认证→角色（未登录访问 admin 路由落 /login?redirect= 而非 /forbidden）；新增 auth/client/guards/LoginView 四个 spec，vitest 五门禁全绿。**2026-09-15 批次 4 磁盘/网卡资源卡片（57ed0ae，协议 v1.5）**：监控页新增「磁盘 / 网卡」卡片（每挂载点容量条 + 分网卡 RX/TX 速率），`getResourcesLatest` REST 初载（404 转空态）+ `metrics.update` 可选 `resources` 节点覆盖刷新；新增 ResourcesCard/api-metrics 两 spec，vitest **219/219**、五门禁全绿（openapi-server 0.3.0，18 endpoints）。 |
@@ -320,7 +319,7 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 
 ## 协议 / 工具
 
-- **OpenAPI 契约**: `docs-SuMon/OpenApi-SuMon/{openapi-auth,server,system,admin,alert,ai,command}.json`（7 个文件 / 49 路径 / 58 个端点操作）
+- **OpenAPI 契约**: `docs-SuMon/OpenApi-SuMon/{openapi-auth,server,system,admin,alert,ai,command}.json`（7 个文件 / 40 路径 / 46 个端点操作）
 - **WebSocket 协议**:`docs-SuMon/Protocol-SuMon/websocket-protocol.md`(v1.3)
 - **后端 OpenAPI 自动化**:`web-vue-SuMon/scripts/check-openapi.mjs`(pre-commit 钩子)
 - **代码质量门**:`web-vue-SuMon/scripts/audit-catchup.mjs`(11 条规则)

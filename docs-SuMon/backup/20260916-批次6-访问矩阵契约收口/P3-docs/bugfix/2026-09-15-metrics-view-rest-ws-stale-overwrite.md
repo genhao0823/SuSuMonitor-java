@@ -45,19 +45,8 @@
 
 `MetricsController` 三个 metrics 面端点的 `@ApiResponses`/`@Operation` 文案与 `openapi-server.json` 均声明 403 "Authenticated user is not an admin (40300)"，但 `SecurityConfig` 对 `GET /api/servers/**` 仅要求 `authenticated()`（`SecurityConfig.java:117`），非 admin 用户实际可得 200，403 为**不可达响应**。这是窗口内新增端点（processes/latest、resources/latest）从既有 metrics/latest 复制的文案，属契约描述与真实访问矩阵不符；修正涉及 Java 注解与契约 JSON 的同步变更（代码变更），按本批次"文档审计不改代码"的边界仅在此留痕，待专项确认访问矩阵意图（任一认证用户可读 vs 收紧 admin）后统一修约。
 
-> **→ 2026-09-16 已由批次 6 收口**（决策与提交见文末「八、后记」）。
-
 ## 七、预防
 
 - "REST 初载 + WS 覆盖"双写同一段状态的组件，REST 成功分支必须声明与 WS 的优先级关系（标志位或时间戳），禁止无条件写。
 - 门禁结论以本机实际命令输出为准回填提交说明；`--max-warnings 0` 类零容忍门禁在 CI 缺位时容易"宣称全绿"，review 时应抽查。
 - 新增视图级 spec（MetricsView.spec）补齐挂载期异步时序断言，作为双路径数据流的回归基线。
-
-## 八、后记（2026-09-16 收口）
-
-本文「六、明确保留不改」留痕的 403 不可达差异已由批次 6 专项收口（计划：`Develop-plans/20260916-批次6-metrics访问矩阵契约收口与后续路线规划.md`）：
-
-- **决策**：访问矩阵维持「任一认证用户可读」，修契约不收紧代码。依据：产品规范「approved user 可查看服务器」、Web 前端监控页对非 admin 开放、`MetricsControllerTests` 既有非 admin 200 断言、Controller `@Operation` description 本就写 "Authenticated users only"。
-- **范围核实**：以 SecurityConfig 全部规则为事实源对 7 个契约文件 58 个端点操作逐一交叉核对，不可达 403 恰好 5 处（`monitor-ticket` + metrics 面 4 个 GET），其余 53 处 403 与安全链一致。
-- **落地**：`openapi-server.json` 0.3.1 删除 5 处 403 响应（3a1716c）；两个 Controller 删除 5 处 `@ApiResponse` 403 注解行（5ca5a36）；新增 `MonitorTicketControllerTests` 2 例（非 admin 200 + 未认证 401）固化访问矩阵；门禁 `./mvnw test` 855/855、`openapi:check` 7/7 全绿。
-- **留痕**：修改前契约与代码备份于 `docs-SuMon/backup/20260916-批次6-访问矩阵契约收口/`（P1-契约 / P2-server / P3-docs）。
