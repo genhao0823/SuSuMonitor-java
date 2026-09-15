@@ -52,6 +52,7 @@ public class MetricsController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Latest metrics"),
             @ApiResponse(responseCode = "401", description = "Bearer JWT is missing, invalid, expired, or no longer authorized (40100)"),
+            @ApiResponse(responseCode = "403", description = "Authenticated user is not an admin (40300)"),
             @ApiResponse(responseCode = "404", description = "Server does not exist or has been deleted (40400)")
     })
     @GetMapping("/{id}/metrics/latest")
@@ -76,6 +77,7 @@ public class MetricsController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Latest top-process snapshot (90-second freshness window)"),
             @ApiResponse(responseCode = "401", description = "Bearer JWT is missing, invalid, expired, or no longer authorized (40100)"),
+            @ApiResponse(responseCode = "403", description = "Authenticated user is not an admin (40300)"),
             @ApiResponse(responseCode = "404", description = "Server does not exist, or no fresh process snapshot exists (40400)")
     })
     @GetMapping("/{id}/processes/latest")
@@ -102,6 +104,7 @@ public class MetricsController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Latest extended-resource snapshot (90-second freshness window)"),
             @ApiResponse(responseCode = "401", description = "Bearer JWT is missing, invalid, expired, or no longer authorized (40100)"),
+            @ApiResponse(responseCode = "403", description = "Authenticated user is not an admin (40300)"),
             @ApiResponse(responseCode = "404", description = "Server does not exist, or no fresh resource snapshot exists (40400)")
     })
     @GetMapping("/{id}/resources/latest")
@@ -128,6 +131,7 @@ public class MetricsController {
             @ApiResponse(responseCode = "200", description = "Metrics page"),
             @ApiResponse(responseCode = "400", description = "Invalid request parameter (40002)"),
             @ApiResponse(responseCode = "401", description = "Bearer JWT is missing, invalid, expired, or no longer authorized (40100)"),
+            @ApiResponse(responseCode = "403", description = "Authenticated user is not an admin (40300)"),
             @ApiResponse(responseCode = "404", description = "Server does not exist or has been deleted (40400)")
     })
     @GetMapping("/{id}/metrics")

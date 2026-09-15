@@ -37,7 +37,8 @@ public class MonitorTicketController {
     // 声明签发接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ticket issued"),
-            @ApiResponse(responseCode = "401", description = "Bearer JWT is missing, invalid, expired, or no longer authorized (40100)")
+            @ApiResponse(responseCode = "401", description = "Bearer JWT is missing, invalid, expired, or no longer authorized (40100)"),
+            @ApiResponse(responseCode = "403", description = "Authenticated user is not an admin (40300)")
     })
     @PostMapping("/monitor-ticket")
     public com.susumonitor.server.common.ApiResponse<MonitorTicketVo> issue(
