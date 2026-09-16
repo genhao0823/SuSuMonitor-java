@@ -141,9 +141,6 @@ SUSUMONITOR_METRICS_RETRY_INITIAL_SECONDS=2
 SUSUMONITOR_METRICS_RETRY_MAX_SECONDS=60
 SUSUMONITOR_METRICS_RETRY_JITTER_ENABLED=true
 SUSUMONITOR_METRICS_REPLAY_MIN_INTERVAL_MILLIS=2500
-# --- 数据采集开关(协议 v1.4/v1.5 可选快照,按需缩减上报面) ---
-SUSUMONITOR_PROCESS_TOP_N=10
-SUSUMONITOR_EXTENDED_RESOURCES=true
 ```
 
 关键配置项：
@@ -157,8 +154,6 @@ SUSUMONITOR_EXTENDED_RESOURCES=true
 | `SUSUMONITOR_HEARTBEAT_INTERVAL_SECONDS` | 心跳间隔，默认 30 秒，≥1 |
 | `SUSUMONITOR_RECONNECT_INITIAL_SECONDS` / `_MAX_SECONDS` | 重连退避初始 / 上限秒，max ≥ initial |
 | `SUSUMONITOR_LOG_LEVEL` | `info` / `debug` / `warn` / `error`，排障时用 `debug` 可见 `metrics sent/reported` |
-| `SUSUMONITOR_PROCESS_TOP_N` | 随 `metrics.report` 上报的 Top 进程条数（协议 v1.4 进程快照），默认 `10`，`0` 关闭，上限 `50`；进程名仅 OS 进程名，不含命令行 |
-| `SUSUMONITOR_EXTENDED_RESOURCES` | 多盘/多网卡扩展资源快照开关（协议 v1.5），**默认开启**；设 `0`/`false` 关闭。开启后 Agent 自动上报 `disks`/`nics` 可选快照，服务端仅保留 90 秒新鲜窗口的内存态最新快照 |
 | `SUSUMONITOR_TERMINAL_ENABLED` | 是否接受 Web 终端协议帧，默认 `false`。开启终端功能设 `true` |
 | `SUSUMONITOR_TERMINAL_SHELL` | PTY 启动 shell，须干净绝对路径，默认 `/bin/bash` |
 | `SUSUMONITOR_METRICS_BUFFER_PATH` | 未确认指标的持久化 FIFO 快照文件，断线或重启后按原顺序受控回放（含本地死信，v3 格式，v1/v2 自动迁移），默认 `/var/lib/susumonitor/metrics-buffer.json` |

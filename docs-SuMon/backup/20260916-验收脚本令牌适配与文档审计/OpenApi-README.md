@@ -8,8 +8,6 @@
 >
 > **漂移状态（2026-09-16，批次 6）**：`openapi-server.json` 升 0.3.1——`POST /api/ws/monitor-ticket` 与 `GET /api/servers/{id}/metrics/latest`、`/processes/latest`、`/resources/latest`、`/metrics` 五个 operation 删除不可达的 403「非 admin」声明（`SecurityConfig` 对上述路径仅要求 `authenticated()`，访问矩阵口径固化为「任一认证用户可读」，见 `Develop-log/20260916-批次6-访问矩阵契约收口.md`）；文件清单表路径/端点统计同步为实测值。
 >
-> **漂移状态（2026-09-16，批次 8）**：`openapi-auth.json` 升 0.3.0——新增公开端点 `GET /api/auth/bootstrap-status`（`BootstrapStatus{bootstrapPending}`）；`RegisterRequest` 增加可选 `bootstrapToken`（32-128 字符，writeOnly，不入 required——条件必填由服务端语义决定）；register responses 增加 403（40310 缺失令牌 / 40311 令牌无效，仅 `admin_initialized=0` 时出现）。合计统计 49→50 路径、58→59 端点操作。契约先行于实现（55ea1b9 → 2f9f124），见 `Develop-log/20260916-批次8-首管理员初始化令牌.md`。
->
 > 校验命令：`cd web-vue-SuMon && npm run openapi:check`（CI 友好，退出 0 表示 JSON 结构、`$ref` 与 Controller 路径/操作映射一致；不校验 DTO/VO 字段语义、security、响应头和前端类型）。
 >
 > 业务代码位置：`server-java-SuMon/src/main/java/com/susumonitor/server/module/**`（VO/DTO/Controller 是契约唯一来源）。
