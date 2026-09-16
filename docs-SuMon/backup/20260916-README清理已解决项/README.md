@@ -23,7 +23,7 @@
 | Android App | **阶段一+阶段二+Polish-7 已完整实现（2026-08-12）**：`app-kt-SuMon/`（Kotlin + Compose）登录/注册、服务器列表/详情/排序、实时指标（WS + OkHttp pingInterval 心跳）、告警记录（通知深链到告警 Tab）、DataStore 通知开关持久化、前台服务告警通知、SSH 终端（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl + **自研 ANSI 终端模拟器**：增量 CSI 解析/双屏/滚动回退/256 色/备用屏，支持 top/htop 类 TUI + **断线自动重连**：指数退避自动重开）；历史提交记录为 89 个单测，终端改动已随 `d8eb375` 提交收口，测试数需在新基线干净提交重新统计；云端全链路手测待真机 |
 | 云端部署 | HTTPS/WSS 生产入口与反向代理资产已具备；2026-07-31 的明文 HTTP 联调仅作为历史验收记录保留，禁止作为生产配置。后端 `18080`、RabbitMQ `5672` 仅供内网/回环访问，Agent 不监听入站端口。 |
 | 监控快照面 | 进程快照（v1.4）与磁盘/网卡资源快照（v1.5）三端已通：Agent 采集→`metrics.update` 捎带→REST latest（90 秒内存新鲜窗口、不落库）；后端 **853/853**、Agent 容器 test/vet 全绿。**2026-09-15 生产部署与真实链路验收**：新 jar（md5 `e1d8aad2`）已部署内网应用机（旧 jar 备份 `*.bak-20260915-pre-resources`），Flyway 36 迁移校验通过、5.2s 就绪；对 `https://genhaosan.online` 全链路 verify-resources **8/8**、verify-processes 回归 **7/7** 通过；Agent 三机心跳秒级恢复，旧版 Agent（tx4）兼容 404 符合协议。 |
-| 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、真实 SMTP 发送、Monitor 慢消费者 1011 背压、Android App 云端全链路手测、数据库异地备份定时调度（crontab）仍需外部环境；多 JVM 的 Agent/Monitor/Terminal 连接状态和事件广播仍未分布式化；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接为自研模拟器边界外。 |
+| 已知遗留 | 真实 Agent+Server 断网/重启/ACK 联合 E2E、真实 SMTP 发送、Monitor 慢消费者 1011 背压、Android App 云端全链路手测、数据库异地备份定时调度（crontab）仍需外部环境；多 JVM 的 Agent/Monitor/Terminal 连接状态和事件广播仍未分布式化。首管理员空库并发已于 2026-08-24 完成真实验收（conc=8 与 conc=20 通过，见 `Develop-plans/20260824-首管理员空库并发真实验收.md`）；Android 终端 vi 全指令集/DEC 私有光标样式/OSC 超链接为自研模拟器边界外。 |
 
 > 本节反映 2026-09-06 的当前仓库基线；下方带日期的“对齐说明”和“收口”段落均为历史记录（原文保留，当前值以本快照和 RC1 计划为准）。AI 只读诊断的详细实现状态与威胁模型见 `docs-SuMon/Protocol-SuMon/ai-data-flow-threat-model.md` 与 `docs-SuMon/Develop-plans/20260830-大模型只读诊断MVP开发计划.md` §八。
 
@@ -110,12 +110,52 @@ SuSuMonitor 是一套**前后端 + Agent 全栈**的服务器监控系统,主题
 
 ### 未验证（必须留痕，未来安排独立验证）
 
-1. **多 JVM 实例下 AFTER_COMMIT 事件跨实例推送** — `MonitorTicketService` / `AgentConnectionRegistry` / `MetricsCleanupService` 全部为单 JVM 内存状态。
+1. _(已通过：首管理员空库并发注册已于 2026-08-24 真实验收——独立空 MySQL schema 并发 8 与 20 均 PASS：全部注册成功、唯一 `admin/approved`、其余 `user/pending`、管理员可登录且 `/me` 返回 `admin/approved`、待审核用户登录 403、DB `auth_bootstrap_state` 已初始化并指向唯一管理员，见 `docs-SuMon/Develop-log/20260824-首管理员空库并发真实验收.md`)_
+2. _(已通过：真实 SSH `50003`/`50002` 分类已于 2026-07-25 通过 Apifox 受控 SSHD 真实验收，详见 `docs-SuMon/Develop-log/20260725-Apifox-SSH-50003-真实验收.md`、 `20260725-Apifox-SSH-50002-真实验收.md`)_
+3. _(历史记录：公网明文 HTTP 云端部署于 2026-07-31 跑通，**禁止执行/复用**；HTTPS/WSS 生产入口须按当前部署重新验收，见 `docs-SuMon/Handoff-SuMon/20260731-云端部署调试交接.md`)_
+4. **多 JVM 实例下 AFTER_COMMIT 事件跨实例推送** — `MonitorTicketService` / `AgentConnectionRegistry` / `MetricsCleanupService` 全部为单 JVM 内存状态。
+5. _(已通过：`Makefile:build-linux` 已补（B-007 关闭），`agent-go-SuMon/bin/susumonitor-agent-linux-amd64` 已交叉构建并在云端真实运行（明文 WS，2026-07-31 历史验收，**禁止复用**）；公网 HTTPS/WSS 长连接须按当前域名重新验证)_
+6. _(已通过：`PUT /api/servers/{id}/ssh/host-key` 首次确认/轮换已实现，通过 Apifox 9 用例 27 断言（2026-07-20）+ 前端真实浏览器联调（2026-07-29，B-038 收口）；"自动化强制校验"策略仍待评估)_
+7. _(已通过：spark line 已接真实 metrics 历史（Sprint 2/3 收口）；仅"SSH 测试历史卡"（`DashboardSshCard`）仍为占位，等待 SSH test history 接口)_
+8. _(已通过：前端已补齐 4 个未签端点契约封装并以真实浏览器联调收口（2026-07-29，B-038 关闭）；`openapi-system.json:info.title` 已补齐（B-037 关闭）)_
 
 ### 未实现（计划中或结构性缺口）
 
-1. **MVP-12~14 微服务拆分**仍规划中（对应能力已在单体内实现）。
-2. **WebSocket Origin 白名单策略**仍待评估（当前 WS 握手未做严格 Origin 校验）。
+1. _(已补齐：`server-java-SuMon/mvnw` + `mvnw.cmd`，2026-07-27 T5，`mvnw test` 326 全过)_
+2. _(已补齐：`server-java-SuMon/src/main/resources/application-prod.yml`，2026-07-27 T5)_
+3. ~~**Dockerfile / docker-compose** — 全仓 0 命中。~~（**已补齐 2026-08-05**：三端 Dockerfile + 根 `docker-compose.yml`；**镜像实机构建 2026-08-16 完成**：本机 WSL2 Docker 三镜像构建 + compose 全栈实跑验收 PASS，见 `docs-SuMon/Develop-log/20260816-Docker镜像实机构建.md`）
+4. _(已补齐：`server-java-SuMon/deploy/susumonitor-server.service`，2026-07-27 T5)_
+5. _(已补齐：`server-java-SuMon/deploy/nginx-susumonitor.conf.example` + `susumonitor-vhost.conf`，2026-07-27 T5，云端已生效)_
+6. ~~**数据库备份脚本** — `scripts/` 仅本地开发脚本。~~（**已补齐**：`server-java-SuMon/deploy/backup.sh`+`restore.sh`（2026-07-31）、`scripts/remote-backup.sh` 异地加密备份（2026-08-07）；crontab 定时调度仍未配置）
+7. _(已实现：2026-07-27 Sprint 0-7 收口，告警记录页 `/alerts/records`、告警规则页 `/alerts/rules`、菜单挂载、`alert.push` WS 消费；真实端到端链路 2026-07-28 验收通过)_
+8. _(已实现：T4 xterm.js 前端最小可用版本 2026-07-28，路由 `/terminal/:serverId`；T5 云端部署已验证（明文 HTTP，2026-07-28 历史记录，**禁止作为生产配置**）、T6 家庭 Linux 主机部署仍待验)_
+9. _(MVP-9 已于 2026-07-31 收口：性能基线 7 场景 PASS + 数据所有权收口 + RabbitMQ 契约冻结；MVP-10（2026-07-31）/MVP-11（2026-08-01）已收口；MVP-12~14 的微服务拆分仍规划中（对应能力已在单体内实现）)_
+10. _(已实现：**Android App 核心监控版 MVP** 2026-08-05，`app-kt-SuMon/`——登录/注册、服务器列表/详情、实时指标（WS）、告警记录、前台服务告警通知；`gradlew assembleDebug` + 18 单测全绿；云端全链路手测待设备，见 `Develop-log/20260805-Android-App-核心监控版MVP.md`)_
+11. _(限流 / CORS 已实现：`AgentConnectionLimiter` / `AgentMessageRateLimiter` / Monitor 背压 + `config/CorsConfig.java`；WebSocket Origin 白名单策略仍待评估)_
+
+### 部署资产缺口清单（必须在新分支中补齐后，才可上线公网）
+
+> 本表为 2026-07-25 快照；其中 6 项已于 T5（2026-07-27）补齐并云端实测，见"现状"列标注。
+
+| 缺口 | 现状 | 阻碍 |
+|---|---|---|
+| Maven Wrapper | ~~缺失~~ → **已补齐**（2026-07-27 T5，`server-java-SuMon/mvnw`） | CI / 跨机器构建可复现（`mvnw test` 326 全过） |
+| `application-prod.yml` | ~~缺失~~ → **已补齐**（2026-07-27 T5，`src/main/resources/application-prod.yml`） | 生产配置已就绪 |
+| Dockerfile + docker-compose | ~~缺失~~ → **已补齐**（2026-08-05）→ **实机构建完成**（2026-08-16，三镜像构建 + compose 全栈实跑 PASS） | compose 首跑调优已落地（healthcheck/TZ/JVM 内存/根 `.env.example`） |
+| Java systemd Unit | ~~缺失~~ → **已补齐**（2026-07-27 T5，`server-java-SuMon/deploy/susumonitor-server.service`） | 进程监管和优雅停机已就绪 |
+| 完整宝塔 Nginx 站点配置 | ~~缺失~~ → **已补齐**（2026-07-27 T5，`deploy/nginx-susumonitor.conf.example` + `susumonitor-vhost.conf`） | 历史明文 HTTP/WS 联调（2026-07-31）仅供追溯，**禁止作为生产配置**；生产入口使用 TLS 并按实际域名现场核验 |
+| 数据库备份脚本 | ~~缺失~~ → **已补齐**（`deploy/backup.sh`+`restore.sh`、`scripts/remote-backup.sh`） | crontab 定时调度未配置 |
+| `agent-go-SuMon/Makefile:build-linux` target | ~~缺失（B-007）~~ → **已补齐**（`Makefile:6`；`bin/susumonitor-agent-linux-amd64` 已实测 + 云端真实运行） | Linux 二进制可构建 |
+| `ssh_host_key_fingerprint` 自动化 | V8 字段 + `PUT /api/servers/{id}/ssh/host-key` 接口已实现并通过 Apifox 9 用例 27 断言（2026-07-20）+ 前端真实浏览器联调（2026-07-29） | SSH 测试已闭环；终端已接入 xterm.js（T4，2026-07-28） |
+
+### 文档与代码事实不一致项（本次对齐已修正或留痕）
+
+| 项 | 修订 |
+|---|---|
+| JWT 有效期 24 vs 72 小时 | 以配置键 `susumonitor.jwt.expire-hours`（默认 72）与 `AppProperties.java` 为准；同步 `.env.example` 与 `本机开发环境配置.md` |
+| `ErrorCode:50003` 语义 | 代码 `ErrorCode.java:25` 为 `SSH_AUTHENTICATION_FAILED`；`项目需求与规范.md:176` 早期写为 `agent offline`，以代码为准 |
+| `openapi-system.json:info.title` | 已补齐（B-037 关闭，2026-07-29） |
+| 6 个 OpenAPI 端点缺失 | 已收口（B-038 关闭，2026-07-29：前端 4 端点契约封装 + 真实浏览器联调） |
 
 ## 技术栈
 
@@ -267,8 +307,18 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 
 ## 后续计划
 
-- **路线**:批次化路线与待办清单见 `docs-SuMon/Develop-plans/20260916-批次6-metrics访问矩阵契约收口与后续路线规划.md` §六（外部环境依赖项与架构演进项均在此留档）。
+- **后端**:~~管理员批量审核 / 用户搜索接口~~（**Sprint 5+ 已完成 2026-08-02**：pending 分页+keyword 搜索 + batch-approve/reject，openapi-admin 3→5 端点，见 `Develop-log/20260802-Sprint5-用户管理增强与逃逸窗口控件.md`）
+- **前端**:~~Sprint 5+（搜索 / 批量审核）~~（**已完成 2026-08-02**：用户审核页远端搜索/分页/批量选择 + 状态 Tabs + 批量失败明细 + 告警逃逸窗口 confirm_count 控件，vitest 118 全绿）；剩余候选：按状态管理增强、ECharts 图表能力增强、T4 Web SSH 终端增强
+- **隔离环境验收**（**已完成 2026-08-02**）：verify-mvp11（C1-C4 + 失败留痕 DB 断言）、verify-admin-batch（18 项）、verify-go-agent-reconnect（6 checks）、verify-mvp11-broker-down（B1-B7）四脚本全 PASS；RabbitMQ 凭据仅通过验证环境变量注入，本文不记录口令，见 `Develop-log/20260802-隔离环境端到端验收.md`
+- **Agent 指标可靠投递**（**M1-M4 已完成 2026-08-05**）：M1 Server `metrics.ack` 入口确认 + M2 Agent 完整帧持久化 FIFO + M3 同 UUID 断线/ACK 超时重传、指数退避/equal jitter、积压重放节流 + **M4** Server 永久拒绝分类 `metrics.nack`（invalid_metrics_payload / stale_collected_at / server_not_found）、Agent 本地持久化死信（snapshot v3，v1/v2 自动迁移）、心跳投递遥测（pending/bytes、oldest、drop、dead-letter）→ Flyway V19 → 状态接口 → 服务器详情页展示；loopback fixture 15 项 PASS，真实 Agent + Java/MySQL 独立 schema 场景仍需使用临时验证凭据运行；队列字节上限已在当前代码中支持，见 `Develop-log/20260805-Agent指标可靠投递（NACK死信与投递遥测）.md`
 - **协作**:在 GitHub 上创建 PR / 提 issue
+- **Polish-6 三端收尾**（**已完成 2026-08-07**，commit `75b41e5`→`29effc0`）：HTTPS 迁移后 agent 配置核对与全库明文 URL 清扫；Android 告警通知深链到告警 Tab / 通知开关 DataStore 持久化（前台服务联动）/ 服务器列表排序选择器 / WS 半开连接检测（OkHttp pingInterval）/ 终端基础增强（实际尺寸 resize + 功能键行 + 物理键盘 Ctrl）；数据库异地备份脚本 `scripts/remote-backup.sh`（云端备份→拉回→AES-256 加密落盘，含 backup.sh CRLF 修复）；Web 告警通知投递历史详情弹窗（新增 `GET /api/alerts/records/{id}/notifications`，OpenAPI alert 6→7 端点）；顺带恢复 Web lint 零警告基线。详见 `docs-SuMon/Develop-plans/20260807-Polish-6-三端全面收尾.md` 与各模块 Dev-log（`20260807-Polish6-M*.md`）
+- **Polish-7 遗留收尾**（**已完成 2026-08-12**，commit `c2672c8`→收口）：20260810 WIP checkpoint（SSH 测试历史 V23 / 主机密钥一键信任 / 超时分类 50400 / Swagger 放行）；SSH 测试历史保留期清理（V24 + CleanupService/Scheduler）；Android 自研 ANSI 终端模拟器（增量 CSI 解析/双屏/滚动回退/256 色/备用屏 + 逐格渲染）；Android 终端断线自动重连（指数退避重开 + UI 提示）；Agent metrics.nack 有限重试（retriable_server_error + snapshot v3 持久化预算）；告警消费多消费者并发（本地 broker 验收：并发 4 消费 100 条零重复 + DLQ 分类正确）。详见 `docs-SuMon/Develop-plans/20260812-Polish-7-遗留收尾.md` 与各模块 Dev-log（`20260812-Polish7-M*.md`）
+- **RabbitMQ 告警事件全链路 + 终端断线中继 + 运维收口**（**已完成 2026-08-13~16**）：
+  - 终端断线中继增强（08-13/14）：Agent 断开时 Java 中继推送服务端生成的 `terminal.closed(agent_disconnected)`；WSL 真实 E2E 验收 `TERMINAL_FLOW_CONTROL_INTEGRATION_OK`（`20260813-M1-终端断线中继增强.md`、`20260814-终端断线中继E2E验收.md`）
+  - 心跳超时终端收口修复（08-15）：90s 心跳超时路径同样收口中继（先收口再移除注册表），`AGENT_HEARTBEAT_TIMEOUT_SECONDS` 参数化，WSL E2E 验收（`20260815-心跳超时终端收口修复.md`）
+  - alert.resolved.v1 恢复事件链路（08-15）：V26 `resolved_at` 落库 + Outbox 发布 + `alert-resolved-notifier` 幂等消费驱动恢复通知 + WS 推送，真实 broker 验收 11/11（`20260815-alert.resolved恢复事件链路.md`）
+  - 运维收口（08-15/16）：V27 通知投递保留期清理（默认开启 90 天）+ Outbox 已发布清理默认开启 + poll 默认对齐 200ms，550/550 单测 + 19/19 真实 MySQL IT（`20260815-运维收口-通知清理与配置一致性.md`）
 
 ## 协议 / 工具
 
@@ -284,13 +334,42 @@ go build -o susumonitor-agent ./cmd/susumonitor-agent
 - 真实 Agent→Server 断网/重启/ACK 联合 E2E、真实 SMTP 发送、Monitor 1011 慢消费者背压和 Android 真机云端联调仍需外部环境。
 - 多 JVM 下的连接注册表、订阅和终端中继仍未完成分布式化；数据库异地备份脚本已有，crontab 调度仍未配置。
 - JWT 默认有效期 72h 且无 refresh 机制：Redis 未启用时登出为无状态空操作（token 到期前无法吊销）。为兼顾无 refresh 下的使用体验暂不缩短默认值，部署方可经 `JWT_EXPIRE_HOURS` 调低并启用 `REDIS_ENABLED=true` 获得真实吊销能力。
+- ~~首用户注册即管理员（先到先得）~~ **已由批次 8 根治（2026-09-16）**：首管理员未初始化时注册必须携带一次性初始化令牌（`AUTH_BOOTSTRAP_TOKEN` 或启动日志横幅投递，AES-256-GCM 密文落库、消费即作废；缺失 40310/无效 40311），详见部署手册 §五点五与 `Develop-log/20260916-批次8-首管理员初始化令牌.md`。
 - 详细文档对齐性检查与修正记录：见 `docs-SuMon/Develop-log/20260824-首管理员空库并发真实验收.md` 和 `docs-SuMon/OpenApi-SuMon/README.md`。
 
-## 当前待解决问题（2026-09-16 对照 main 基线）
+## 当前待解决问题（2026-08-29 对照 main 安全审计后基线）
 
-仅保留未关闭项；历史缺陷与安全审计修复的完整清单按日期归档于 `docs-SuMon/Bug-fix/`（另有开发日志逐批留痕），不在本文件罗列。
+以下问题为本轮文档对齐与安全审计时对照代码确认的现状。**第 1-9、12 项已于 2026-08-28 修复，第 13 项于 2026-08-29 安全审计修复**，第 10、11 项为安全默认/结构性边界，按“代码最小修复+文档标注”处理：
 
-1. **SSH 出站默认拒绝所有目标（安全默认，保留）**：`SSH_ALLOWED_CIDRS` 默认空，未显式配置时 SSH 测试/主机指纹观察全部返回 `40301`（`application.yml:106`）。部署时必须显式配置 CIDR，属安全默认而非缺陷。
-2. **`commands` 表未接入业务（遗留结构，保留）**：V4 迁移仅建表，未发现对应 API/Service；不新增清理迁移以免破坏已应用迁移历史。
+1. ~~**告警评估异常被吞**~~ **已修复**：`AlertEvaluationServiceImpl` 不再吞单规则异常，异常向上传播使消费事务回滚并重试/DLQ（`AlertEvaluationServiceImpl.java:70-77`）。
+2. ~~**告警事件 `load`/`load_avg` 契约断裂**~~ **已修复**：`AlertMetric.toEventMetric()` 将规则 `load` 映射为事件 `load_avg`，触发/恢复工厂均使用映射（`AlertTriggeredEnvelopeFactory.java`、`AlertResolvedEnvelopeFactory.java`）。
+3. ~~**Metrics `collected_at` 未严格校验 UTC**~~ **已修复**：`MetricsServiceImpl.validatePayload` 拒绝非 UTC offset（`MetricsServiceImpl.java:165-171`）。
+4. ~~**Web 指标历史默认分页超限**~~ **已修复**：前端 `getMetricsHistory` 默认 `page_size=100`，与后端 `@Max(100)` 一致（`web-vue-SuMon/src/api/metrics.ts`）。
+5. ~~**Web PUT 服务器更新与后端全量契约不一致**~~ **已修复**：`UpdateServerRequest` 基础字段改必填，`ServerFormDialog` 提交完整基础字段并在切换认证方式时强制新主凭据（`web-vue-SuMon/src/types/api.d.ts`、`ServerFormDialog.vue`）。
+6. ~~**Web 错误码常量缺失**~~ **已修复**：前端 `error-code.ts` 补 `42905/50301/50302`。
+7. ~~**Web 告警记录缺 `resolved_at`**~~ **已修复**：`AlertRecord`/`AlertPushAlert` 增加 `resolved_at: string | null`。
+8. ~~**Web 服务器排序缺 `status`**~~ **已修复**：`ServerQuery` 类型与 `ServerListView` URL 恢复白名单加入 `status`。
+9. ~~**Go Agent UUID fallback 不符合 RFC 4122**~~ **已修复**：`crypto/rand` 失败时 fallback 仍产出合法 UUID v4（`agent-go-SuMon/internal/wsclient/message.go`），并拒绝带路径的 backend URL（`config.go`）。
+10. **SSH 出站默认拒绝所有目标（安全默认，保留）**：`SSH_ALLOWED_CIDRS` 默认空，未显式配置时 SSH 测试/主机指纹观察全部返回 `40301`（`application.yml:106`）。部署时必须显式配置 CIDR，属安全默认而非缺陷。
+11. **`commands` 表未接入业务（遗留结构，保留）**：V4 迁移仅建表，未发现对应 API/Service；不新增清理迁移以免破坏已应用迁移历史。
+12. ~~**Android 后端地址硬编码 / WS 超时未关旧连接**~~ **已修复**：`Constants.kt` 改读 `BuildConfig`（构建时可覆盖），`WsClient.connectOnce` 超时后显式 `cancel()` 旧连接（`app-kt-SuMon`）。
+13. **2026-08-29 安全审计收尾（本批修复）**：
+    - ~~**WebSocket 终端通道越权**~~ **已修复**：`terminal.*` 帧仅 admin 可发，普通用户回 `40302` 且保留连接（`MonitorWebSocketHandler`），与 REST 面 SSH admin-only 策略一致。
+    - ~~**告警规则通知渠道泄露**~~ **已修复**：`GET /api/alerts/rules` 对非 admin 脱敏 `notify_email/notify_dingtalk/notify_webhook`（`AlertRuleServiceImpl.toVo(exposeNotify)`）。
+    - ~~**注册接口无限流**~~ **已修复**：新增独立 `RegisterRateLimiter`（内存/Redis 双实现，`REGISTER_LIMIT_MAX_ATTEMPTS` 默认 60/60s，兼容首管理员并发验收上限 20）。
+    - ~~**Swagger 生产公开放行**~~ **已修复**：`application-prod.yml` 关闭 springdoc api-docs/swagger-ui。
+    - ~~**Redis 无认证**~~ **已修复**：compose redis 加 `--requirepass ${REDIS_PASSWORD:-}`，server 注入 `SPRING_REDIS_PASSWORD`，`.env.example` 注明 REDIS_ENABLED=true 时必填。
+    - ~~**HTTP-only 反代配置**~~ **已加固**：`deploy/susumonitor-vhost.conf` 顶部显著警告 + HTTPS/WSS 模板与 301 跳转示例，公网生产禁用明文版本。
+    - ~~**logback 无条件 DEBUG**~~ **已修复**：`com.susumonitor.server: DEBUG` 限定 `springProfile local`。
+    - ~~**Spring Boot 3.4.7 偏旧**~~ **已升级**：3.4.13（Spring Framework 6.2.13，覆盖 CVE-2025-35249/35250），603 单测全绿。
+    - ~~**Android JWT 明文存储 / 备份泄露**~~ **已修复**：token 经 Android Keystore AES-GCM 加密落盘（`TokenCipher`，旧明文自动兼容），`allowBackup=false`。
+    - ~~**Android 401 竞态误登出**~~ **已修复**：仅当本地 token 未变时才清会话，WS 升级请求 401 不触发登出（`AuthInterceptor`）。
+    - ~~**Android 杂项**~~ **已修复**：WsClient 订阅集改 `CopyOnWriteArraySet`、通知 ID 改原子自增、release 开启 R8、设置页版本号读 `BuildConfig`、注册密码不一致提示、折线图 O(n²)、删死代码、`stopSelf`、登出先清本地、终端缓冲提升至 ViewModel（旋转不清屏）。
+    - ~~**api-test / 文档密码残留**~~ **已清理**：3 个 mjs 脚本密码改必填环境变量，Develop-log 中 `732682` 全部替换为 `<REDACTED>`。
+    - ~~**Go ACK/NACK 载荷校验与快照 UTC 校验**~~ **已修复**：见 websocket-protocol.md 第 5/6 项。
 
-> 上方带日期的历史收口段落与快照仅作留痕，不代表当前待办；历史命令和临时公网配置禁止直接执行。
+另：`api-e2e-test.mjs` 已改用当前 `/api/admin/users?status=pending` 端点并把 pending 登录断言修正为 HTTP 403/40300；首管理员验收端口已统一为 18183；`local-mysql-init.sql` 密码已脱敏为占位符；`AuthControllerTests` 时间炸弹测试已修复。
+
+> 以上编号仅用于本文件内部引用；修复优先级见 `docs-SuMon/Develop-plans/` 后续规划。
+
+> 下方带日期的收口段落是历史记录，不代表当前待办；历史命令和临时公网配置禁止直接执行。
