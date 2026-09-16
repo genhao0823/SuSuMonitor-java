@@ -11,7 +11,7 @@
 
 | 项 | 状态 / 值 |
 |---|---|
-| GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-jvav-> |
+| GitHub 仓库 | <https://github.com/genhao0823/SuSuMonitor-java> |
 | 当前基线 | `main @ ce68d79`（2026-09-16；ce68d79 为批次 8 验收链路适配修复——api-test 空库首管理员验收/兜底注册补齐一次性令牌（40310），见 `Bug-fix/2026-09-16-first-admin-scripts-bootstrap-40310.md`；此前基线 2f9f124（2026-09-16）覆盖批次 8 首管理员一次性初始化令牌 2f9f124（契约 55ea1b9 0.3.0 先行）；此前基线 5ca5a36（2026-09-16）覆盖批次 6 metrics 面访问矩阵契约收口 3a1716c(契约 0.3.1)→5ca5a36(server 修约+测试固化)；此前基线 cf93816（2026-09-15）覆盖批次 4 多盘/多网卡资源下钻三端 db464e8(契约 v1.5)→3137e68(agent)→5528a2e(server)→57ed0ae(web)→cf93816(api-test)、批次 5 M3 门禁评审文档 a12a378、批次 2 联调 UX 修复 509a193、批次 3 L2 变更类模板 d106674、M2 观察期评审报告 45f508b、进程级监控、安全加固与全功能联调 0914 批次） |
 | 契约与访问矩阵 | **批次 6（2026-09-16）**：openapi-server 0.3.1——`monitor-ticket` 与 `metrics/latest`、`processes/latest`、`resources/latest`、`metrics` 历史五个端点删除不可达的 403「非 admin」响应声明（七日审计留痕的「需专项决策」项已拍板：维持「任一认证用户可读」口径，修契约不收紧代码）；新增 `MonitorTicketControllerTests` 2 例固化访问矩阵（非 admin 200 + 未认证 401）；全量契约 **49 路径 / 58 端点操作**与 Java Controller 1:1 对齐（openapi:check 7/7）；后端 `./mvnw test` **855/855** 全绿；修改前文件全部备份至 `docs-SuMon/backup/20260916-批次6-访问矩阵契约收口/` |
 | MySQL IT 隔离库复跑 | **批次 7（2026-09-16）**：一次性 `mysql:8.4.11` 隔离容器（回环 13307，随机凭据仅环境变量传递不落盘，收口即销毁）全量复跑 `**/*IT.java`——11 个 IT 类 **55/55 全绿（0 Failures 0 Errors 0 Skipped）**，surefire 单测同轮 **855/855**，Flyway **36 个迁移（V1→V36）全部 success=1**、业务表 23 张；首轮暴露 11 红（3F+8E）经归因全部为 **IT 测试侧欠账**（V33 NOT NULL 审计列实体缺省 / ODKU 返回值 H2 语义 / TINYINT(1) 驱动布尔映射 / 聚合断言与软删排除及窗口语义自相矛盾），产品代码零缺陷，修复后全量复跑全绿——详见 `docs-SuMon/Bug-fix/2026-09-16-mysql-it-四类欠账修复.md` 与 `Develop-log/20260916-批次7-隔离库IT复跑.md`；修改前 IT 文件与 README 备份至 `docs-SuMon/backup/20260916-批次7-隔离库IT复跑/`（含 SHA-256 manifest）；第 20 行 AI 条目内「45 例待隔离库复跑」为 2026-09-07 历史快照，已由本批全量收口 |
