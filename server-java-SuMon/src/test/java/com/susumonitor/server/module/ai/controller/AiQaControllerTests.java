@@ -73,7 +73,6 @@ class AiQaControllerTests {
     @Autowired
     private MockMvc mockMvc;
 
-    // 替代问答编排服务，仅验证 HTTP 与安全契约。
     @MockitoBean
     private AiQaService aiQaService;
 

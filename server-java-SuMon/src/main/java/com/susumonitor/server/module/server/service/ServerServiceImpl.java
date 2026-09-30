@@ -27,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 管理服务器基础信息、SSH 凭据密文、分页读取、软删除和状态快照。
  */
-// 将当前类注册为 Spring Service Bean，作为服务器管理业务和事务边界。
 @Service
 public class ServerServiceImpl implements ServerService {
 

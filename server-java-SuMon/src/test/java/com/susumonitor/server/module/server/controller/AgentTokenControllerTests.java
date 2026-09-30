@@ -53,11 +53,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** 验证 Agent Token 管理接口的管理员权限、参数校验和一次性响应契约。 */
-// 激活测试配置，避免读取本机敏感配置。
 @ActiveProfiles("test")
-// 只加载 Agent Token Controller 所需的 MVC 测试切片。
 @WebMvcTest(AgentTokenController.class)
-// 引入真实安全链、请求追踪和统一异常映射，验证完整 HTTP 边界。
 @Import({SecurityConfig.class, SecurityErrorHandler.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 class AgentTokenControllerTests {
 
@@ -67,19 +64,15 @@ class AgentTokenControllerTests {
     private static final String ADMIN_BEARER = "Bearer " + ADMIN_TOKEN;
     private static final String USER_BEARER = "Bearer " + USER_TOKEN;
 
-    // 注入 MockMvc，通过真实 MVC 和安全过滤器链调用目标接口。
     @Autowired
     private MockMvc mockMvc;
 
-    // 隔离 Agent Token 业务和数据库，仅验证 Controller 契约。
     @MockitoBean
     private AgentTokenService agentTokenService;
 
-    // 提供可控 JWT 解析结果，覆盖管理员和普通用户场景。
     @MockitoBean
     private JwtTokenService jwtTokenService;
 
-    // 提供认证用户回查替身，避免连接数据库。
     @MockitoBean
     private UserMapper userMapper;
 
@@ -143,7 +136,6 @@ class AgentTokenControllerTests {
     private OutboxMapper outboxMapper;
     @MockitoBean
     private ConsumeRecordMapper consumeRecordMapper;
-
 
 
     /** 验证管理员可注册和轮换 Token，明文仅出现在这两个一次性响应中。 */

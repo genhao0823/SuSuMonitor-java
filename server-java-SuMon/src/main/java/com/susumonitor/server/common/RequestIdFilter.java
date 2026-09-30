@@ -16,7 +16,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * 为每个请求生成可信请求 ID，并安全透传可选的客户端关联 ID。
  */
-// 将过滤器注册为 Spring Bean，使所有 HTTP 请求统一执行追踪逻辑。
 @Component
 // 让追踪信息先于 Spring Security 建立，确保 401 和 403 响应也包含请求 ID。
 @Order(Ordered.HIGHEST_PRECEDENCE)

@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
  * 与本次比较的局部变量中；严禁写入请求日志、审计记录或任何响应体。
  * 存储形态为 AES-256-GCM 密文（AAD 绑定系统维度固定上下文），明文永不落库。</p>
  */
-// 将令牌服务注册为 Spring Bean，供注册事务与启动装配器注入。
 @Slf4j
 @Service
 public class BootstrapTokenServiceImpl implements BootstrapTokenService {

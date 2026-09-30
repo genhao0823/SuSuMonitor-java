@@ -39,7 +39,6 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>所有认证接口统一以 /api/auth 为路径前缀，通过 UserService 完成认证业务。</p>
  */
-// 将认证接口归入 OpenAPI 文档的 auth 分组，与 openapi-auth.json 契约的 tag 一致。
 @Tag(name = "auth", description = "Authentication and registration")
 @Slf4j
 @RestController
@@ -74,7 +73,6 @@ public class AuthController {
      * @param httpRequest HTTP 请求（解析客户端 IP）
      * @return 当前用户公开信息
      */
-    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-auth.json 0.3.0 的 registerUser 操作对齐。
     @Operation(
             summary = "Register user",
             description = "Registers a user. When the system still awaits its first admin "
@@ -87,7 +85,6 @@ public class AuthController {
                     + "a valid X-Correlation-ID is echoed in the response. "
                     + "A rate-limited client receives HTTP 429 with code 42905.",
             operationId = "registerUser")
-    // 声明注册接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "User registered"),
             @ApiResponse(responseCode = "400", description = "Invalid request parameter (40002)"),
@@ -120,7 +117,6 @@ public class AuthController {
      *
      * @return 首管理员初始化状态
      */
-    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-auth.json 0.3.0 的 getBootstrapStatus 操作对齐。
     @Operation(
             summary = "Bootstrap status",
             description = "Public endpoint returning whether the system still awaits its first admin. "
@@ -130,7 +126,6 @@ public class AuthController {
                     + "AUTH_BOOTSTRAP_TOKEN environment variable. After the first admin exists, "
                     + "registration no longer requires the token.",
             operationId = "getBootstrapStatus")
-    // 声明状态查询接口的响应（公开端点无认证失败语义），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Bootstrap status snapshot")
     })
@@ -153,14 +148,12 @@ public class AuthController {
      * @param response HTTP 响应，用于禁止缓存敏感 Token
      * @return 登录结果
      */
-    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-auth.json 的 loginUser 操作对齐。
     @Operation(
             summary = "Login",
             description = "Authenticates credentials and returns a JWT for approved users. "
                     + "Cache-Control: no-store is set on the response. "
                     + "A rate-limited client receives HTTP 429 with code 42905 and Retry-After.",
             operationId = "loginUser")
-    // 声明登录接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Login successful"),
             @ApiResponse(responseCode = "400", description = "Invalid request parameter (40002)"),
@@ -191,15 +184,12 @@ public class AuthController {
      * @param authenticatedUser 当前认证用户
      * @return 当前用户信息
      */
-    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-auth.json 的 getCurrentUser 操作对齐。
-    // 需要 Bearer JWT，声明 security 使 Swagger UI 标记为需要认证。
     @Operation(
             summary = "Current user",
             description = "Returns the latest database snapshot of the authenticated user. "
                     + "The server re-queries the database on every call.",
             operationId = "getCurrentUser",
             security = @SecurityRequirement(name = "bearerAuth"))
-    // 声明当前用户接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Current user snapshot"),
             @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)")
@@ -219,8 +209,6 @@ public class AuthController {
      * @param request HTTP 请求（读取过滤器放置的 ParsedToken）
      * @return data 为 null 的统一成功响应
      */
-    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-auth.json 的 logoutUser 操作对齐。
-    // 需要 Bearer JWT，声明 security 使 Swagger UI 标记为需要认证。
     @Operation(
             summary = "Logout",
             description = "Bearer-authenticated logout. When Redis is enabled, the current JWT jti "
@@ -232,7 +220,6 @@ public class AuthController {
                     + "and logs a warning (the token stays valid until natural expiry).",
             operationId = "logoutUser",
             security = @SecurityRequirement(name = "bearerAuth"))
-    // 声明登出接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Logout acknowledged"),
             @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)"),

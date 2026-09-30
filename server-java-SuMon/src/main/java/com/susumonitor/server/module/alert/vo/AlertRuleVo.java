@@ -15,7 +15,6 @@ import lombok.Data;
  * <p>server/snake_case 字段名与服务器模块一致。
  * 时间字段转为 UTC ISO-8601 输出。</p>
  */
-// 类级 @Schema 描述告警规则模型，供 springdoc 生成响应模型说明。
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "告警规则")

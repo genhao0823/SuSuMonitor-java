@@ -60,14 +60,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import javax.sql.DataSource;
 
-// 启用 Spring Boot 测试上下文和 MockMvc，验证注册 Controller 的 HTTP 行为。
 @ActiveProfiles("test")
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
                 + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"
 })
-// 启用 MockMvc，使测试无需启动真实 HTTP 端口即可调用 Controller。
 @AutoConfigureMockMvc
 class AuthControllerTests {
 
@@ -77,7 +75,6 @@ class AuthControllerTests {
     @Autowired
     private ObjectMapper objectMapper;
 
-    // 使用模拟 UserService，隔离 Controller 测试与数据库和业务实现的依赖。
     @MockitoBean
     private UserService userService;
 
@@ -147,7 +144,6 @@ class AuthControllerTests {
     @MockitoBean
     private PlatformTransactionManager transactionManager;
 
-    // 提供 JWT 服务替身，使安全过滤器测试可控制 Token 解析结果。
     @MockitoBean
     private JwtTokenService jwtTokenService;
 
@@ -165,7 +161,6 @@ class AuthControllerTests {
     private OutboxMapper outboxMapper;
     @MockitoBean
     private ConsumeRecordMapper consumeRecordMapper;
-
 
 
     @Test

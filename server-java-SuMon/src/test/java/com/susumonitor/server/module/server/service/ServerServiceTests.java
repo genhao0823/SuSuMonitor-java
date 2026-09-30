@@ -48,11 +48,9 @@ import org.springframework.dao.DuplicateKeyException;
 /**
  * 验证服务器 Service 的凭据状态机、分页、异常映射和安全响应边界。
  */
-// 启用 Mockito 扩展，隔离数据库和真实 AES 加密实现。
 @ExtendWith(MockitoExtension.class)
 class ServerServiceTests {
 
-    // 使用 Mapper 替身精确验证数据访问参数和异常分支。
     @Mock
     private ServerMapper serverMapper;
 

@@ -8,7 +8,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * 注册安全相关的 Spring Bean，提供密码编码器等安全组件。
  */
-// 将当前类注册为 Spring 配置类，使其中的 @Bean 方法生效。
 @Configuration
 public class SecurityBeansConfig {
 

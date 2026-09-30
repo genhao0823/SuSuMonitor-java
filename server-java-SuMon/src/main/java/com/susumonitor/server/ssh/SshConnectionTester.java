@@ -35,7 +35,6 @@ import org.springframework.stereotype.Component;
 /**
  * 使用 sshj 完成受限出站 SSH 握手、严格主机公钥校验和凭据认证。
  */
-// 将 SSH 网络组件注册为 Spring Bean，并集中执行连接资源限制。
 @Component
 public class SshConnectionTester implements AutoCloseable {
 

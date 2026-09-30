@@ -28,17 +28,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * 验证管理员审核状态机、分页搜索与批量审核分支。
  */
-// 启用 Mockito 扩展，为测试创建 Mapper 替身。
 @ExtendWith(MockitoExtension.class)
 class AdminUserServiceTests {
 
-    // 隔离真实数据库，精确验证审核业务分支。
     @Mock
     private UserService userService;
 
     private AdminUserService adminUserService;
 
-    // 在每个测试前创建管理员服务。
     @BeforeEach
     void setUp() {
         adminUserService = new AdminUserServiceImpl(userService);

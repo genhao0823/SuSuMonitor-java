@@ -50,11 +50,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** 验证 Monitor ticket 签发接口的访问矩阵：任一认证用户可签发，未认证请求被安全链拦截。 */
-// 激活测试配置，避免读取本机敏感配置。
 @ActiveProfiles("test")
-// 只加载 Monitor Ticket Controller 所需的 MVC 测试切片。
 @WebMvcTest(MonitorTicketController.class)
-// 引入真实安全链、请求追踪和统一异常映射，验证完整 HTTP 边界。
 @Import({SecurityConfig.class, SecurityErrorHandler.class, RequestIdFilter.class, GlobalExceptionHandler.class})
 class MonitorTicketControllerTests {
 
@@ -62,19 +59,15 @@ class MonitorTicketControllerTests {
     private static final String USER_BEARER = "Bearer " + USER_TOKEN;
     private static final String AUTHORIZATION = "Authorization";
 
-    // 注入 MockMvc，通过真实 MVC 和安全过滤器链调用目标接口。
     @Autowired
     private MockMvc mockMvc;
 
-    // 隔离 ticket 签发业务，仅验证 Controller 契约与访问矩阵。
     @MockitoBean
     private MonitorTicketService monitorTicketService;
 
-    // 提供可控 JWT 解析结果，覆盖认证场景。
     @MockitoBean
     private JwtTokenService jwtTokenService;
 
-    // 提供认证用户回查替身，避免连接数据库。
     @MockitoBean
     private UserMapper userMapper;
 

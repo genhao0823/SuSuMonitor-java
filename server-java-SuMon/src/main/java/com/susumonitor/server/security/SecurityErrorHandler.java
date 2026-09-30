@@ -19,9 +19,7 @@ import org.springframework.stereotype.Component;
 /**
  * 将 Spring Security 的认证和授权失败转换为项目统一 JSON 响应。
  */
-// 将处理器注册为 Spring Bean，供过滤器和安全配置共享。
 @Component
-// 自动生成 ObjectMapper 构造注入方法。
 @RequiredArgsConstructor
 public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
 

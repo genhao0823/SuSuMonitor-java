@@ -6,7 +6,6 @@ import java.time.OffsetDateTime;
 /**
  * 健康检查响应 VO，包含应用存活状态、应用名称和时间戳。
  */
-// 类级 @Schema 描述健康检查结果模型，供 springdoc 生成响应模型说明。
 @Schema(description = "健康检查结果（仅存活状态，不依赖数据库）")
 public class HealthStatusVo {
 

@@ -11,7 +11,6 @@ import org.apache.ibatis.annotations.Param;
 /**
  * 访问服务器持久化数据，并统一限制业务操作只能作用于未软删除记录。
  */
-// 将当前接口注册为 MyBatis Mapper，使 Spring 能够注入服务器数据访问实现。
 @Mapper
 public interface ServerMapper extends BaseMapper<ServerEntity> {
 
@@ -22,7 +21,6 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return 插入行数
      */
     int insertServerBase(
-            // 将服务器记录绑定到 XML 的 server 参数，并承接自增主键回写。
             @Param("server") ServerEntity server);
 
     /**
@@ -35,13 +33,9 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return 更新行数
      */
     int updateCredentialCiphertexts(
-            // 将服务器 ID 绑定到 XML 的 serverId 参数。
             @Param("serverId") Long serverId,
-            // 将 SSH 密码密文绑定到 XML 的 sshPasswordEncrypted 参数。
             @Param("sshPasswordEncrypted") String sshPasswordEncrypted,
-            // 将 SSH 私钥密文绑定到 XML 的 sshPrivateKeyEncrypted 参数。
             @Param("sshPrivateKeyEncrypted") String sshPrivateKeyEncrypted,
-            // 将 SSH 私钥口令密文绑定到 XML 的 sshPrivateKeyPassphraseEncrypted 参数。
             @Param("sshPrivateKeyPassphraseEncrypted") String sshPrivateKeyPassphraseEncrypted);
 
     /**
@@ -59,7 +53,6 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
     List<ServerEntity> selectActiveServers(
             // 承载分页参数与回写的 total，由分页拦截器消费。
             IPage<ServerEntity> page,
-            // 将搜索关键词绑定到 XML 的 keyword 参数。
             @Param("keyword") String keyword,
             // 将排序字段标识绑定到 XML 的 sortBy 参数，XML 仅通过固定分支使用该值。
             @Param("sortBy") String sortBy,
@@ -73,7 +66,6 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return 有效服务器，不存在时返回 null
      */
     ServerEntity selectActiveServerById(
-            // 将服务器 ID 绑定到 XML 的 serverId 参数。
             @Param("serverId") Long serverId);
 
     /**
@@ -91,7 +83,6 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return 可供内部更新的有效服务器，不存在时返回 null
      */
     ServerEntity selectActiveServerWithCredentialsById(
-            // 将服务器 ID 绑定到 XML 的 serverId 参数。
             @Param("serverId") Long serverId);
 
     /**
@@ -101,7 +92,6 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return 更新行数
      */
     int updateActiveServer(
-            // 将完整更新结果绑定到 XML 的 server 参数。
             @Param("server") ServerEntity server);
 
     /**
@@ -113,11 +103,8 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return 更新行数
      */
     int softDeleteActiveServer(
-            // 将服务器 ID 绑定到 XML 的 serverId 参数。
             @Param("serverId") Long serverId,
-            // 将删除时间绑定到 XML 的 deletedAt 参数。
             @Param("deletedAt") LocalDateTime deletedAt,
-            // 将删除唯一标识绑定到 XML 的 deleteToken 参数。
             @Param("deleteToken") String deleteToken);
 
     /**
@@ -127,7 +114,6 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return 服务器状态快照，不存在时返回 null
      */
     ServerEntity selectActiveServerStatusById(
-            // 将服务器 ID 绑定到 XML 的 serverId 参数。
             @Param("serverId") Long serverId);
 
     /**
@@ -137,7 +123,6 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return SSH 主机公钥状态，不存在时返回 null
      */
     ServerEntity selectActiveServerHostKeyById(
-            // 将服务器 ID 绑定到主机公钥状态查询。
             @Param("serverId") Long serverId);
 
     /**
@@ -147,7 +132,6 @@ public interface ServerMapper extends BaseMapper<ServerEntity> {
      * @return SSH 连接测试快照，不存在时返回 null
      */
     ServerEntity selectActiveServerSshById(
-            // 将服务器 ID 绑定到 SSH 连接测试查询。
             @Param("serverId") Long serverId);
 
     /**

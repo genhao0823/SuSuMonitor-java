@@ -17,10 +17,8 @@ import lombok.Data;
 @TableName("alert_notifications")
 public class AlertNotificationEntity {
 
-    // 主键 ID，自增。
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
-    // 关联告警记录 ID。
     @TableField("alert_record_id")
     private Long alertRecordId;
     // 通知渠道: email/dingtalk/webhook。

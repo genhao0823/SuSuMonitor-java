@@ -99,7 +99,6 @@ public class SystemController {
             description = "Checks whether the backend application is alive. "
                     + "This endpoint does not depend on the database.",
             operationId = "getHealth")
-    // 声明健康检查的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Application is alive"),
             @ApiResponse(responseCode = "500", description = "Internal server error (50000)")
@@ -124,7 +123,6 @@ public class SystemController {
                     + "health check to pass. A Broker failure leaves the process alive but returns "
                     + "readiness code 50301 and HTTP 503.",
             operationId = "getReady")
-    // 声明就绪检查的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200",
                     description = "Application, database, and enabled RabbitMQ integration are ready"),
@@ -158,8 +156,6 @@ public class SystemController {
      *
      * <p>RabbitMQ 未启用时对应注册表/服务为空，返回空列表。</p>
      */
-    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-system.json 的 getRabbitmqConsumers 操作对齐。
-    // 监控快照仅管理员可访问，声明 Bearer JWT 认证。
     @Tag(name = "rabbitmq-monitor", description = "RabbitMQ runtime monitoring snapshots (ROLE_ADMIN only)")
     @Operation(
             summary = "Consume timing and failure-rate window snapshot",
@@ -168,7 +164,6 @@ public class SystemController {
                     + "Returns an empty list when the RabbitMQ integration is disabled.",
             operationId = "getRabbitmqConsumers",
             security = @SecurityRequirement(name = "bearerAuth"))
-    // 声明消费统计接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Consumer stats snapshot"),
             @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)"),
@@ -217,8 +212,6 @@ public class SystemController {
      *
      * <p>RabbitMQ 未启用或无探测结果时返回空列表。</p>
      */
-    // 生成 OpenAPI 端点文档，summary/description/operationId 与 openapi-system.json 的 getRabbitmqQueues 操作对齐。
-    // 监控快照仅管理员可访问，声明 Bearer JWT 认证。
     @Tag(name = "rabbitmq-monitor", description = "RabbitMQ runtime monitoring snapshots (ROLE_ADMIN only)")
     @Operation(
             summary = "Queue backlog snapshot",
@@ -228,7 +221,6 @@ public class SystemController {
                     + "integration is disabled or no probe has run yet.",
             operationId = "getRabbitmqQueues",
             security = @SecurityRequirement(name = "bearerAuth"))
-    // 声明队列积压接口的错误响应（HTTP 状态 + 业务错误码），与契约 responses 对齐。
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Queue backlog snapshot"),
             @ApiResponse(responseCode = "401", description = "Missing, invalid, or expired JWT (40100)"),

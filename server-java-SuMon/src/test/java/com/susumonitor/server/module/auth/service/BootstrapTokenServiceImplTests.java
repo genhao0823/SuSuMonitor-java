@@ -27,7 +27,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-// 启用 Mockito 扩展，为测试初始化字段上的 Mock 对象。
 @ExtendWith(MockitoExtension.class)
 class BootstrapTokenServiceImplTests {
 

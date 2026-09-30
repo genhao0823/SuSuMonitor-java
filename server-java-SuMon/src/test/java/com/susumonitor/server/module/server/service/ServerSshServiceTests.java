@@ -39,7 +39,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * 验证 SSH 主机公钥状态机、凭据延迟解密和稳定异常映射。
  */
-// 启用 Mockito 扩展，使测试不访问数据库、网络或真实凭据密码器。
 @ExtendWith(MockitoExtension.class)
 class ServerSshServiceTests {
 
@@ -51,7 +50,6 @@ class ServerSshServiceTests {
     private static final String FIRST_FINGERPRINT = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private static final String SECOND_FINGERPRINT = "SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
 
-    // 使用 Mapper 替身控制主机公钥快照、凭据快照和 CAS 结果。
     @Mock
     private ServerMapper serverMapper;
 
@@ -59,18 +57,15 @@ class ServerSshServiceTests {
     @Mock
     private CredentialCipher credentialCipher;
 
-    // 使用网络组件替身避免建立任何真实 SSH 连接。
     @Mock
     private SshConnectionTester connectionTester;
 
-    // 使用历史 Mapper 替身验证测试结果留痕行为。
     @Mock
     private SshTestHistoryMapper sshTestHistoryMapper;
 
     private ServerSshService serverSshService;
 
     /** 在每个测试前创建待测 SSH 业务服务。 */
-    // 将当前方法注册为 JUnit 5 的测试初始化方法。
     @BeforeEach
     void setUp() {
         serverSshService = new ServerSshServiceImpl(
@@ -78,7 +73,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证未登记公钥时完成握手、CAS 首次确认并回读最终状态。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void firstConfirmationShouldPersistObservedHostKey() {
         ServerEntity initial = hostKeyServer(null, null);
@@ -99,7 +93,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证已有指纹发生变化时必须显式提交 replace，且拒绝前不进行握手。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void changedFingerprintWithoutReplaceShouldFail() {
         when(serverMapper.selectActiveServerHostKeyById(SERVER_ID))
@@ -115,7 +108,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证显式 replace 允许将已登记指纹原子轮换为握手观察值。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void changedFingerprintWithReplaceShouldRotate() {
         ServerEntity initial = hostKeyServer(ALGORITHM, FIRST_FINGERPRINT);
@@ -134,7 +126,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证相同指纹及算法握手成功时通过 CAS 复核并返回 unchanged。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void sameFingerprintShouldBeIdempotent() {
         ServerEntity existing = hostKeyServer(ALGORITHM, FIRST_FINGERPRINT);
@@ -153,7 +144,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证握手后的 CAS 未命中且目标仍存在时返回资源冲突。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void compareAndSetMissShouldReturnConflict() {
         ServerEntity initial = hostKeyServer(null, null);
@@ -169,7 +159,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证未确认主机公钥时 POST 测试在解密和网络调用前返回 40901。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void unconfirmedHostKeyShouldRejectConnectionTest() {
         when(serverMapper.selectActiveServerSshById(SERVER_ID)).thenReturn(passwordServer(false));
@@ -183,7 +172,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证密码密文直到 SSH 网络组件调用 Supplier 时才解密并转换连接结果。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void passwordShouldBeDecryptedLazily() {
         ServerEntity server = passwordServer(true);
@@ -210,7 +198,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证主机身份通过后数据库 SSH 快照变化会在解密前阻止发送旧凭据。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void changedSnapshotShouldRejectBeforePasswordDecryption() {
         ServerEntity initial = passwordServer(true);
@@ -232,7 +219,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证 private_key 路径分别延迟取得私钥和可选口令并返回认证结果。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void privateKeyShouldUseKeyAndPassphraseSuppliers() {
         ServerEntity server = sshServer("private_key", true);
@@ -264,7 +250,6 @@ class ServerSshServiceTests {
     /** 验证每一种 SSH 网络异常分类都映射为对应稳定业务错误码。 */
     // 使用枚举参数源对所有 SSH 异常分类执行同一映射断言。
     @EnumSource(SshConnectionException.Category.class)
-    // 将当前方法注册为 JUnit 5 参数化测试用例。
     @ParameterizedTest
     void connectionExceptionShouldMapToStableError(SshConnectionException.Category category) {
         when(serverMapper.selectActiveServerSshById(SERVER_ID)).thenReturn(passwordServer(true));
@@ -279,7 +264,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证观察模式返回目标主机当前公钥，不涉及凭据与登记。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void observeHostKeyShouldReturnObservedKey() {
         ServerEntity server = hostKeyServer(ALGORITHM, FIRST_FINGERPRINT);
@@ -298,7 +282,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证未确认过主机密钥的服务器观察时 registered_fingerprint 为 null。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void observeHostKeyOnUnconfirmedServerShouldReportNullRegistered() {
         ServerEntity server = hostKeyServer(null, null);
@@ -312,7 +295,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证观察目标不存在的服务器返回 40400。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void observeHostKeyOnMissingServerShouldReturnNotFound() {
         when(serverMapper.selectActiveServerHostKeyById(SERVER_ID)).thenReturn(null);
@@ -323,7 +305,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证成功连接测试会留痕一条成功历史记录。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void successfulTestShouldRecordHistory() {
         ServerEntity server = passwordServer(true);
@@ -349,7 +330,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证连接失败会留痕失败历史（含错误码）后继续抛出映射后的业务异常。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void failedTestShouldRecordFailureHistoryWithErrorCode() {
         ServerEntity server = passwordServer(true);
@@ -372,7 +352,6 @@ class ServerSshServiceTests {
     }
 
     /** 验证历史查询将实体转换为对外 VO，保持时间与成功标志。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void listTestHistoryShouldConvertEntities() {
         SshTestHistoryEntity entity = new SshTestHistoryEntity();

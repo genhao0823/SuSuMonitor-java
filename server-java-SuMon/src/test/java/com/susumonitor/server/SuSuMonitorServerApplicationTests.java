@@ -26,7 +26,6 @@ import org.springframework.test.context.ActiveProfiles;
 
 import javax.sql.DataSource;
 
-// 激活独立测试配置，避免上下文测试读取本机敏感配置。
 @ActiveProfiles("test")
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -38,7 +37,6 @@ class SuSuMonitorServerApplicationTests {
     @MockitoBean
     private DataSource dataSource;
 
-    // 使用模拟 Mapper 替代真实数据库 Mapper，保持上下文测试不依赖数据库自动配置。
     @MockitoBean
     private UserMapper userMapper;
 
@@ -103,7 +101,6 @@ class SuSuMonitorServerApplicationTests {
     private OutboxMapper outboxMapper;
     @MockitoBean
     private ConsumeRecordMapper consumeRecordMapper;
-
 
 
     @Test

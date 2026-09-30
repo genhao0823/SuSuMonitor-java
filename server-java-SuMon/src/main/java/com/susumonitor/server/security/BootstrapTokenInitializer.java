@@ -15,10 +15,8 @@ import org.springframework.stereotype.Component;
  * 预置值长度非法）时异常向上传播、阻止应用启动（fail-fast，与 AesGcmKeyConfig
  * 的密钥校验语义一致，防止不安全实例对外服务）。</p>
  */
-// 将装配器注册为 Spring Bean，使其随应用启动自动执行一次。
 @Slf4j
 @Component
-// 通过构造器注入令牌服务，保持与项目既有 Bean 风格一致。
 @RequiredArgsConstructor
 public class BootstrapTokenInitializer implements ApplicationRunner {
 

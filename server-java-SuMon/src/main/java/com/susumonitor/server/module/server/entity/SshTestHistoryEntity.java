@@ -17,10 +17,8 @@ import lombok.Data;
 @TableName("ssh_test_history")
 public class SshTestHistoryEntity {
 
-    // 主键 ID，自增。
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
-    // 关联的服务器 ID。
     @TableField("server_id")
     private Long serverId;
     // 连接测试是否成功。
@@ -34,16 +32,13 @@ public class SshTestHistoryEntity {
     // 成功时观察到的远端主机公钥指纹。
     @TableField("host_key_fingerprint")
     private String hostKeyFingerprint;
-    // 认证方式: password / private_key。
     @TableField("auth_type")
     private String authType;
     // 测试总耗时毫秒。
     @TableField("duration_ms")
     private Long durationMs;
-    // 测试发生时间。
     @TableField("tested_at")
     private LocalDateTime testedAt;
-    // 记录创建时间。
     @TableField("created_at")
     private LocalDateTime createdAt;
 }

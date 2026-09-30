@@ -127,7 +127,6 @@ public class GlobalExceptionHandler {
      * @param exception JSON 反序列化异常
      * @return 统一参数错误响应
      */
-    // 捕获 JSON 语法或类型错误，避免错误进入通用 500 处理。
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(
             HttpMessageNotReadableException exception) {

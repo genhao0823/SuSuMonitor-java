@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * @param <T> 响应数据类型
  */
-// 类级 @Schema 描述统一响应信封，供 springdoc 生成响应模型说明。
 @Schema(description = "统一响应信封：code 为业务状态码，0 表示成功")
 public class ApiResponse<T> {
 

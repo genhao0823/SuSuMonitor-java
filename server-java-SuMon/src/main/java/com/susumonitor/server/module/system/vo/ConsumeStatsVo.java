@@ -9,7 +9,6 @@ import lombok.Data;
 /**
  * 消费统计响应 VO（MVP-14 监控收尾）：耗时窗口 + 失败率窗口组合快照。
  */
-// 类级 @Schema 描述消费统计快照模型，供 springdoc 生成响应模型说明。
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "单个消费者的耗时窗口与失败率窗口组合快照")

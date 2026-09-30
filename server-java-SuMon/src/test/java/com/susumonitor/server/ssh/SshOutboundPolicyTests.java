@@ -17,7 +17,6 @@ class SshOutboundPolicyTests {
     private static final int FORBIDDEN_PORT = 23;
 
     /** 验证白名单端口和 CIDR 内的数字 IP 可被解析并返回。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void allowedPortAndCidrShouldReturnAddress() {
         SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("192.0.2.0/24"));
@@ -29,7 +28,6 @@ class SshOutboundPolicyTests {
     }
 
     /** 验证不在端口白名单内的请求在地址解析前被拒绝。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void forbiddenPortShouldBeRejected() {
         SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("192.0.2.0/24"));
@@ -39,7 +37,6 @@ class SshOutboundPolicyTests {
     }
 
     /** 验证允许端口上的 CIDR 外地址仍被拒绝。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void addressOutsideAllowedCidrShouldBeRejected() {
         SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("192.0.2.0/24"));
@@ -49,7 +46,6 @@ class SshOutboundPolicyTests {
     }
 
     /** 验证云元数据地址即使落入宽泛允许 CIDR 也始终被拒绝。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void cloudMetadataAddressShouldAlwaysBeRejected() {
         SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("0.0.0.0/0"));
@@ -59,7 +55,6 @@ class SshOutboundPolicyTests {
     }
 
     /** 验证 CIDR 配置不能使用会触发 DNS 的主机名。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void hostnameCidrShouldFailDuringPolicyCreation() {
         AppProperties properties = new AppProperties();
@@ -72,7 +67,6 @@ class SshOutboundPolicyTests {
      * 防御性回归（2026-09-14 安全评审复核）：默认空 CIDR 为 deny-all，
      * 任何主机名/IP 在未显式配置允许网段时都必须被拒。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void emptyAllowedCidrsShouldDenyByDefault() {
         SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of());
@@ -85,7 +79,6 @@ class SshOutboundPolicyTests {
      * 防御性回归：localhost 域名解析到环回地址，即使落在宽放 CIDR 内也因环回语义被拒，
      * 证明解析后逐地址特殊语义校验与 CIDR 判定独立生效。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void localhostHostnameShouldBeRejectedEvenWithAllowAllCidr() {
         SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("0.0.0.0/0"));
@@ -97,7 +90,6 @@ class SshOutboundPolicyTests {
     /**
      * 防御性回归：链路本地（非 metadata）、组播与未指定地址在宽放 CIDR 下仍被拒。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void specialUseAddressesShouldBeRejectedUnderAllowAllCidr() {
         SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("0.0.0.0/0"));
@@ -114,7 +106,6 @@ class SshOutboundPolicyTests {
      * 防御性回归：IPv6 云 metadata 地址在 IPv6 宽放 CIDR 下仍被拒绝，
      * 覆盖 normalize 后的 metadata 名单匹配路径。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void ipv6CloudMetadataShouldBeRejectedUnderIpv6AllowAllCidr() {
         SshOutboundPolicy policy = policy(List.of(ALLOWED_PORT), List.of("::/0"));

@@ -17,9 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 /**
  * 配置无状态 Bearer 鉴权和公开接口边界。
  */
-// 将当前类注册为 Spring 安全配置类。
 @Configuration
-// 启用 Web 安全过滤器链。
 @EnableWebSecurity
 public class SecurityConfig {
 
@@ -33,7 +31,6 @@ public class SecurityConfig {
      * @param appProperties 应用配置（读取黑名单故障语义开关；WebMvcTest 切片可缺席）
      * @return JWT 认证过滤器
      */
-    // 将 JWT 过滤器注册为 Spring Bean，供安全链引用。
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(
             JwtTokenService jwtTokenService,
@@ -74,7 +71,6 @@ public class SecurityConfig {
      * @return 安全过滤器链
      * @throws Exception 安全链构建失败
      */
-    // 注册项目唯一的 HTTP 安全过滤器链。
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity httpSecurity,

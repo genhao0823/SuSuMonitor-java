@@ -13,7 +13,6 @@ import org.springframework.context.annotation.Configuration;
  * springdoc 生成的文档是运行时辅助；各端点的 summary/description/operationId
  * 在 Controller 注解中与契约保持对齐，本配置只声明全局元数据。</p>
  */
-// 声明 OpenAPI 全局信息：标题、描述和版本，Swagger UI 首页展示这些元数据。
 @OpenAPIDefinition(
         info = @Info(
                 title = "SuSuMonitor API",

@@ -9,7 +9,6 @@ import org.springframework.context.annotation.Configuration;
 /**
  * 解析并严格校验 AES-256-GCM 密钥，为凭据加解密提供统一密钥。
  */
-// 将当前类注册为 Spring 配置类，使 AES 密钥在应用启动阶段完成校验。
 @Configuration
 public class AesGcmKeyConfig {
 

@@ -6,7 +6,6 @@ import java.time.OffsetDateTime;
 /**
  * 就绪检查响应 VO，包含应用就绪状态、数据库状态和时间戳。
  */
-// 类级 @Schema 描述就绪检查结果模型，供 springdoc 生成响应模型说明。
 @Schema(description = "就绪检查结果（数据库必须可用）")
 public class ReadyStatusVo {
 

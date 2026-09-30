@@ -51,21 +51,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.blankOrNullString;
 
-// 启用 Spring Boot 测试上下文和 MockMvc，验证管理员用户审核 Controller 行为。
 @ActiveProfiles("test")
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
                 + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"
 })
-// 启用 MockMvc，使测试无需启动真实 HTTP 端口即可调用 Controller。
 @AutoConfigureMockMvc
 class AdminUserControllerTests {
 
     @Autowired
     private MockMvc mockMvc;
 
-    // 使用模拟管理员用户服务，隔离 Controller 测试与真实数据库实现。
     @MockitoBean
     private AdminUserService adminUserService;
 
@@ -135,14 +132,12 @@ class AdminUserControllerTests {
     @MockitoBean
     private PlatformTransactionManager transactionManager;
 
-    // 提供 JWT 服务替身，使安全过滤器测试可控制 Token 解析结果。
     @MockitoBean
     private JwtTokenService jwtTokenService;
     @MockitoBean
     private OutboxMapper outboxMapper;
     @MockitoBean
     private ConsumeRecordMapper consumeRecordMapper;
-
 
 
     // 验证管理员可以获取用户分页列表并返回统一成功响应（status/keyword/page 参数透传）。
