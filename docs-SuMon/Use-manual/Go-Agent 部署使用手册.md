@@ -180,7 +180,7 @@ SUSUMONITOR_EXTENDED_RESOURCES=true
 deploy/
 ├── install.sh                    # 一键安装脚本
 ├── susumonitor-agent.service     # systemd 单元
-├── agent.env                     # 配置模板
+├── agent.env.example             # 配置模板
 └── logrotate.conf                # 日志轮转
 ```
 

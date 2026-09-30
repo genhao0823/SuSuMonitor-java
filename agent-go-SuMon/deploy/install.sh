@@ -70,7 +70,7 @@ info "Creating config directory ${CONFIG_DIR}..."
 mkdir -p "${CONFIG_DIR}"
 
 # 拷贝环境变量模板（如果目标已存在则跳过，不覆盖已有配置）。
-ENV_TEMPLATE="${SCRIPT_DIR}/agent.env"
+ENV_TEMPLATE="${SCRIPT_DIR}/agent.env.example"
 if [ -f "${ENV_TEMPLATE}" ]; then
     if [ -f "${CONFIG_DIR}/agent.env" ]; then
         warn "${CONFIG_DIR}/agent.env already exists, keeping its content and enforcing root-only permissions."
