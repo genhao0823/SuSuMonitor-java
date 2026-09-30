@@ -17,7 +17,6 @@ import org.springframework.stereotype.Component;
 /**
  * 使用 AES-256-GCM 和服务器凭据上下文加密、解密敏感凭据。
  */
-// 将凭据密码器注册为 Spring Bean，供需要持久化敏感凭据的业务组件注入。
 @Component
 public class CredentialCipher {
 

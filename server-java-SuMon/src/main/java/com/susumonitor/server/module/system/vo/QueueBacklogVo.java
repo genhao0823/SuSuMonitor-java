@@ -9,7 +9,6 @@ import lombok.Data;
 /**
  * 队列积压快照响应 VO（MVP-14 监控收尾）。
  */
-// 类级 @Schema 描述队列积压快照模型，供 springdoc 生成响应模型说明。
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "单个队列的积压探测快照")

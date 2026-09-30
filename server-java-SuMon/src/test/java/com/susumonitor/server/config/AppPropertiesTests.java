@@ -72,7 +72,6 @@ class AppPropertiesTests {
     }
 
     /** 验证非正数 SSH 连接超时不能通过配置校验。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void nonPositiveSshConnectTimeoutShouldFailValidation() {
         AppProperties properties = properties(VALID_TEST_SECRET, 24);
@@ -82,7 +81,6 @@ class AppPropertiesTests {
     }
 
     /** 验证空 SSH 端口白名单不能通过配置校验。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void emptySshAllowedPortsShouldFailValidation() {
         AppProperties properties = properties(VALID_TEST_SECRET, 24);

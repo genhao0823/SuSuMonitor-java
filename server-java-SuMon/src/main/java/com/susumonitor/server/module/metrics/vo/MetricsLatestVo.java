@@ -7,7 +7,6 @@ import java.time.OffsetDateTime;
 import lombok.Data;
 
 /** 对外返回单个服务器最新固定宽表指标。 */
-// 类级 @Schema 描述固定宽表指标模型，供 springdoc 生成响应模型说明。
 @Data
 @Schema(description = "固定宽表指标（最新值或历史行）")
 public class MetricsLatestVo {
@@ -25,7 +24,6 @@ public class MetricsLatestVo {
     @JsonProperty("net_rx") @Schema(description = "累计接收字节数", minimum = "0") private Long netRx;
     @JsonProperty("net_tx") @Schema(description = "累计发送字节数", minimum = "0") private Long netTx;
     @Schema(description = "温度（采集平台不支持为 null）") private BigDecimal temperature;
-    // 描述负载均值字段，注明不是百分比，采集平台不支持时为 null。
     @JsonProperty("load_avg")
     @Schema(description = "系统负载均值（非百分比）；采集平台不提供时为 null", minimum = "0")
     private BigDecimal loadAvg;

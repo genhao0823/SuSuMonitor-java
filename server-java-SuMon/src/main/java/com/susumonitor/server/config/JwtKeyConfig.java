@@ -9,7 +9,6 @@ import org.springframework.context.annotation.Configuration;
 /**
  * 解析并校验 JWT 签名密钥，为后续 Token 签发和验签提供统一密钥。
  */
-// 将当前类注册为 Spring 配置类，使 JWT 密钥 Bean 在启动阶段创建并校验。
 @Configuration
 public class JwtKeyConfig {
 
@@ -21,7 +20,6 @@ public class JwtKeyConfig {
      * @param appProperties 应用配置
      * @return JWT 签名密钥
      */
-    // 注册 JWT SecretKey，供后续 JwtTokenService 注入使用。
     @Bean("jwtSigningKey")
     public SecretKey jwtSigningKey(AppProperties appProperties) {
         byte[] secretBytes;

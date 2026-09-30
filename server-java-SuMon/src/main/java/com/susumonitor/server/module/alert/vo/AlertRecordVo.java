@@ -15,7 +15,6 @@ import lombok.Data;
  * <p>时间字段转为 UTC ISO-8601 输出。
  * status 为 unread/read/resolved。</p>
  */
-// 类级 @Schema 描述告警记录模型，供 springdoc 生成响应模型说明。
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "告警记录")
@@ -53,7 +52,6 @@ public class AlertRecordVo {
     @Schema(description = "触发时间（UTC ISO-8601）")
     private OffsetDateTime triggeredAt;
     @JsonProperty("resolved_at")
-    // 描述恢复时间字段，仅 status=resolved 时存在，未恢复为 null。
     @Schema(description = "恢复时间；仅 status=resolved 时存在，未恢复为 null", format = "date-time")
     private OffsetDateTime resolvedAt;
     @JsonProperty("notified_at")

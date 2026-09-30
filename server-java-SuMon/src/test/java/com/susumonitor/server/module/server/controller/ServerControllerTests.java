@@ -74,15 +74,12 @@ import org.springframework.test.web.servlet.RequestBuilder;
 /**
  * 验证服务器 Controller 的八个接口契约、权限边界、参数校验和统一异常响应。
  */
-// 激活独立测试配置，避免 Controller 测试读取本机敏感配置。
 @ActiveProfiles("test")
-// 启动完整 Spring Boot Web 上下文，并排除真实数据源和 Flyway 初始化。
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
                 + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"
 })
-// 启用 MockMvc，使测试无需启动真实 HTTP 端口即可验证安全链和 Controller。
 @AutoConfigureMockMvc
 class ServerControllerTests {
 
@@ -93,11 +90,9 @@ class ServerControllerTests {
     private static final String USER_BEARER = "Bearer " + USER_TOKEN;
     private static final String JSON_CONTENT_TYPE = "application/json";
 
-    // 注入 MockMvc 以通过真实过滤器链调用服务器接口。
     @Autowired
     private MockMvc mockMvc;
 
-    // 使用模拟服务器服务，隔离 Controller 测试与业务实现和真实数据库。
     @MockitoBean
     private ServerService serverService;
 
@@ -105,7 +100,6 @@ class ServerControllerTests {
     @MockitoBean
     private ServerSshService serverSshService;
 
-    // 提供服务器 Mapper 替身，避免测试上下文创建真实 MyBatis 会话工厂。
     @MockitoBean
     private ServerMapper serverMapper;
 
@@ -159,7 +153,6 @@ class ServerControllerTests {
     @MockitoBean
     private PlatformTransactionManager transactionManager;
 
-    // 提供用户 Mapper 替身，使 JWT 过滤器可回查可控的认证用户。
     @MockitoBean
     private UserMapper userMapper;
 
@@ -171,7 +164,6 @@ class ServerControllerTests {
     @MockitoBean
     private DataSource dataSource;
 
-    // 提供 JWT 服务替身，使每个权限场景可控制 Token 解析结果。
     @MockitoBean
     private JwtTokenService jwtTokenService;
     @MockitoBean
@@ -180,11 +172,9 @@ class ServerControllerTests {
     private ConsumeRecordMapper consumeRecordMapper;
 
 
-
     /**
      * 验证管理员可成功调用创建、列表、详情、更新、删除和状态六个接口。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void adminShouldAccessAllSixEndpoints() throws Exception {
         authenticateAdmin();
@@ -268,7 +258,6 @@ class ServerControllerTests {
     /**
      * 验证已审核普通用户可读取列表、详情和状态三个 GET 接口。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void approvedUserShouldAccessThreeGetEndpoints() throws Exception {
         authenticateUser();
@@ -288,7 +277,6 @@ class ServerControllerTests {
     /**
      * 验证普通用户的创建、更新和删除请求均由安全链拒绝为 403。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void approvedUserShouldReceiveForbiddenForAllWrites() throws Exception {
         authenticateUser();
@@ -313,7 +301,6 @@ class ServerControllerTests {
     /**
      * 验证六个服务器接口缺少 Token 时均返回统一 401 响应。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void allEndpointsWithoutTokenShouldReturnUnauthorized() throws Exception {
         RequestBuilder[] requests = {
@@ -335,7 +322,6 @@ class ServerControllerTests {
     /**
      * 验证非正数路径 ID 在进入 Service 前返回统一参数错误。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void invalidIdShouldReturnBadRequest() throws Exception {
         authenticateAdmin();
@@ -377,7 +363,6 @@ class ServerControllerTests {
     /**
      * 验证不在白名单中的排序字段返回统一参数错误。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void invalidSortShouldReturnBadRequest() throws Exception {
         authenticateAdmin();
@@ -446,7 +431,6 @@ class ServerControllerTests {
     /**
      * 验证无法解析的创建 JSON 返回统一参数错误。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void malformedJsonShouldReturnBadRequest() throws Exception {
         authenticateAdmin();
@@ -462,7 +446,6 @@ class ServerControllerTests {
     /**
      * 验证 Service 的资源不存在异常映射为统一 404 响应。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void missingServerShouldReturnNotFound() throws Exception {
         authenticateAdmin();
@@ -510,7 +493,6 @@ class ServerControllerTests {
     /**
      * 验证 Service 的资源冲突异常映射为统一 409 响应。
      */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void conflictingDeleteShouldReturnConflict() throws Exception {
         authenticateAdmin();
@@ -522,7 +504,6 @@ class ServerControllerTests {
     }
 
     /** 验证管理员可调用两个 SSH 接口，身份 ID 被透传且响应包含请求追踪头。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void adminShouldAccessBothSshEndpoints() throws Exception {
         authenticateAdmin();
@@ -557,7 +538,6 @@ class ServerControllerTests {
     }
 
     /** 验证已审核普通用户调用两个 SSH 管理接口均返回 40300。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void approvedUserShouldReceiveForbiddenForBothSshEndpoints() throws Exception {
         authenticateUser();
@@ -577,7 +557,6 @@ class ServerControllerTests {
     }
 
     /** 验证两个 SSH 接口缺少 Token 时均返回统一 40100。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void sshEndpointsWithoutTokenShouldReturnUnauthorized() throws Exception {
         RequestBuilder[] requests = {
@@ -595,7 +574,6 @@ class ServerControllerTests {
     }
 
     /** 验证不符合 OpenSSH SHA-256 格式的指纹返回参数错误且不调用 Service。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void invalidSshFingerprintShouldReturnBadRequest() throws Exception {
         authenticateAdmin();
@@ -611,7 +589,6 @@ class ServerControllerTests {
     }
 
     /** 验证 SSH 测试接口拒绝契约未定义的 JSON 请求体且不调用 Service。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void sshTestRequestBodyShouldReturnBadRequest() throws Exception {
         authenticateAdmin();

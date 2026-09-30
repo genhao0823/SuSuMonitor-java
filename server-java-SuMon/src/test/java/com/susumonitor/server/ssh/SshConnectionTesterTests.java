@@ -86,7 +86,6 @@ class SshConnectionTesterTests {
     }
 
     /** 验证握手阶段读取服务器标识超时被分类为 TIMEOUT 而非 CONNECTION_FAILED。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void handshakeReadTimeoutShouldBeClassifiedAsTimeout() throws Exception {
         try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName(HOST))) {
@@ -101,7 +100,6 @@ class SshConnectionTesterTests {
     }
 
     /** 验证连接被拒绝时仍分类为 CONNECTION_FAILED，不误报为超时。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void connectionRefusedShouldBeClassifiedAsConnectionFailed() throws Exception {
         int port;
@@ -117,7 +115,6 @@ class SshConnectionTesterTests {
     }
 
     /** 验证整体连接超时取消仍分类为 TIMEOUT。 */
-    // 将当前方法注册为 JUnit 5 测试用例。
     @Test
     void overallTimeoutShouldBeClassifiedAsTimeout() throws Exception {
         try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName(HOST))) {

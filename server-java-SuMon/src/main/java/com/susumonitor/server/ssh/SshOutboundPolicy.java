@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 /**
  * 解析并校验 SSH 出站目标，确保连接只使用显式允许的端口和 CIDR。
  */
-// 将出站策略注册为 Spring Bean，供 SSH 网络组件统一复用。
 @Component
 public class SshOutboundPolicy {
 

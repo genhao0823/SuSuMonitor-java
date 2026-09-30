@@ -83,7 +83,6 @@ class AiHealthReportControllerTests {
     @Autowired
     private ObjectMapper objectMapper;
 
-    // 替代报告编排服务与统一时钟，仅验证 HTTP 与安全契约。
     @MockitoBean
     private AiHealthReportService reportService;
 

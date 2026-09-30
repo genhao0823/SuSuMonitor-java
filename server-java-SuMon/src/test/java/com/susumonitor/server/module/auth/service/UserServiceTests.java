@@ -33,33 +33,26 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-// 启用 Mockito 扩展，为测试初始化字段上的 Mock 对象。
 @ExtendWith(MockitoExtension.class)
 class UserServiceTests {
 
-    // 创建 UserMapper 的模拟对象，隔离 UserService 对真实数据库的依赖。
     @Mock
     private UserMapper userMapper;
 
-    // 创建初始化状态 Mapper 的模拟对象，验证首管理员事务编排。
     @Mock
     private AuthBootstrapStateMapper authBootstrapStateMapper;
 
-    // 创建 PasswordEncoder 的模拟对象，隔离密码编码器的具体实现。
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    // 创建 JWT 服务模拟对象，隔离登录业务与 Token 实现。
     @Mock
     private JwtTokenService jwtTokenService;
 
-    // 创建初始化令牌服务模拟对象，隔离注册事务与令牌加解密校验（批次 8）。
     @Mock
     private BootstrapTokenService bootstrapTokenService;
 
     private UserService userService;
 
-    // 在每个测试方法执行前创建待测试的 UserService 实例。
     @BeforeEach
     void setUp() {
         when(passwordEncoder.encode("SUSUMONITOR_DUMMY_LOGIN_PASSWORD")).thenReturn("dummy-bcrypt-hash");

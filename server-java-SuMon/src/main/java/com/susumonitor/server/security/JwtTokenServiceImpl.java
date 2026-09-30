@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 /**
  * 使用固定 HS256 契约签发和解析 SuSuMonitor 用户 JWT。
  */
-// 将 JWT 服务注册为 Spring Bean，供登录业务和 Bearer 过滤器复用。
 @Service
 public class JwtTokenServiceImpl implements JwtTokenService {
 

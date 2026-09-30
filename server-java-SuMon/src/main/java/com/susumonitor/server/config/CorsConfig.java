@@ -26,7 +26,6 @@ public class CorsConfig {
      * @param appProperties 应用配置属性
      * @return CORS 配置源
      */
-    // 将 CORS 配置源注册为 Spring Bean，供 Security 过滤器链的 CorsFilter 使用。
     @Bean
     public CorsConfigurationSource corsConfigurationSource(AppProperties appProperties) {
         CorsConfiguration configuration = new CorsConfiguration();

@@ -71,7 +71,6 @@ class AiDiagnosisControllerTests {
     @Autowired
     private MockMvc mockMvc;
 
-    // 替代 AI 编排服务，仅验证 HTTP 与安全契约。
     @MockitoBean
     private AiDiagnosisService aiDiagnosisService;
 
@@ -91,11 +90,9 @@ class AiDiagnosisControllerTests {
     @MockitoBean
     private com.susumonitor.server.module.ai.mapper.AiQaRunMapper aiQaRunMapper;
 
-    // 提供可控 JWT 解析结果，覆盖认证场景。
     @MockitoBean
     private JwtTokenService jwtTokenService;
 
-    // 提供认证用户回查替身，避免连接数据库。
     @MockitoBean
     private UserMapper userMapper;
 

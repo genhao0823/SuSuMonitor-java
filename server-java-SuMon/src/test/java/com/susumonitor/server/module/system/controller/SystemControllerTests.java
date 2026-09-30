@@ -47,7 +47,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// 激活独立测试配置，避免 Controller 测试读取本机敏感配置。
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @SpringBootTest(properties = {
@@ -66,7 +65,6 @@ class SystemControllerTests {
     @MockitoBean
     private Connection connection;
 
-    // 使用模拟 Mapper 替代真实数据库 Mapper，保持 Controller 测试不依赖数据库自动配置。
     @MockitoBean
     private UserMapper userMapper;
 

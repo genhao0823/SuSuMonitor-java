@@ -18,21 +18,17 @@ import lombok.Data;
 @TableName("alert_records")
 public class AlertRecordEntity {
 
-    // 主键 ID，自增。
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
     // 告警规则 ID，为 null 表示规则已删除但记录保留。
     @TableField("rule_id")
     private Long ruleId;
-    // 服务器 ID。
     @TableField("server_id")
     private Long serverId;
     // 告警指标。
     private String metric;
-    // 触发时当前值。
     @TableField("current_value")
     private BigDecimal currentValue;
-    // 触发阈值。
     @TableField("threshold_value")
     private BigDecimal thresholdValue;
     // 告警等级。
@@ -41,13 +37,10 @@ public class AlertRecordEntity {
     private String status;
     // 告警消息。
     private String message;
-    // 标记已读用户 ID。
     @TableField("read_by")
     private Long readBy;
-    // 标记已读时间。
     @TableField("read_at")
     private LocalDateTime readAt;
-    // 告警触发时间。
     @TableField("triggered_at")
     private LocalDateTime triggeredAt;
     // 告警恢复时间；未恢复（status != resolved）时为 null。

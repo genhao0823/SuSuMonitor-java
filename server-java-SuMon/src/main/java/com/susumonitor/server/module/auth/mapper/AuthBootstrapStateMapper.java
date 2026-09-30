@@ -8,7 +8,6 @@ import org.apache.ibatis.annotations.Param;
 /**
  * 访问首管理员初始化状态，并通过行锁保证初始化判断的原子性。
  */
-// 将当前接口注册为 MyBatis Mapper，使注册事务能够锁定和更新初始化状态。
 @Mapper
 public interface AuthBootstrapStateMapper {
 
@@ -39,9 +38,7 @@ public interface AuthBootstrapStateMapper {
      * @return 更新行数（0 表示首管理员已初始化或状态行不存在）
      */
     int saveBootstrapToken(
-            // 将令牌密文信封绑定到 XML 的 cipher 参数。
             @Param("cipher") String cipher,
-            // 将生成/载入时间绑定到 XML 的 generatedAt 参数。
             @Param("generatedAt") LocalDateTime generatedAt);
 
     /**
@@ -54,7 +51,6 @@ public interface AuthBootstrapStateMapper {
      * @return 更新行数（0 表示状态已变化或行不存在）
      */
     int consumeBootstrapToken(
-            // 将消费时间绑定到 XML 的 consumedAt 参数。
             @Param("consumedAt") LocalDateTime consumedAt);
 
     /**
@@ -65,8 +61,6 @@ public interface AuthBootstrapStateMapper {
      * @return 更新行数
      */
     int markAdminInitialized(
-            // 将首管理员 ID 绑定到 XML 的 initializedUserId 参数。
             @Param("initializedUserId") Long initializedUserId,
-            // 将初始化时间绑定到 XML 的 initializedAt 参数。
             @Param("initializedAt") LocalDateTime initializedAt);
 }

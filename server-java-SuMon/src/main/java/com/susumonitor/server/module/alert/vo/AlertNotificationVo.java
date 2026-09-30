@@ -13,7 +13,6 @@ import lombok.Data;
  * <p>一次告警每个渠道一行；status 为 pending/sent/failed，
  * nextAttemptAt 为 null 表示不再重试，lastError 记录最近失败原因。</p>
  */
-// 类级 @Schema 描述告警通知投递记录模型，供 springdoc 生成响应模型说明。
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "告警通知投递记录（每条渠道一行）")
